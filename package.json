@@ -1,0 +1,21 @@
+{
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^11.1.3",
+      "onFail": "download"
+    }
+  },
+  "type": "module",
+  "name": "draftlet",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "./scripts/start-all.sh",
+    "dev:desktop": "./scripts/dev-desktop.sh",
+    "dev:extension": "./scripts/dev-extension.sh",
+    "dev:server": "./scripts/dev-server.sh",
+    "build": "./scripts/build-all.sh",
+    "make:desktop": "./scripts/build-server.sh && pnpm --dir apps/desktop make"
+  }
+}

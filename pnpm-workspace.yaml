@@ -1,0 +1,7 @@
+packages:
+  - apps/extension
+  - apps/desktop
+allowBuilds:
+  esbuild: true
+  spawn-sync: true
+nodeLinker: hoisted
