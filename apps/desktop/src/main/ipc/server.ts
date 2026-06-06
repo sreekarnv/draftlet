@@ -62,9 +62,7 @@ export async function startDraftletServer(): Promise<CommandStatus> {
 
 export async function stopDraftletServer(): Promise<CommandStatus> {
   if (serverProcess && serverProcess.exitCode === null) {
-    serverProcess.kill();
-    serverProcess = null;
-    return ok('Managed Draftlet server stopped.', 'stopped');
+    return stopOwnedDraftletServer();
   }
 
   const health = await checkServerHealth();
@@ -85,6 +83,16 @@ export async function stopDraftletServer(): Promise<CommandStatus> {
 
   await stopProcesses(pids);
   return ok(`Stopped Draftlet server process${pids.length > 1 ? 'es' : ''}: ${pids.join(', ')}.`, 'stopped');
+}
+
+export async function stopOwnedDraftletServer(): Promise<CommandStatus> {
+  if (serverProcess && serverProcess.exitCode === null) {
+    serverProcess.kill();
+    serverProcess = null;
+    return ok('Managed Draftlet server stopped.', 'stopped');
+  }
+
+  return ok('No managed Draftlet server is running.', 'stopped');
 }
 
 function buildServerStartCommand(): ServerStartCommand {
