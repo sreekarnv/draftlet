@@ -10,6 +10,22 @@ Draftlet is a local-first browser drafting assistant. Select text on a webpage, 
 
 Ollama is required separately. Draftlet does not bundle Ollama.
 
+## Demo
+
+### Desktop companion
+
+![Draftlet desktop companion](.github/assets/desktop-companion.png)
+
+Local runtime checklist for Ollama, model readiness, and the Draftlet server.
+
+### Extension workflow
+
+<video src=".github/assets/extension-gmail.mp4" controls muted playsinline></video>
+
+[Open the extension demo video](.github/assets/extension-gmail.mp4)
+
+Selecting text, opening Draftlet, and generating local reply drafts.
+
 ## How It Works
 
 The extension talks to the local server at `http://127.0.0.1:47632`. The server talks to Ollama at `http://127.0.0.1:11434`. The desktop app helps check and manage that local runtime.
