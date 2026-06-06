@@ -2,7 +2,21 @@ name: CI
 
 on:
   push:
+    paths:
+      - 'apps/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/ci.yml'
   pull_request:
+    paths:
+      - 'apps/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/ci.yml'
 
 permissions:
   contents: read
