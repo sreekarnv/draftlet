@@ -20,9 +20,7 @@ Local runtime checklist for Ollama, model readiness, and the Draftlet server.
 
 ### Extension workflow
 
-<video src=".github/assets/extension-gmail.mp4" controls muted playsinline></video>
-
-[Open the extension demo video](.github/assets/extension-gmail.mp4)
+![Draftlet extension workflow](.github/assets/extension-gmail.gif)
 
 Selecting text, opening Draftlet, and generating local reply drafts.
 
