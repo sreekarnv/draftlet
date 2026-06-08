@@ -1,15 +1,23 @@
 import '../components/panel/panel.css';
 
-import { checkServerHealth, streamReplies } from '../core/api';
 import { DEFAULT_PANEL_VIEW, DEFAULT_TONE } from '../core/constants';
 import {
+  CANCEL_DRAFT_GENERATION,
+  DRAFT_GENERATION_COMPLETED,
+  DRAFT_GENERATION_FAILED,
+  DRAFT_GENERATION_STARTED,
+  DRAFT_REPLY_RECEIVED,
+  GET_RUNTIME_STATUS,
   GET_SIDE_PANEL_CONTEXT,
   INSERT_REPLY,
   SIDE_PANEL_CONTEXT_UPDATED,
+  START_DRAFT_GENERATION,
   type DraftletMessage,
   type DraftletSidePanelContext,
   type InsertReplyResult,
+  type RuntimeStatusResult,
   type SidePanelContextResult,
+  type StartDraftGenerationResult,
 } from '../core/messages';
 import { getSavedPanelView, getSavedTone, savePanelView, saveTone } from '../core/storage';
 import type { InsertionResult, PanelView, Tone } from '../core/types';
@@ -18,7 +26,7 @@ import { mountDraftletPanel } from '../ui/mount-panel';
 let currentContext: DraftletSidePanelContext | null = null;
 let currentTone: Tone = DEFAULT_TONE;
 let currentPanelView: PanelView = DEFAULT_PANEL_VIEW;
-let activeRequest: AbortController | null = null;
+let activeGenerationId: string | null = null;
 
 const root = document.getElementById('root');
 
@@ -57,10 +65,7 @@ const panel = mountedPanel.controller;
 void initializeSidePanel();
 
 browser.runtime.onMessage.addListener((message: DraftletMessage) => {
-  if (message.type === SIDE_PANEL_CONTEXT_UPDATED) {
-    applyContext(message.context);
-  }
-
+  handleDraftletMessage(message);
   return undefined;
 });
 
@@ -93,23 +98,68 @@ async function initializeSidePanel() {
   });
 }
 
+function handleDraftletMessage(message: DraftletMessage) {
+  if (message.type === SIDE_PANEL_CONTEXT_UPDATED) {
+    applyContext(message.context);
+    return;
+  }
+
+  if (message.type === DRAFT_GENERATION_STARTED && message.generationId === activeGenerationId) {
+    panel.setConnectionStatus('connected');
+    panel.setState('streaming');
+    return;
+  }
+
+  if (message.type === DRAFT_REPLY_RECEIVED && message.generationId === activeGenerationId) {
+    panel.addReply(message.reply);
+    return;
+  }
+
+  if (message.type === DRAFT_GENERATION_COMPLETED && message.generationId === activeGenerationId) {
+    activeGenerationId = null;
+    panel.setState(message.replyCount > 0 ? 'success' : 'error', 'No replies returned.');
+    return;
+  }
+
+  if (message.type === DRAFT_GENERATION_FAILED && message.generationId === activeGenerationId) {
+    activeGenerationId = null;
+    panel.setConnectionStatus('disconnected');
+    panel.setState('error', message.error.message);
+  }
+}
+
 function applyContext(context: DraftletSidePanelContext) {
-  currentContext = context;
-  currentTone = context.tone;
-  currentPanelView = context.activeView;
+  const tone = context.tone ?? currentTone;
+  const activeView = context.activeView ?? currentPanelView;
+
+  currentContext = {
+    ...context,
+    tone,
+    activeView,
+  };
+  currentTone = tone;
+  currentPanelView = activeView;
 
   panel.open({
     selectedText: context.selectedText,
-    tone: context.tone,
-    activeView: context.activeView,
+    tone,
+    activeView,
   });
   void refreshHealth();
 }
 
 async function refreshHealth() {
-  const connected = await checkServerHealth();
-  panel.setConnectionStatus(connected ? 'connected' : 'disconnected');
-  return connected;
+  try {
+    const response = await browser.runtime.sendMessage({
+      type: GET_RUNTIME_STATUS,
+    } satisfies DraftletMessage) as RuntimeStatusResult;
+
+    panel.setConnectionStatus(response.status);
+    return response.status === 'connected';
+  } catch {
+    panel.setConnectionStatus('disconnected');
+    return false;
+  }
 }
 
 async function generateReplies() {
@@ -118,50 +168,32 @@ async function generateReplies() {
     return;
   }
 
-  abortActiveRequest();
-  activeRequest = new AbortController();
-  let replyCount = 0;
-
+  await cancelActiveGeneration();
   panel.clearReplies();
   panel.setState('loading');
 
   try {
-    const connected = await refreshHealth();
-
-    if (!connected) {
-      panel.setState('error', 'Draftlet server is not reachable.');
-      return;
-    }
-
-    await streamReplies(
-      {
-        selected_text: currentContext.selectedText,
+    const response = await browser.runtime.sendMessage({
+      type: START_DRAFT_GENERATION,
+      context: {
+        ...currentContext,
         tone: currentTone,
-        source_url: currentContext.sourceUrl,
-        source_domain: currentContext.sourceDomain,
+        activeView: currentPanelView,
       },
-      {
-        signal: activeRequest.signal,
-        onReply(reply) {
-          replyCount += 1;
-          panel.addReply(reply);
-        },
-      },
-    );
+    } satisfies DraftletMessage) as StartDraftGenerationResult;
 
-    panel.setState(replyCount > 0 ? 'success' : 'error', 'No replies returned.');
-  } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
+    if (!response.started || !response.generationId) {
+      panel.setState('error', response.error?.message ?? 'Could not start draft generation.');
       return;
     }
 
+    activeGenerationId = response.generationId;
+  } catch (error) {
     panel.setConnectionStatus('disconnected');
     panel.setState(
       'error',
-      error instanceof Error ? error.message : 'Could not stream replies from the local server.',
+      error instanceof Error ? error.message : 'Could not reach the Draftlet extension coordinator.',
     );
-  } finally {
-    activeRequest = null;
   }
 }
 
@@ -188,7 +220,7 @@ async function insertIntoActivePage(replyText: string): Promise<InsertionResult>
 }
 
 async function closeSidePanel() {
-  abortActiveRequest();
+  await cancelActiveGeneration();
 
   try {
     if (browser.sidePanel?.close) {
@@ -206,7 +238,16 @@ async function closeSidePanel() {
   window.close();
 }
 
-function abortActiveRequest() {
-  activeRequest?.abort();
-  activeRequest = null;
+async function cancelActiveGeneration() {
+  if (!activeGenerationId) {
+    return;
+  }
+
+  const generationId = activeGenerationId;
+  activeGenerationId = null;
+
+  await browser.runtime.sendMessage({
+    type: CANCEL_DRAFT_GENERATION,
+    generationId,
+  } satisfies DraftletMessage).catch(() => {});
 }
