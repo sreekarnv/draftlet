@@ -112,5 +112,6 @@ Draftlet is local-first. Selected text is sent to the local Draftlet server, pro
 ## More Docs
 
 - [Setup and commands](docs/setup.md)
-- [Architecture](docs/architecture.md)
+- [v2 architecture target](docs/architecture/architecture.md)
+- [v1/current architecture reference](docs/v1/current-architecture.md)
 - [Troubleshooting](docs/troubleshooting.md)
