@@ -13,6 +13,7 @@ import {
   INSERT_REPLY,
   WORKSPACE_SESSION_UPDATED,
   START_DRAFT_GENERATION,
+  START_DRAFT_REFINEMENT,
   type ConversationThreadSnapshot,
   type DraftletMessage,
   type InsertReplyResult,
@@ -66,6 +67,9 @@ const mountedPanel = mountDraftletPanel(root, {
   },
   onGenerate() {
     void generateReplies();
+  },
+  onRefine(instruction) {
+    void refineReplies(instruction);
   },
   onInsert(replyText) {
     return insertIntoActivePage(replyText);
@@ -281,6 +285,49 @@ async function generateReplies() {
 
     if (!response.started || !response.generationId || !response.sessionId) {
       panel.setState('error', response.error?.message ?? 'Could not start draft generation.');
+      return;
+    }
+
+    activeGenerationId = response.generationId;
+    activeGenerationSessionId = response.sessionId;
+  } catch (error) {
+    panel.setConnectionStatus('disconnected');
+    panel.setState(
+      'error',
+      error instanceof Error ? error.message : 'Could not reach the Draftlet extension coordinator.',
+    );
+  }
+}
+
+
+async function refineReplies(instruction: string) {
+  if (!currentSession?.latestContext.selectedText) {
+    panel.setState('error', 'Select text on a page before refining replies.');
+    return;
+  }
+
+  const trimmedInstruction = instruction.trim();
+
+  if (!trimmedInstruction) {
+    panel.setState('error', 'Add a follow-up instruction before refining drafts.');
+    return;
+  }
+
+  await cancelActiveGeneration();
+  panel.clearReplies();
+  panel.setState('loading');
+
+  try {
+    const response = await browser.runtime.sendMessage({
+      type: START_DRAFT_REFINEMENT,
+      sessionId: currentSession.sessionId,
+      instruction: trimmedInstruction,
+      tone: currentTone,
+      activeView: currentPanelView,
+    } satisfies DraftletMessage) as StartDraftGenerationResult;
+
+    if (!response.started || !response.generationId || !response.sessionId) {
+      panel.setState('error', response.error?.message ?? 'Could not start draft refinement.');
       return;
     }
 

@@ -6,6 +6,7 @@ export const WORKSPACE_SESSION_UPDATED = 'draftlet:workspace-session-updated';
 export const CONVERSATION_THREAD_UPDATED = 'draftlet:conversation-thread-updated';
 export const GET_RUNTIME_STATUS = 'draftlet:get-runtime-status';
 export const START_DRAFT_GENERATION = 'draftlet:start-draft-generation';
+export const START_DRAFT_REFINEMENT = 'draftlet:start-draft-refinement';
 export const CANCEL_DRAFT_GENERATION = 'draftlet:cancel-draft-generation';
 export const DRAFT_GENERATION_STARTED = 'draftlet:draft-generation-started';
 export const DRAFT_VARIANT_RECEIVED = 'draftlet:draft-variant-received';
@@ -119,6 +120,7 @@ export type DraftletMessage =
   | { type: typeof CONVERSATION_THREAD_UPDATED; sessionId: string; snapshot: ConversationThreadSnapshot }
   | { type: typeof GET_RUNTIME_STATUS }
   | { type: typeof START_DRAFT_GENERATION; sessionId: string; tone?: Tone; activeView?: PanelView }
+  | { type: typeof START_DRAFT_REFINEMENT; sessionId: string; instruction: string; tone?: Tone; activeView?: PanelView }
   | { type: typeof CANCEL_DRAFT_GENERATION; sessionId?: string; generationId?: string }
   | {
       type: typeof DRAFT_GENERATION_STARTED;

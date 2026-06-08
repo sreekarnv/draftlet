@@ -129,8 +129,9 @@ The current v2 generation flow is transitional but now uses durable runtime doma
 - content script sends `draftlet:launch-side-panel` with a page context snapshot
 - service worker coordinates the active browser tab and upserts a runtime `WorkspaceSession`
 - side panel restores the active tab session with `draftlet:get-current-workspace-session`; background also asks runtime for the persisted session/thread snapshot when available
-- generation creates or reuses a session-backed `ConversationThread`, creates a `Turn`, and streams replies through `/replies`
-- runtime persists each streamed reply as both a legacy `Reply` and a new `DraftVariant` for the turn
+- initial generation creates or reuses a session-backed `ConversationThread`, creates a `Turn`, and streams replies through `/replies` with `generation_mode: initial`
+- follow-up refinement uses `draftlet:start-draft-refinement`, appends a new `Turn` to the active persisted thread, and streams `/replies` with `generation_mode: refinement` plus the user instruction
+- runtime loads prior persisted thread context for refinement prompts, then persists each streamed reply as both a legacy `Reply` and a new `DraftVariant` for the turn
 - runtime emits `draft_variant` SSE events with variant/thread/turn metadata
 - service worker emits `draftlet:draft-generation-started`, `draftlet:draft-variant-received`, `draftlet:draft-generation-completed`, and `draftlet:draft-generation-failed` with `sessionId`, `generationId`, and thread/turn/variant data
 - side panel temporarily projects `DraftVariant.content` into the existing reply-card UI
