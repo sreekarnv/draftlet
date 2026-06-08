@@ -1,4 +1,12 @@
-import { checkServerHealth, streamReplies } from '../core/api';
+import {
+  checkServerHealth,
+  getWorkspaceSessionSnapshot,
+  patchTurnStatus,
+  putConversationThread,
+  putTurn,
+  putWorkspaceSession,
+  streamReplies,
+} from '../core/api';
 import { DEFAULT_TONE } from '../core/constants';
 import {
   CANCEL_DRAFT_GENERATION,
@@ -15,12 +23,15 @@ import {
   WORKSPACE_SESSION_UPDATED,
   type CancelDraftGenerationResult,
   type ConversationThreadSnapshot,
+  type ConversationThread,
+  type DraftVariant,
   type DraftletError,
   type DraftletMessage,
   type DraftletSidePanelContext,
   type InsertReplyResult,
   type LaunchSidePanelResult,
   type RuntimeStatusResult,
+  type SourceSnapshot,
   type StartDraftGenerationResult,
   type Turn,
   type WorkspaceSession,
@@ -28,11 +39,13 @@ import {
 } from '../core/messages';
 import { createConversationThreadStore } from '../core/conversation-thread';
 import { createWorkspaceSessionStore } from '../core/workspace-session';
+import type { Tone } from '../core/types';
 
 interface ActiveGenerationController {
   generationId: string;
   threadId: string;
   turnId: string;
+  variants: DraftVariant[];
   controller: AbortController;
 }
 
@@ -98,6 +111,12 @@ async function handleLaunchSidePanel(
     session = sessions.getBySessionId(session.sessionId) ?? session;
   }
 
+  void persistWorkspaceSession(session).then((persisted) => {
+    if (persisted) {
+      emitWorkspaceSessionUpdated(persisted);
+    }
+  });
+
   try {
     await openSidePanel(session);
     void emitWorkspaceSessionUpdated(session);
@@ -119,7 +138,17 @@ async function handleGetCurrentWorkspaceSession(tabId?: number): Promise<Workspa
     return { session: null };
   }
 
-  return { session: sessions.getByTabId(resolvedTabId) };
+  const session = sessions.getByTabId(resolvedTabId);
+
+  if (!session) {
+    return { session: null };
+  }
+
+  const restored = await restoreRuntimeSnapshot(session);
+  return {
+    session: restored.session,
+    thread: restored.thread,
+  };
 }
 
 async function handleGetRuntimeStatus(): Promise<RuntimeStatusResult> {
@@ -127,10 +156,10 @@ async function handleGetRuntimeStatus(): Promise<RuntimeStatusResult> {
   return { status: connected ? 'connected' : 'disconnected' };
 }
 
-function handleStartDraftGeneration(
+async function handleStartDraftGeneration(
   sessionId: string,
   options: Pick<DraftletSidePanelContext, 'tone' | 'activeView'>,
-): StartDraftGenerationResult {
+): Promise<StartDraftGenerationResult> {
   const session = sessions.getBySessionId(sessionId);
 
   if (!session) {
@@ -152,10 +181,11 @@ function handleStartDraftGeneration(
 
   handleCancelDraftGeneration(sessionId);
 
+  const tone = options.tone ?? session.latestContext.tone ?? DEFAULT_TONE;
   const context = {
     ...session.latestContext,
     selectedText,
-    tone: options.tone ?? session.latestContext.tone ?? DEFAULT_TONE,
+    tone,
     activeView: options.activeView ?? session.latestContext.activeView,
   };
   let updatedSession = sessions.updateContext(sessionId, context) ?? session;
@@ -180,6 +210,9 @@ function handleStartDraftGeneration(
     };
   }
 
+  const thread = createThread(updatedSession, context);
+  updatedSession = sessions.setActiveThread(sessionId, thread.threadId) ?? updatedSession;
+  const turn = createTurn(thread, context, tone);
   const generationId = createGenerationId();
   const controller = new AbortController();
   const turn = turnResult.turn;
@@ -188,11 +221,35 @@ function handleStartDraftGeneration(
     generationId,
     threadId: turn.threadId,
     turnId: turn.turnId,
+  try {
+    await putWorkspaceSession(updatedSession);
+    await putConversationThread(thread);
+    await putTurn(turn);
+  } catch (error) {
+    return {
+      started: false,
+      sessionId,
+      threadId: thread.threadId,
+      turnId: turn.turnId,
+      error: createDraftletError(
+        'runtime_persistence_failed',
+        error instanceof Error ? error.message : 'Could not persist Draftlet session state.',
+        true,
+        generationId,
+      ),
+    };
+  }
+
+  activeGenerationsBySessionId.set(sessionId, {
+    generationId,
+    threadId: thread.threadId,
+    turnId: turn.turnId,
+    variants: [],
     controller,
   });
   const generatingSession = sessions.setActiveGeneration(sessionId, {
     generationId,
-    threadId: turn.threadId,
+    threadId: thread.threadId,
     turnId: turn.turnId,
     status: 'starting',
     startedAt: new Date().toISOString(),
@@ -201,12 +258,14 @@ function handleStartDraftGeneration(
   void emitWorkspaceSessionUpdated(generatingSession);
   void emitConversationThreadUpdated(sessionId, turnResult.snapshot);
   void runDraftGeneration(generatingSession.sessionId, context, generationId, turn.threadId, turn.turnId, controller);
+  void emitConversationThreadUpdated(sessionId, { thread, turns: [turn], variants: [] });
+  void runDraftGeneration(generatingSession.sessionId, context, generationId, thread, turn, controller);
 
   return {
     started: true,
     sessionId,
     generationId,
-    threadId: turn.threadId,
+    threadId: thread.threadId,
     turnId: turn.turnId,
   };
 }
@@ -229,6 +288,8 @@ function handleCancelDraftGeneration(sessionId?: string, generationId?: string):
   const updatedSession = sessions.clearActiveGeneration(session.sessionId, activeGeneration.generationId);
   const snapshot = threads.updateTurnStatus(activeGeneration.turnId, 'cancelled');
 
+  void patchTurnStatus(activeGeneration.turnId, 'cancelled').catch(() => {});
+
   if (updatedSession) {
     void emitWorkspaceSessionUpdated(updatedSession);
   }
@@ -246,6 +307,8 @@ async function runDraftGeneration(
   generationId: string,
   threadId: string,
   turnId: string,
+  thread: ConversationThread,
+  turn: Turn,
   controller: AbortController,
 ): Promise<void> {
   await Promise.resolve();
@@ -275,6 +338,13 @@ async function runDraftGeneration(
       turn: streamingTurn,
     });
   }
+  await emitDraftletMessage({
+    type: DRAFT_GENERATION_STARTED,
+    sessionId,
+    generationId,
+    threadId: thread.threadId,
+    turnId: turn.turnId,
+  });
 
   try {
     const connected = await checkServerHealth(controller.signal);
@@ -285,6 +355,8 @@ async function runDraftGeneration(
         generationId,
         threadId,
         turnId,
+        thread.threadId,
+        turn.turnId,
         createDraftletError('runtime_unavailable', 'Draftlet server is not reachable.', true, generationId),
       );
       return;
@@ -296,11 +368,18 @@ async function runDraftGeneration(
         tone: context.tone ?? DEFAULT_TONE,
         source_url: context.sourceUrl,
         source_domain: context.sourceDomain,
+        page_title: context.pageTitle,
+        session_id: sessionId,
+        thread_id: thread.threadId,
+        turn_id: turn.turnId,
+        instruction: turn.instruction,
       },
       {
         signal: controller.signal,
         onReply(reply) {
-          if (!isActiveGeneration(sessionId, generationId)) {
+          const active = activeGenerationsBySessionId.get(sessionId);
+
+          if (!active || active.generationId !== generationId) {
             return;
           }
 
@@ -316,17 +395,22 @@ async function runDraftGeneration(
           }
 
           void emitConversationThreadUpdated(sessionId, variantResult.snapshot);
+          const variant = createVariant(turn.turnId, context.tone ?? DEFAULT_TONE, reply, active.variants.length);
+          active.variants.push(variant);
+          
           void emitDraftletMessage({
             type: DRAFT_VARIANT_RECEIVED,
             sessionId,
             generationId,
-            variant: variantResult.variant,
+            variant,
           });
         },
       },
     );
 
-    if (!isActiveGeneration(sessionId, generationId)) {
+    const active = activeGenerationsBySessionId.get(sessionId);
+
+    if (!active || active.generationId !== generationId) {
       return;
     }
 
@@ -347,6 +431,16 @@ async function runDraftGeneration(
         variants: findVariantsForTurn(completedSnapshot, turnId),
       });
     }
+    
+    await emitDraftletMessage({
+      type: DRAFT_GENERATION_COMPLETED,
+      sessionId,
+      generationId,
+      threadId: thread.threadId,
+      turnId: turn.turnId,
+      variants: active.variants,
+    });
+  
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
       return;
@@ -371,6 +465,7 @@ async function runDraftGeneration(
 
       if (updatedSession) {
         void emitWorkspaceSessionUpdated(updatedSession);
+        void persistWorkspaceSession(updatedSession);
       }
     }
   }
@@ -438,6 +533,50 @@ function resolveGenerationSession(sessionId?: string, generationId?: string): Wo
   return null;
 }
 
+async function restoreRuntimeSnapshot(session: WorkspaceSession): Promise<WorkspaceSessionResult> {
+  try {
+    const snapshot = await getWorkspaceSessionSnapshot(session.sessionId);
+
+    if (!snapshot) {
+      return { session };
+    }
+
+    const restoredSession = {
+      ...snapshot.session,
+      tabId: session.tabId,
+      windowId: session.windowId,
+      latestContext: {
+        ...snapshot.session.latestContext,
+        tabId: session.tabId,
+        windowId: session.windowId,
+        tone: session.latestContext.tone,
+        activeView: session.latestContext.activeView,
+      },
+    };
+    sessions.updateContext(restoredSession.sessionId, restoredSession.latestContext);
+
+    if (restoredSession.activeThreadId) {
+      sessions.setActiveThread(restoredSession.sessionId, restoredSession.activeThreadId);
+    }
+
+    if (snapshot.thread) {
+      void emitConversationThreadUpdated(restoredSession.sessionId, snapshot.thread);
+    }
+
+    return { session: restoredSession, thread: snapshot.thread };
+  } catch {
+    return { session };
+  }
+}
+
+async function persistWorkspaceSession(session: WorkspaceSession): Promise<WorkspaceSession | null> {
+  try {
+    return await putWorkspaceSession(session);
+  } catch {
+    return null;
+  }
+}
+
 async function openSidePanel(session: WorkspaceSession) {
   if (!browser.sidePanel?.open) {
     throw new Error('Chrome side panel is not available.');
@@ -501,9 +640,13 @@ function createDraftletError(
 }
 
 function createGenerationId(): string {
+  return createDomainId('generation');
+}
+
+function createDomainId(prefix: string): string {
   if (typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
+    return `${prefix}-${crypto.randomUUID()}`;
   }
 
-  return `generation-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }

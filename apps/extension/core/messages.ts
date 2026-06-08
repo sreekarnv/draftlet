@@ -85,6 +85,7 @@ export interface DraftVariant {
   variantId: string;
   turnId: string;
   tone: Tone;
+  length?: string;
   content: string;
   rank: number;
   status: DraftVariantStatus;
@@ -97,6 +98,11 @@ export interface ConversationThreadSnapshot {
   thread: ConversationThread;
   turns: Turn[];
   variants: DraftVariant[];
+}
+
+export interface WorkspaceSessionSnapshot {
+  session: WorkspaceSession;
+  thread: ConversationThreadSnapshot | null;
 }
 
 export interface DraftletError {
@@ -148,6 +154,7 @@ export interface LaunchSidePanelResult {
 
 export interface WorkspaceSessionResult {
   session: WorkspaceSession | null;
+  thread?: ConversationThreadSnapshot | null;
 }
 
 export interface RuntimeStatusResult {

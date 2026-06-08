@@ -7,8 +7,25 @@ class ReplyRequest(BaseModel):
     model: str | None = Field(default=None, max_length=120)
     source_url: str | None = Field(default=None, max_length=2048)
     source_domain: str | None = Field(default=None, max_length=255)
+    page_title: str | None = Field(default=None, max_length=512)
+    session_id: str | None = Field(default=None, max_length=120)
+    thread_id: str | None = Field(default=None, max_length=120)
+    turn_id: str | None = Field(default=None, max_length=120)
+    instruction: str | None = Field(default=None, max_length=4000)
 
-    @field_validator("selected_text", "tone", "model", "source_url", "source_domain", mode="before")
+    @field_validator(
+        "selected_text",
+        "tone",
+        "model",
+        "source_url",
+        "source_domain",
+        "page_title",
+        "session_id",
+        "thread_id",
+        "turn_id",
+        "instruction",
+        mode="before",
+    )
     @classmethod
     def strip_text_fields(cls, value: str | None) -> str | None:
         if value is None:

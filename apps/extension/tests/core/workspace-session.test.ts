@@ -59,14 +59,14 @@ describe('workspace session store', () => {
     expect(store.getByTabId(10)?.sessionId).toBe(navigated.sessionId);
   });
 
-  it('stores the active thread for a session', () => {
+  it('stores active thread metadata for a session', () => {
     const store = createTestStore();
     const session = store.upsertFromPageContext({ context: context('First'), tabId: 10 });
 
     const updated = store.setActiveThread(session.sessionId, 'thread-1');
 
     expect(updated?.activeThreadId).toBe('thread-1');
-    expect(store.getByTabId(10)?.activeThreadId).toBe('thread-1');
+    expect(store.getBySessionId(session.sessionId)?.activeThreadId).toBe('thread-1');
   });
 
   it('tracks active generation metadata per session', () => {
