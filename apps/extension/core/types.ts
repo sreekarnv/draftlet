@@ -9,11 +9,19 @@ export interface ReplyRequestPayload {
   model?: string;
   source_url?: string;
   source_domain?: string;
+  page_title?: string;
+  session_id?: string;
+  thread_id?: string;
+  turn_id?: string;
+  instruction?: string;
 }
 
 export interface StreamedReply {
   text: string;
   replyId?: number;
+  variantId?: string;
+  threadId?: string;
+  turnId?: string;
 }
 
 export interface ReplyItem {
@@ -40,7 +48,6 @@ export interface HistoryGeneration {
   created_at: string;
   replies: HistoryReply[];
 }
-
 
 export interface PreferenceItem {
   id: number;

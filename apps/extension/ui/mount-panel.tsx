@@ -39,7 +39,7 @@ export interface PanelController {
   setConnectionStatus(status: ConnectionStatus): void;
   setState(state: PanelState, message?: string): void;
   clearReplies(): void;
-  addReply(reply: StreamedReply): void;
+  addReply(reply: StreamedReply | ReplyItem): void;
   subscribe(listener: (action: PanelAction) => void): () => void;
 }
 
@@ -138,11 +138,13 @@ function createPanelController(initialTone: Tone, initialView: PanelView): Panel
     addReply(reply) {
       emit({
         type: 'addReply',
-        reply: {
-          id: reply.replyId ? `reply-${reply.replyId}` : crypto.randomUUID(),
-          text: reply.text,
-          persistedId: reply.replyId,
-        },
+        reply: 'id' in reply
+          ? reply
+          : {
+            id: reply.replyId ? `reply-${reply.replyId}` : crypto.randomUUID(),
+            text: reply.text,
+            persistedId: reply.replyId,
+          },
       });
     },
     subscribe(nextListener) {
