@@ -1,0 +1,72 @@
+from datetime import datetime
+from typing import TYPE_CHECKING
+
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.db.base import Base
+
+if TYPE_CHECKING:
+    from app.db.models.workspace import WorkspaceSession
+
+
+class ConversationThread(Base):
+    __tablename__ = "conversation_threads"
+
+    thread_id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    session_id: Mapped[str] = mapped_column(ForeignKey("workspace_sessions.session_id", ondelete="CASCADE"), index=True)
+    selected_text: Mapped[str] = mapped_column(Text)
+    source_url: Mapped[str] = mapped_column(Text)
+    source_domain: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    page_title: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(40), default="active")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    session: Mapped["WorkspaceSession"] = relationship(back_populates="threads")
+    turns: Mapped[list["Turn"]] = relationship(
+        back_populates="thread",
+        cascade="all, delete-orphan",
+        order_by="Turn.created_at",
+    )
+
+
+class Turn(Base):
+    __tablename__ = "turns"
+
+    turn_id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    thread_id: Mapped[str] = mapped_column(ForeignKey("conversation_threads.thread_id", ondelete="CASCADE"), index=True)
+    instruction: Mapped[str] = mapped_column(Text)
+    selected_text: Mapped[str] = mapped_column(Text)
+    source_url: Mapped[str] = mapped_column(Text)
+    source_domain: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    page_title: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tone: Mapped[str] = mapped_column(String(80))
+    generation_status: Mapped[str] = mapped_column(String(40), default="queued")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    thread: Mapped["ConversationThread"] = relationship(back_populates="turns")
+    variants: Mapped[list["DraftVariant"]] = relationship(
+        back_populates="turn",
+        cascade="all, delete-orphan",
+        order_by="DraftVariant.rank",
+    )
+
+
+class DraftVariant(Base):
+    __tablename__ = "draft_variants"
+    __table_args__ = (UniqueConstraint("turn_id", "rank", name="uq_draft_variants_turn_rank"),)
+
+    variant_id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    turn_id: Mapped[str] = mapped_column(ForeignKey("turns.turn_id", ondelete="CASCADE"), index=True)
+    tone: Mapped[str] = mapped_column(String(80))
+    length: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    content: Mapped[str] = mapped_column(Text)
+    rank: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(40), default="generated")
+    legacy_reply_id: Mapped[int | None] = mapped_column(ForeignKey("replies.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    turn: Mapped["Turn"] = relationship(back_populates="variants")

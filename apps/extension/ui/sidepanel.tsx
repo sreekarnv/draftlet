@@ -6,12 +6,14 @@ import {
   DRAFT_GENERATION_COMPLETED,
   DRAFT_GENERATION_FAILED,
   DRAFT_GENERATION_STARTED,
-  DRAFT_REPLY_RECEIVED,
+  CONVERSATION_THREAD_UPDATED,
+  DRAFT_VARIANT_RECEIVED,
   GET_CURRENT_WORKSPACE_SESSION,
   GET_RUNTIME_STATUS,
   INSERT_REPLY,
   WORKSPACE_SESSION_UPDATED,
   START_DRAFT_GENERATION,
+  type ConversationThreadSnapshot,
   type DraftletMessage,
   type InsertReplyResult,
   type RuntimeStatusResult,
@@ -28,6 +30,7 @@ let currentTone: Tone = DEFAULT_TONE;
 let currentPanelView: PanelView = DEFAULT_PANEL_VIEW;
 let activeGenerationId: string | null = null;
 let activeGenerationSessionId: string | null = null;
+let currentThreadSnapshot: ConversationThreadSnapshot | null = null;
 
 const root = document.getElementById('root');
 
@@ -98,6 +101,11 @@ async function initializeSidePanel() {
 
     if (response.session) {
       applySession(response.session);
+
+      if (response.thread) {
+        applyThreadSnapshot(response.thread, true);
+      }
+
       return;
     }
   } catch {
@@ -129,12 +137,23 @@ function handleDraftletMessage(message: DraftletMessage) {
     return;
   }
 
+  if (message.type === CONVERSATION_THREAD_UPDATED) {
+    if (currentSession?.sessionId === message.sessionId) {
+      applyThreadSnapshot(message.snapshot, false);
+    }
+    return;
+  }
+
   if (
-    message.type === DRAFT_REPLY_RECEIVED
+    message.type === DRAFT_VARIANT_RECEIVED
     && message.sessionId === activeGenerationSessionId
     && message.generationId === activeGenerationId
   ) {
-    panel.addReply(message.reply);
+    panel.addReply({
+      id: message.variant.variantId,
+      text: message.variant.content,
+      persistedId: message.variant.persistedReplyId,
+    });
     return;
   }
 
@@ -144,7 +163,7 @@ function handleDraftletMessage(message: DraftletMessage) {
     && message.generationId === activeGenerationId
   ) {
     clearActiveGeneration();
-    panel.setState(message.replyCount > 0 ? 'success' : 'error', 'No replies returned.');
+    panel.setState(message.variants.length > 0 ? 'success' : 'error', 'No replies returned.');
     return;
   }
 
@@ -157,6 +176,38 @@ function handleDraftletMessage(message: DraftletMessage) {
     panel.setConnectionStatus('disconnected');
     panel.setState('error', message.error.message);
   }
+}
+
+function applyThreadSnapshot(snapshot: ConversationThreadSnapshot, renderLatestTurn: boolean) {
+  currentThreadSnapshot = snapshot;
+
+  if (!renderLatestTurn) {
+    return;
+  }
+
+  const latestTurn = [...snapshot.turns].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).at(-1);
+
+  if (!latestTurn) {
+    return;
+  }
+
+  const variants = snapshot.variants
+    .filter((variant) => variant.turnId === latestTurn.turnId)
+    .sort((a, b) => a.rank - b.rank);
+
+  if (variants.length === 0) {
+    return;
+  }
+
+  panel.clearReplies();
+  for (const variant of variants) {
+    panel.addReply({
+      id: variant.variantId,
+      text: variant.content,
+      persistedId: variant.persistedReplyId,
+    });
+  }
+  panel.setState('success');
 }
 
 function shouldApplySessionUpdate(session: WorkspaceSession): boolean {

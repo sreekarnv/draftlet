@@ -1,4 +1,5 @@
 from collections.abc import AsyncIterator
+import json
 
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
@@ -29,6 +30,18 @@ def format_sse_event(event: ReplyEvent) -> str:
 
     if event.reply_id is not None:
         event_lines.append(f"id: {event.reply_id}")
+
+    if event.variant_id:
+        event_lines.append("event: draft_variant")
+        payload = {
+            "reply": event.reply,
+            "reply_id": event.reply_id,
+            "variant_id": event.variant_id,
+            "turn_id": event.turn_id,
+            "thread_id": event.thread_id,
+        }
+        event_lines.append(f"data: {json.dumps(payload, separators=(',', ':'))}")
+        return f"{'\n'.join(event_lines)}\n\n"
 
     reply_lines = event.reply.splitlines() or [""]
     event_lines.extend(f"data: {line}" for line in reply_lines)
