@@ -7,7 +7,6 @@ import {
   DRAFT_GENERATION_COMPLETED,
   DRAFT_GENERATION_FAILED,
   DRAFT_GENERATION_STARTED,
-  CONVERSATION_THREAD_UPDATED,
   DRAFT_VARIANT_RECEIVED,
   GET_CURRENT_WORKSPACE_SESSION,
   GET_RUNTIME_STATUS,
@@ -19,7 +18,6 @@ import {
   type InsertReplyResult,
   type RuntimeStatusResult,
   type StartDraftGenerationResult,
-  type ConversationThreadSnapshot,
   type WorkspaceSession,
   type WorkspaceSessionResult,
 } from '../core/messages';
@@ -131,7 +129,7 @@ function handleDraftletMessage(message: DraftletMessage) {
 
   if (message.type === CONVERSATION_THREAD_UPDATED) {
     if (currentSession?.sessionId === message.sessionId) {
-      currentThreadSnapshot = message.snapshot;
+      applyThreadSnapshot(message.snapshot, false);
     }
     return;
   }
@@ -143,13 +141,6 @@ function handleDraftletMessage(message: DraftletMessage) {
   ) {
     panel.setConnectionStatus('connected');
     panel.setState('streaming');
-    return;
-  }
-
-  if (message.type === CONVERSATION_THREAD_UPDATED) {
-    if (currentSession?.sessionId === message.sessionId) {
-      applyThreadSnapshot(message.snapshot, false);
-    }
     return;
   }
 

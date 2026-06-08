@@ -31,7 +31,6 @@ import {
   type InsertReplyResult,
   type LaunchSidePanelResult,
   type RuntimeStatusResult,
-  type SourceSnapshot,
   type StartDraftGenerationResult,
   type Turn,
   type WorkspaceSession,
@@ -210,17 +209,11 @@ async function handleStartDraftGeneration(
     };
   }
 
-  const thread = createThread(updatedSession, context);
-  updatedSession = sessions.setActiveThread(sessionId, thread.threadId) ?? updatedSession;
-  const turn = createTurn(thread, context, tone);
   const generationId = createGenerationId();
   const controller = new AbortController();
+  const thread = turnResult.snapshot.thread;
   const turn = turnResult.turn;
 
-  activeGenerationsBySessionId.set(sessionId, {
-    generationId,
-    threadId: turn.threadId,
-    turnId: turn.turnId,
   try {
     await putWorkspaceSession(updatedSession);
     await putConversationThread(thread);
@@ -257,8 +250,6 @@ async function handleStartDraftGeneration(
 
   void emitWorkspaceSessionUpdated(generatingSession);
   void emitConversationThreadUpdated(sessionId, turnResult.snapshot);
-  void runDraftGeneration(generatingSession.sessionId, context, generationId, turn.threadId, turn.turnId, controller);
-  void emitConversationThreadUpdated(sessionId, { thread, turns: [turn], variants: [] });
   void runDraftGeneration(generatingSession.sessionId, context, generationId, thread, turn, controller);
 
   return {
@@ -305,8 +296,6 @@ async function runDraftGeneration(
   sessionId: string,
   context: DraftletSidePanelContext,
   generationId: string,
-  threadId: string,
-  turnId: string,
   thread: ConversationThread,
   turn: Turn,
   controller: AbortController,
@@ -318,8 +307,8 @@ async function runDraftGeneration(
   }
 
   const streamingSession = sessions.updateActiveGenerationStatus(sessionId, generationId, 'streaming');
-  const streamingSnapshot = threads.updateTurnStatus(turnId, 'streaming');
-  const streamingTurn = streamingSnapshot ? findTurn(streamingSnapshot, turnId) : null;
+  const streamingSnapshot = threads.updateTurnStatus(turn.turnId, 'streaming');
+  const streamingTurn = streamingSnapshot ? findTurn(streamingSnapshot, turn.turnId) : null;
 
   if (streamingSession) {
     void emitWorkspaceSessionUpdated(streamingSession);
@@ -329,21 +318,12 @@ async function runDraftGeneration(
     void emitConversationThreadUpdated(sessionId, streamingSnapshot);
   }
 
-  if (streamingSnapshot?.thread && streamingTurn) {
-    await emitDraftletMessage({
-      type: DRAFT_GENERATION_STARTED,
-      sessionId,
-      generationId,
-      thread: streamingSnapshot.thread,
-      turn: streamingTurn,
-    });
-  }
   await emitDraftletMessage({
     type: DRAFT_GENERATION_STARTED,
     sessionId,
     generationId,
-    threadId: thread.threadId,
-    turnId: turn.turnId,
+    thread: streamingSnapshot?.thread ?? thread,
+    turn: streamingTurn ?? { ...turn, generationStatus: 'streaming' },
   });
 
   try {
@@ -353,8 +333,6 @@ async function runDraftGeneration(
       await emitGenerationFailed(
         sessionId,
         generationId,
-        threadId,
-        turnId,
         thread.threadId,
         turn.turnId,
         createDraftletError('runtime_unavailable', 'Draftlet server is not reachable.', true, generationId),
@@ -384,7 +362,7 @@ async function runDraftGeneration(
           }
 
           const variantResult = threads.addVariant({
-            turnId,
+            turnId: turn.turnId,
             tone: context.tone ?? DEFAULT_TONE,
             content: reply.text,
             persistedReplyId: reply.replyId,
@@ -395,14 +373,13 @@ async function runDraftGeneration(
           }
 
           void emitConversationThreadUpdated(sessionId, variantResult.snapshot);
-          const variant = createVariant(turn.turnId, context.tone ?? DEFAULT_TONE, reply, active.variants.length);
-          active.variants.push(variant);
-          
+          active.variants.push(variantResult.variant);
+
           void emitDraftletMessage({
             type: DRAFT_VARIANT_RECEIVED,
             sessionId,
             generationId,
-            variant,
+            variant: variantResult.variant,
           });
         },
       },
@@ -414,33 +391,22 @@ async function runDraftGeneration(
       return;
     }
 
-    const completedSnapshot = threads.updateTurnStatus(turnId, 'completed');
-    const completedTurn = completedSnapshot ? findTurn(completedSnapshot, turnId) : null;
+    const completedSnapshot = threads.updateTurnStatus(turn.turnId, 'completed');
+    const completedTurn = completedSnapshot ? findTurn(completedSnapshot, turn.turnId) : null;
 
     if (completedSnapshot) {
       void emitConversationThreadUpdated(sessionId, completedSnapshot);
     }
 
-    if (completedSnapshot?.thread && completedTurn) {
-      await emitDraftletMessage({
-        type: DRAFT_GENERATION_COMPLETED,
-        sessionId,
-        generationId,
-        thread: completedSnapshot.thread,
-        turn: completedTurn,
-        variants: findVariantsForTurn(completedSnapshot, turnId),
-      });
-    }
-    
     await emitDraftletMessage({
       type: DRAFT_GENERATION_COMPLETED,
       sessionId,
       generationId,
-      threadId: thread.threadId,
-      turnId: turn.turnId,
-      variants: active.variants,
+      thread: completedSnapshot?.thread ?? thread,
+      turn: completedTurn ?? { ...turn, generationStatus: 'completed' },
+      variants: completedSnapshot ? findVariantsForTurn(completedSnapshot, turn.turnId) : active.variants,
     });
-  
+
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
       return;
@@ -449,8 +415,8 @@ async function runDraftGeneration(
     await emitGenerationFailed(
       sessionId,
       generationId,
-      threadId,
-      turnId,
+      thread.threadId,
+      turn.turnId,
       createDraftletError(
         'generation_failed',
         error instanceof Error ? error.message : 'Could not stream replies from the local server.',
