@@ -116,5 +116,6 @@ function createSidePanelContext(selectedText: string): DraftletSidePanelContext 
     selectedText,
     sourceUrl: window.location.href,
     sourceDomain: window.location.hostname || undefined,
+    pageTitle: document.title || undefined,
   };
 }
