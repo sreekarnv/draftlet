@@ -2,17 +2,19 @@ import { checkServerHealth, streamReplies } from '../core/api';
 import { DEFAULT_TONE } from '../core/constants';
 import {
   CANCEL_DRAFT_GENERATION,
+  CONVERSATION_THREAD_UPDATED,
   DRAFT_GENERATION_COMPLETED,
   DRAFT_GENERATION_FAILED,
   DRAFT_GENERATION_STARTED,
-  DRAFT_REPLY_RECEIVED,
+  DRAFT_VARIANT_RECEIVED,
   GET_CURRENT_WORKSPACE_SESSION,
   GET_RUNTIME_STATUS,
   INSERT_REPLY,
   LAUNCH_SIDE_PANEL,
-  WORKSPACE_SESSION_UPDATED,
   START_DRAFT_GENERATION,
+  WORKSPACE_SESSION_UPDATED,
   type CancelDraftGenerationResult,
+  type ConversationThreadSnapshot,
   type DraftletError,
   type DraftletMessage,
   type DraftletSidePanelContext,
@@ -20,17 +22,22 @@ import {
   type LaunchSidePanelResult,
   type RuntimeStatusResult,
   type StartDraftGenerationResult,
+  type Turn,
   type WorkspaceSession,
   type WorkspaceSessionResult,
 } from '../core/messages';
+import { createConversationThreadStore } from '../core/conversation-thread';
 import { createWorkspaceSessionStore } from '../core/workspace-session';
 
 interface ActiveGenerationController {
   generationId: string;
+  threadId: string;
+  turnId: string;
   controller: AbortController;
 }
 
 const sessions = createWorkspaceSessionStore();
+const threads = createConversationThreadStore();
 const activeGenerationsBySessionId = new Map<string, ActiveGenerationController>();
 
 export default defineBackground(() => {
@@ -151,21 +158,57 @@ function handleStartDraftGeneration(
     tone: options.tone ?? session.latestContext.tone ?? DEFAULT_TONE,
     activeView: options.activeView ?? session.latestContext.activeView,
   };
-  const updatedSession = sessions.updateContext(sessionId, context) ?? session;
+  let updatedSession = sessions.updateContext(sessionId, context) ?? session;
+  const threadSnapshot = threads.ensureThreadForSession({
+    sessionId,
+    activeThreadId: updatedSession.activeThreadId,
+    context,
+  });
+  updatedSession = sessions.setActiveThread(sessionId, threadSnapshot.thread.threadId) ?? updatedSession;
+
+  const turnResult = threads.createTurn({
+    threadId: threadSnapshot.thread.threadId,
+    context,
+    tone: context.tone ?? DEFAULT_TONE,
+  });
+
+  if (!turnResult) {
+    return {
+      started: false,
+      sessionId,
+      error: createDraftletError('thread_not_found', 'Draftlet thread was not found for this session.', true, sessionId),
+    };
+  }
+
   const generationId = createGenerationId();
   const controller = new AbortController();
+  const turn = turnResult.turn;
 
-  activeGenerationsBySessionId.set(sessionId, { generationId, controller });
+  activeGenerationsBySessionId.set(sessionId, {
+    generationId,
+    threadId: turn.threadId,
+    turnId: turn.turnId,
+    controller,
+  });
   const generatingSession = sessions.setActiveGeneration(sessionId, {
     generationId,
+    threadId: turn.threadId,
+    turnId: turn.turnId,
     status: 'starting',
     startedAt: new Date().toISOString(),
   }) ?? updatedSession;
 
   void emitWorkspaceSessionUpdated(generatingSession);
-  void runDraftGeneration(generatingSession.sessionId, context, generationId, controller);
+  void emitConversationThreadUpdated(sessionId, turnResult.snapshot);
+  void runDraftGeneration(generatingSession.sessionId, context, generationId, turn.threadId, turn.turnId, controller);
 
-  return { started: true, sessionId, generationId };
+  return {
+    started: true,
+    sessionId,
+    generationId,
+    threadId: turn.threadId,
+    turnId: turn.turnId,
+  };
 }
 
 function handleCancelDraftGeneration(sessionId?: string, generationId?: string): CancelDraftGenerationResult {
@@ -184,9 +227,14 @@ function handleCancelDraftGeneration(sessionId?: string, generationId?: string):
   activeGeneration.controller.abort();
   activeGenerationsBySessionId.delete(session.sessionId);
   const updatedSession = sessions.clearActiveGeneration(session.sessionId, activeGeneration.generationId);
+  const snapshot = threads.updateTurnStatus(activeGeneration.turnId, 'cancelled');
 
   if (updatedSession) {
     void emitWorkspaceSessionUpdated(updatedSession);
+  }
+
+  if (snapshot) {
+    void emitConversationThreadUpdated(session.sessionId, snapshot);
   }
 
   return { canceled: true };
@@ -196,10 +244,10 @@ async function runDraftGeneration(
   sessionId: string,
   context: DraftletSidePanelContext,
   generationId: string,
+  threadId: string,
+  turnId: string,
   controller: AbortController,
 ): Promise<void> {
-  let replyCount = 0;
-
   await Promise.resolve();
 
   if (!isActiveGeneration(sessionId, generationId)) {
@@ -207,16 +255,26 @@ async function runDraftGeneration(
   }
 
   const streamingSession = sessions.updateActiveGenerationStatus(sessionId, generationId, 'streaming');
+  const streamingSnapshot = threads.updateTurnStatus(turnId, 'streaming');
+  const streamingTurn = streamingSnapshot ? findTurn(streamingSnapshot, turnId) : null;
 
   if (streamingSession) {
     void emitWorkspaceSessionUpdated(streamingSession);
   }
 
-  await emitDraftletMessage({
-    type: DRAFT_GENERATION_STARTED,
-    sessionId,
-    generationId,
-  });
+  if (streamingSnapshot) {
+    void emitConversationThreadUpdated(sessionId, streamingSnapshot);
+  }
+
+  if (streamingSnapshot?.thread && streamingTurn) {
+    await emitDraftletMessage({
+      type: DRAFT_GENERATION_STARTED,
+      sessionId,
+      generationId,
+      thread: streamingSnapshot.thread,
+      turn: streamingTurn,
+    });
+  }
 
   try {
     const connected = await checkServerHealth(controller.signal);
@@ -225,6 +283,8 @@ async function runDraftGeneration(
       await emitGenerationFailed(
         sessionId,
         generationId,
+        threadId,
+        turnId,
         createDraftletError('runtime_unavailable', 'Draftlet server is not reachable.', true, generationId),
       );
       return;
@@ -244,12 +304,23 @@ async function runDraftGeneration(
             return;
           }
 
-          replyCount += 1;
+          const variantResult = threads.addVariant({
+            turnId,
+            tone: context.tone ?? DEFAULT_TONE,
+            content: reply.text,
+            persistedReplyId: reply.replyId,
+          });
+
+          if (!variantResult) {
+            return;
+          }
+
+          void emitConversationThreadUpdated(sessionId, variantResult.snapshot);
           void emitDraftletMessage({
-            type: DRAFT_REPLY_RECEIVED,
+            type: DRAFT_VARIANT_RECEIVED,
             sessionId,
             generationId,
-            reply,
+            variant: variantResult.variant,
           });
         },
       },
@@ -259,12 +330,23 @@ async function runDraftGeneration(
       return;
     }
 
-    await emitDraftletMessage({
-      type: DRAFT_GENERATION_COMPLETED,
-      sessionId,
-      generationId,
-      replyCount,
-    });
+    const completedSnapshot = threads.updateTurnStatus(turnId, 'completed');
+    const completedTurn = completedSnapshot ? findTurn(completedSnapshot, turnId) : null;
+
+    if (completedSnapshot) {
+      void emitConversationThreadUpdated(sessionId, completedSnapshot);
+    }
+
+    if (completedSnapshot?.thread && completedTurn) {
+      await emitDraftletMessage({
+        type: DRAFT_GENERATION_COMPLETED,
+        sessionId,
+        generationId,
+        thread: completedSnapshot.thread,
+        turn: completedTurn,
+        variants: findVariantsForTurn(completedSnapshot, turnId),
+      });
+    }
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
       return;
@@ -273,6 +355,8 @@ async function runDraftGeneration(
     await emitGenerationFailed(
       sessionId,
       generationId,
+      threadId,
+      turnId,
       createDraftletError(
         'generation_failed',
         error instanceof Error ? error.message : 'Could not stream replies from the local server.',
@@ -292,15 +376,29 @@ async function runDraftGeneration(
   }
 }
 
-async function emitGenerationFailed(sessionId: string, generationId: string, error: DraftletError): Promise<void> {
+async function emitGenerationFailed(
+  sessionId: string,
+  generationId: string,
+  threadId: string,
+  turnId: string,
+  error: DraftletError,
+): Promise<void> {
   if (!isActiveGeneration(sessionId, generationId)) {
     return;
+  }
+
+  const failedSnapshot = threads.updateTurnStatus(turnId, 'failed');
+
+  if (failedSnapshot) {
+    void emitConversationThreadUpdated(sessionId, failedSnapshot);
   }
 
   await emitDraftletMessage({
     type: DRAFT_GENERATION_FAILED,
     sessionId,
     generationId,
+    threadId,
+    turnId,
     error,
   });
 }
@@ -368,8 +466,24 @@ function emitWorkspaceSessionUpdated(session: WorkspaceSession): Promise<unknown
   });
 }
 
+function emitConversationThreadUpdated(sessionId: string, snapshot: ConversationThreadSnapshot): Promise<unknown> {
+  return emitDraftletMessage({
+    type: CONVERSATION_THREAD_UPDATED,
+    sessionId,
+    snapshot,
+  });
+}
+
 function emitDraftletMessage(message: DraftletMessage): Promise<unknown> {
   return browser.runtime.sendMessage(message).catch(() => {});
+}
+
+function findTurn(snapshot: ConversationThreadSnapshot, turnId: string): Turn | null {
+  return snapshot.turns.find((turn) => turn.turnId === turnId) ?? null;
+}
+
+function findVariantsForTurn(snapshot: ConversationThreadSnapshot, turnId: string) {
+  return snapshot.variants.filter((variant) => variant.turnId === turnId);
 }
 
 function createDraftletError(

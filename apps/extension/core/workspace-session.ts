@@ -20,6 +20,7 @@ export interface WorkspaceSessionStore {
   getBySessionId(sessionId: string): WorkspaceSession | null;
   getByTabId(tabId: number): WorkspaceSession | null;
   updateContext(sessionId: string, context: DraftletSidePanelContext): WorkspaceSession | null;
+  setActiveThread(sessionId: string, threadId: string): WorkspaceSession | null;
   setActiveGeneration(sessionId: string, generation: WorkspaceSessionGeneration): WorkspaceSession | null;
   updateActiveGenerationStatus(
     sessionId: string,
@@ -108,6 +109,16 @@ export function createWorkspaceSessionStore({
         pageTitle: normalizedContext.pageTitle,
         latestContext: normalizedContext,
       });
+    },
+
+    setActiveThread(sessionId, threadId) {
+      const session = sessionsById.get(sessionId);
+
+      if (!session) {
+        return null;
+      }
+
+      return touch(session, { activeThreadId: threadId });
     },
 
     setActiveGeneration(sessionId, generation) {
