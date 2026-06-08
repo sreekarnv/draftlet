@@ -7,26 +7,27 @@ import {
   DRAFT_GENERATION_FAILED,
   DRAFT_GENERATION_STARTED,
   DRAFT_REPLY_RECEIVED,
+  GET_CURRENT_WORKSPACE_SESSION,
   GET_RUNTIME_STATUS,
-  GET_SIDE_PANEL_CONTEXT,
   INSERT_REPLY,
-  SIDE_PANEL_CONTEXT_UPDATED,
+  WORKSPACE_SESSION_UPDATED,
   START_DRAFT_GENERATION,
   type DraftletMessage,
-  type DraftletSidePanelContext,
   type InsertReplyResult,
   type RuntimeStatusResult,
-  type SidePanelContextResult,
   type StartDraftGenerationResult,
+  type WorkspaceSession,
+  type WorkspaceSessionResult,
 } from '../core/messages';
 import { getSavedPanelView, getSavedTone, savePanelView, saveTone } from '../core/storage';
 import type { InsertionResult, PanelView, Tone } from '../core/types';
 import { mountDraftletPanel } from '../ui/mount-panel';
 
-let currentContext: DraftletSidePanelContext | null = null;
+let currentSession: WorkspaceSession | null = null;
 let currentTone: Tone = DEFAULT_TONE;
 let currentPanelView: PanelView = DEFAULT_PANEL_VIEW;
 let activeGenerationId: string | null = null;
+let activeGenerationSessionId: string | null = null;
 
 const root = document.getElementById('root');
 
@@ -40,12 +41,24 @@ const mountedPanel = mountDraftletPanel(root, {
   surface: 'sidepanel',
   onToneChange(tone) {
     currentTone = tone;
-    currentContext = currentContext ? { ...currentContext, tone } : currentContext;
+    currentSession = currentSession ? {
+      ...currentSession,
+      latestContext: {
+        ...currentSession.latestContext,
+        tone,
+      },
+    } : currentSession;
     void saveTone(tone);
   },
   onViewChange(activeView) {
     currentPanelView = activeView;
-    currentContext = currentContext ? { ...currentContext, activeView } : currentContext;
+    currentSession = currentSession ? {
+      ...currentSession,
+      latestContext: {
+        ...currentSession.latestContext,
+        activeView,
+      },
+    } : currentSession;
     void savePanelView(activeView);
   },
   onGenerate() {
@@ -80,11 +93,11 @@ async function initializeSidePanel() {
 
   try {
     const response = await browser.runtime.sendMessage({
-      type: GET_SIDE_PANEL_CONTEXT,
-    } satisfies DraftletMessage) as SidePanelContextResult;
+      type: GET_CURRENT_WORKSPACE_SESSION,
+    } satisfies DraftletMessage) as WorkspaceSessionResult;
 
-    if (response.context) {
-      applyContext(response.context);
+    if (response.session) {
+      applySession(response.session);
       return;
     }
   } catch {
@@ -99,52 +112,87 @@ async function initializeSidePanel() {
 }
 
 function handleDraftletMessage(message: DraftletMessage) {
-  if (message.type === SIDE_PANEL_CONTEXT_UPDATED) {
-    applyContext(message.context);
+  if (message.type === WORKSPACE_SESSION_UPDATED) {
+    if (shouldApplySessionUpdate(message.session)) {
+      applySession(message.session);
+    }
     return;
   }
 
-  if (message.type === DRAFT_GENERATION_STARTED && message.generationId === activeGenerationId) {
+  if (
+    message.type === DRAFT_GENERATION_STARTED
+    && message.sessionId === activeGenerationSessionId
+    && message.generationId === activeGenerationId
+  ) {
     panel.setConnectionStatus('connected');
     panel.setState('streaming');
     return;
   }
 
-  if (message.type === DRAFT_REPLY_RECEIVED && message.generationId === activeGenerationId) {
+  if (
+    message.type === DRAFT_REPLY_RECEIVED
+    && message.sessionId === activeGenerationSessionId
+    && message.generationId === activeGenerationId
+  ) {
     panel.addReply(message.reply);
     return;
   }
 
-  if (message.type === DRAFT_GENERATION_COMPLETED && message.generationId === activeGenerationId) {
-    activeGenerationId = null;
+  if (
+    message.type === DRAFT_GENERATION_COMPLETED
+    && message.sessionId === activeGenerationSessionId
+    && message.generationId === activeGenerationId
+  ) {
+    clearActiveGeneration();
     panel.setState(message.replyCount > 0 ? 'success' : 'error', 'No replies returned.');
     return;
   }
 
-  if (message.type === DRAFT_GENERATION_FAILED && message.generationId === activeGenerationId) {
-    activeGenerationId = null;
+  if (
+    message.type === DRAFT_GENERATION_FAILED
+    && message.sessionId === activeGenerationSessionId
+    && message.generationId === activeGenerationId
+  ) {
+    clearActiveGeneration();
     panel.setConnectionStatus('disconnected');
     panel.setState('error', message.error.message);
   }
 }
 
-function applyContext(context: DraftletSidePanelContext) {
-  const tone = context.tone ?? currentTone;
-  const activeView = context.activeView ?? currentPanelView;
+function shouldApplySessionUpdate(session: WorkspaceSession): boolean {
+  return !currentSession
+    || currentSession.sessionId === session.sessionId
+    || currentSession.tabId === session.tabId;
+}
 
-  currentContext = {
-    ...context,
-    tone,
-    activeView,
+function applySession(session: WorkspaceSession) {
+  const previousSession = currentSession;
+  const tone = session.latestContext.tone ?? currentTone;
+  const activeView = session.latestContext.activeView ?? currentPanelView;
+  const shouldOpenSession = !previousSession
+    || previousSession.sessionId !== session.sessionId
+    || previousSession.pageUrl !== session.pageUrl
+    || previousSession.latestContext.selectedText !== session.latestContext.selectedText;
+
+  currentSession = {
+    ...session,
+    latestContext: {
+      ...session.latestContext,
+      tone,
+      activeView,
+    },
   };
   currentTone = tone;
   currentPanelView = activeView;
 
-  panel.open({
-    selectedText: context.selectedText,
-    tone,
-    activeView,
-  });
+  if (shouldOpenSession) {
+    panel.open({
+      selectedText: session.latestContext.selectedText,
+      tone,
+      activeView,
+    });
+  }
+
   void refreshHealth();
 }
 
@@ -163,7 +211,7 @@ async function refreshHealth() {
 }
 
 async function generateReplies() {
-  if (!currentContext?.selectedText) {
+  if (!currentSession?.latestContext.selectedText) {
     panel.setState('error', 'Select text on a page before generating replies.');
     return;
   }
@@ -175,19 +223,18 @@ async function generateReplies() {
   try {
     const response = await browser.runtime.sendMessage({
       type: START_DRAFT_GENERATION,
-      context: {
-        ...currentContext,
-        tone: currentTone,
-        activeView: currentPanelView,
-      },
+      sessionId: currentSession.sessionId,
+      tone: currentTone,
+      activeView: currentPanelView,
     } satisfies DraftletMessage) as StartDraftGenerationResult;
 
-    if (!response.started || !response.generationId) {
+    if (!response.started || !response.generationId || !response.sessionId) {
       panel.setState('error', response.error?.message ?? 'Could not start draft generation.');
       return;
     }
 
     activeGenerationId = response.generationId;
+    activeGenerationSessionId = response.sessionId;
   } catch (error) {
     panel.setConnectionStatus('disconnected');
     panel.setState(
@@ -201,6 +248,7 @@ async function insertIntoActivePage(replyText: string): Promise<InsertionResult>
   try {
     const response = await browser.runtime.sendMessage({
       type: INSERT_REPLY,
+      sessionId: currentSession?.sessionId,
       replyText,
     } satisfies DraftletMessage) as InsertReplyResult;
 
@@ -239,15 +287,22 @@ async function closeSidePanel() {
 }
 
 async function cancelActiveGeneration() {
-  if (!activeGenerationId) {
+  if (!activeGenerationId || !activeGenerationSessionId) {
     return;
   }
 
   const generationId = activeGenerationId;
-  activeGenerationId = null;
+  const sessionId = activeGenerationSessionId;
+  clearActiveGeneration();
 
   await browser.runtime.sendMessage({
     type: CANCEL_DRAFT_GENERATION,
+    sessionId,
     generationId,
   } satisfies DraftletMessage).catch(() => {});
+}
+
+function clearActiveGeneration() {
+  activeGenerationId = null;
+  activeGenerationSessionId = null;
 }

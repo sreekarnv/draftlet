@@ -107,19 +107,20 @@ Each streaming event should include:
 The runtime should not emit UI-specific instructions. It should emit domain and transport events that the side panel can map into UI states.
 
 
-## Phase 1 Extension Flow
+## Extension WorkspaceSession Flow
 
-The current v2 Phase 1 extension generation flow is intentionally transitional:
+The current v2 extension generation flow is intentionally transitional but session-aware:
 - content script sends `draftlet:launch-side-panel` with a page context snapshot
-- service worker stores the latest tab/window context and opens the side panel
-- side panel requests runtime status with `draftlet:get-runtime-status`
-- side panel starts generation with `draftlet:start-draft-generation`
-- service worker owns the local runtime health check and `/replies` stream
-- service worker emits `draftlet:draft-generation-started`, `draftlet:draft-reply-received`, `draftlet:draft-generation-completed`, and `draftlet:draft-generation-failed`
-- side panel can cancel with `draftlet:cancel-draft-generation`
-- insertion remains explicit: side panel sends `draftlet:insert-reply`, service worker forwards it to the content script, and the content script performs best-effort DOM insertion
+- service worker creates or updates a per-tab `WorkspaceSession`
+- side panel restores the active tab session with `draftlet:get-current-workspace-session`
+- service worker broadcasts `draftlet:workspace-session-updated` when session context or active generation metadata changes
+- side panel starts generation with `draftlet:start-draft-generation` using `sessionId`
+- service worker owns local runtime health checks and the `/replies` stream for that session
+- service worker emits `draftlet:draft-generation-started`, `draftlet:draft-reply-received`, `draftlet:draft-generation-completed`, and `draftlet:draft-generation-failed` with `sessionId` and `generationId`
+- side panel can cancel with `draftlet:cancel-draft-generation` using `sessionId` and `generationId`
+- insertion remains explicit: side panel sends `draftlet:insert-reply` with `sessionId`, service worker forwards it to the session tab, and the content script performs best-effort DOM insertion
 
-This keeps the webpage out of runtime transport and generation workflow ownership while preserving the existing side panel UI. Phase 2 should replace the latest-context placeholder with explicit session/thread identifiers.
+This keeps the webpage out of runtime transport and generation workflow ownership while preserving the existing side panel UI. The next phase should move from session-scoped one-shot generation toward explicit ConversationThread, Turn, and DraftVariant contracts.
 
 ## Error Shape
 
