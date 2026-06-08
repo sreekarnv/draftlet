@@ -20,6 +20,7 @@ import {
   INSERT_REPLY,
   LAUNCH_SIDE_PANEL,
   START_DRAFT_GENERATION,
+  START_DRAFT_REFINEMENT,
   WORKSPACE_SESSION_UPDATED,
   type CancelDraftGenerationResult,
   type ConversationThreadSnapshot,
@@ -38,7 +39,7 @@ import {
 } from '../core/messages';
 import { createConversationThreadStore } from '../core/conversation-thread';
 import { createWorkspaceSessionStore } from '../core/workspace-session';
-import type { Tone } from '../core/types';
+import type { GenerationMode, Tone } from '../core/types';
 
 interface ActiveGenerationController {
   generationId: string;
@@ -70,6 +71,15 @@ export default defineBackground(() => {
       return Promise.resolve(handleStartDraftGeneration(message.sessionId, {
         tone: message.tone,
         activeView: message.activeView,
+      }));
+    }
+
+    if (message.type === START_DRAFT_REFINEMENT) {
+      return Promise.resolve(handleStartDraftGeneration(message.sessionId, {
+        tone: message.tone,
+        activeView: message.activeView,
+        instruction: message.instruction,
+        mode: 'refinement',
       }));
     }
 
@@ -157,7 +167,7 @@ async function handleGetRuntimeStatus(): Promise<RuntimeStatusResult> {
 
 async function handleStartDraftGeneration(
   sessionId: string,
-  options: Pick<DraftletSidePanelContext, 'tone' | 'activeView'>,
+  options: Pick<DraftletSidePanelContext, 'tone' | 'activeView'> & { instruction?: string; mode?: GenerationMode },
 ): Promise<StartDraftGenerationResult> {
   const session = sessions.getBySessionId(sessionId);
 
@@ -180,6 +190,17 @@ async function handleStartDraftGeneration(
 
   handleCancelDraftGeneration(sessionId);
 
+  const mode = options.mode ?? 'initial';
+  const instruction = normalizeInstruction(options.instruction, mode);
+
+  if (mode === 'refinement' && !instruction) {
+    return {
+      started: false,
+      sessionId,
+      error: createDraftletError('missing_instruction', 'Add a follow-up instruction before refining drafts.', true, sessionId),
+    };
+  }
+
   const tone = options.tone ?? session.latestContext.tone ?? DEFAULT_TONE;
   const context = {
     ...session.latestContext,
@@ -188,17 +209,23 @@ async function handleStartDraftGeneration(
     activeView: options.activeView ?? session.latestContext.activeView,
   };
   let updatedSession = sessions.updateContext(sessionId, context) ?? session;
-  const threadSnapshot = threads.ensureThreadForSession({
-    sessionId,
-    activeThreadId: updatedSession.activeThreadId,
-    context,
-  });
+  const threadSnapshot = await ensureThreadSnapshotForGeneration(updatedSession, context, mode);
+
+  if (!threadSnapshot) {
+    return {
+      started: false,
+      sessionId,
+      error: createDraftletError('thread_not_found', 'Draftlet thread was not found for this session.', true, sessionId),
+    };
+  }
+
   updatedSession = sessions.setActiveThread(sessionId, threadSnapshot.thread.threadId) ?? updatedSession;
 
   const turnResult = threads.createTurn({
     threadId: threadSnapshot.thread.threadId,
     context,
     tone: context.tone ?? DEFAULT_TONE,
+    instruction: instruction ?? 'Generate reply drafts',
   });
 
   if (!turnResult) {
@@ -250,7 +277,7 @@ async function handleStartDraftGeneration(
 
   void emitWorkspaceSessionUpdated(generatingSession);
   void emitConversationThreadUpdated(sessionId, turnResult.snapshot);
-  void runDraftGeneration(generatingSession.sessionId, context, generationId, thread, turn, controller);
+  void runDraftGeneration(generatingSession.sessionId, context, generationId, mode, thread, turn, controller);
 
   return {
     started: true,
@@ -296,6 +323,7 @@ async function runDraftGeneration(
   sessionId: string,
   context: DraftletSidePanelContext,
   generationId: string,
+  mode: GenerationMode,
   thread: ConversationThread,
   turn: Turn,
   controller: AbortController,
@@ -351,6 +379,7 @@ async function runDraftGeneration(
         thread_id: thread.threadId,
         turn_id: turn.turnId,
         instruction: turn.instruction,
+        generation_mode: mode,
       },
       {
         signal: controller.signal,
@@ -499,6 +528,36 @@ function resolveGenerationSession(sessionId?: string, generationId?: string): Wo
   return null;
 }
 
+async function ensureThreadSnapshotForGeneration(
+  session: WorkspaceSession,
+  context: DraftletSidePanelContext,
+  mode: GenerationMode,
+): Promise<ConversationThreadSnapshot | null> {
+  const localSnapshot = session.activeThreadId ? threads.getSnapshot(session.activeThreadId) : threads.getSnapshotForSession(session.sessionId);
+
+  if (localSnapshot) {
+    return localSnapshot;
+  }
+
+  if (mode === 'refinement' && session.activeThreadId) {
+    const runtimeSnapshot = await getWorkspaceSessionSnapshot(session.sessionId).catch(() => null);
+
+    if (runtimeSnapshot?.thread?.thread.threadId === session.activeThreadId) {
+      return threads.hydrateSnapshot(runtimeSnapshot.thread);
+    }
+  }
+
+  if (mode === 'refinement') {
+    return null;
+  }
+
+  return threads.ensureThreadForSession({
+    sessionId: session.sessionId,
+    activeThreadId: session.activeThreadId,
+    context,
+  });
+}
+
 async function restoreRuntimeSnapshot(session: WorkspaceSession): Promise<WorkspaceSessionResult> {
   try {
     const snapshot = await getWorkspaceSessionSnapshot(session.sessionId);
@@ -526,6 +585,7 @@ async function restoreRuntimeSnapshot(session: WorkspaceSession): Promise<Worksp
     }
 
     if (snapshot.thread) {
+      threads.hydrateSnapshot(snapshot.thread);
       void emitConversationThreadUpdated(restoredSession.sessionId, snapshot.thread);
     }
 
@@ -589,6 +649,16 @@ function findTurn(snapshot: ConversationThreadSnapshot, turnId: string): Turn | 
 
 function findVariantsForTurn(snapshot: ConversationThreadSnapshot, turnId: string) {
   return snapshot.variants.filter((variant) => variant.turnId === turnId);
+}
+
+function normalizeInstruction(instruction: string | undefined, mode: GenerationMode): string | undefined {
+  const trimmed = instruction?.trim();
+
+  if (trimmed) {
+    return trimmed;
+  }
+
+  return mode === 'initial' ? 'Generate reply drafts' : undefined;
 }
 
 function createDraftletError(

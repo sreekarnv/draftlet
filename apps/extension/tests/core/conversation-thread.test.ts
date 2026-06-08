@@ -112,6 +112,41 @@ describe('conversation thread store', () => {
     expect(restored.thread.threadId).toBe(initial.thread.threadId);
     expect(restored.thread.source.selectedText).toBe('Updated');
   });
+
+  it('hydrates a persisted thread snapshot for later refinement turns', () => {
+    const store = createTestStore();
+    const initial = store.ensureThreadForSession({
+      sessionId: 'session-1',
+      context: context('Original message'),
+    });
+    const turnResult = store.createTurn({
+      threadId: initial.thread.threadId,
+      context: context('Original message'),
+      tone: 'friendly',
+    })!;
+    store.addVariant({
+      turnId: turnResult.turn.turnId,
+      tone: 'friendly',
+      content: 'Prior draft',
+      persistedReplyId: 101,
+    });
+
+    const restored = createTestStore();
+    const hydrated = restored.hydrateSnapshot(store.getSnapshot(initial.thread.threadId)!);
+    const refinement = restored.createTurn({
+      threadId: hydrated.thread.threadId,
+      context: context('Original message'),
+      tone: 'friendly',
+      instruction: 'Make it warmer',
+    });
+
+    expect(refinement?.turn).toMatchObject({
+      threadId: initial.thread.threadId,
+      instruction: 'Make it warmer',
+      generationStatus: 'queued',
+    });
+    expect(refinement?.snapshot.variants.map((variant) => variant.content)).toEqual(['Prior draft']);
+  });
 });
 
 function createTestStore() {

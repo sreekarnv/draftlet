@@ -12,6 +12,7 @@ class ReplyRequest(BaseModel):
     thread_id: str | None = Field(default=None, max_length=120)
     turn_id: str | None = Field(default=None, max_length=120)
     instruction: str | None = Field(default=None, max_length=4000)
+    generation_mode: str = Field(default="initial", min_length=1, max_length=40)
 
     @field_validator(
         "selected_text",
@@ -24,6 +25,7 @@ class ReplyRequest(BaseModel):
         "thread_id",
         "turn_id",
         "instruction",
+        "generation_mode",
         mode="before",
     )
     @classmethod

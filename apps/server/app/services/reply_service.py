@@ -13,6 +13,7 @@ from app.services.domain_service import (
     create_or_update_thread,
     create_or_update_turn,
     create_or_update_variant,
+    get_thread_snapshot,
     update_turn_status,
     upsert_workspace_session,
 )
@@ -28,13 +29,14 @@ from app.services.stream_parser import ReplyStreamParser
 
 async def stream_reply_events(request: ReplyRequest) -> AsyncIterator[ReplyEvent]:
     settings = get_settings()
-    prompt = build_reply_prompt(request)
     parser = ReplyStreamParser()
 
     with SessionLocal() as session:
         model = request.model or get_default_model(session, settings.default_model)
         generation = create_generation(session, request, model)
         turn = ensure_domain_generation(session, request)
+        thread_snapshot = get_thread_snapshot(session, request.thread_id) if request.thread_id else None
+        prompt = build_reply_prompt(request, thread_snapshot)
         reply_index = 0
 
         try:

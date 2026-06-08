@@ -41,6 +41,7 @@ export interface ConversationThreadStore {
   createTurn(input: CreateTurnInput): { snapshot: ConversationThreadSnapshot; turn: Turn } | null;
   addVariant(input: AddVariantInput): { snapshot: ConversationThreadSnapshot; variant: DraftVariant } | null;
   updateTurnStatus(turnId: string, status: TurnGenerationStatus): ConversationThreadSnapshot | null;
+  hydrateSnapshot(snapshot: ConversationThreadSnapshot): ConversationThreadSnapshot;
 }
 
 export function createConversationThreadStore({
@@ -173,6 +174,32 @@ export function createConversationThreadStore({
       });
       touchThread(turn.threadId, updatedAt);
       return snapshot(turn.threadId);
+    },
+
+    hydrateSnapshot(snapshotValue) {
+      threadsById.set(snapshotValue.thread.threadId, snapshotValue.thread);
+      threadIdBySessionId.set(snapshotValue.thread.sessionId, snapshotValue.thread.threadId);
+      turnIdsByThreadId.set(
+        snapshotValue.thread.threadId,
+        snapshotValue.turns.map((turn) => turn.turnId),
+      );
+
+      for (const turn of snapshotValue.turns) {
+        turnsById.set(turn.turnId, turn);
+        variantIdsByTurnId.set(
+          turn.turnId,
+          snapshotValue.variants
+            .filter((variant) => variant.turnId === turn.turnId)
+            .sort((a, b) => a.rank - b.rank)
+            .map((variant) => variant.variantId),
+        );
+      }
+
+      for (const variant of snapshotValue.variants) {
+        variantsById.set(variant.variantId, variant);
+      }
+
+      return snapshot(snapshotValue.thread.threadId)!;
     },
   };
 

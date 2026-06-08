@@ -1,4 +1,4 @@
-import { FileText, History, RefreshCw, Sparkles, X } from 'lucide-react';
+import { FileText, History, RefreshCw, Sparkles, Wand2, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 
 import { getHistory } from '../../core/api';
@@ -83,6 +83,7 @@ export function DraftletPanel({ callbacks, controller }: DraftletPanelProps) {
     callbacks.onViewChange?.(activeView);
   };
 
+  const [refinementInstruction, setRefinementInstruction] = useState('');
   const surface = callbacks.surface ?? 'overlay';
 
   return (
@@ -102,7 +103,7 @@ export function DraftletPanel({ callbacks, controller }: DraftletPanelProps) {
             <X aria-hidden="true" className="h-4 w-4" />
           </Button>
         </div>
-        {view.activeView === 'replies' ? renderComposerWorkspace(view, callbacks, selectTone) : null}
+        {view.activeView === 'replies' ? renderComposerWorkspace(view, callbacks, selectTone, refinementInstruction, setRefinementInstruction) : null}
         <div className="mt-3">
           {renderViewNavigation(view, selectView)}
         </div>
@@ -128,6 +129,8 @@ function renderComposerWorkspace(
   view: PanelViewState,
   callbacks: PanelCallbacks,
   selectTone: (tone: Tone) => void,
+  refinementInstruction: string,
+  setRefinementInstruction: (instruction: string) => void,
 ) {
   const isGenerating = view.state === 'loading' || view.state === 'streaming';
 
@@ -155,6 +158,28 @@ function renderComposerWorkspace(
           {view.replies.length > 0 ? <RefreshCw aria-hidden="true" className="h-3.5 w-3.5" /> : <Sparkles aria-hidden="true" className="h-3.5 w-3.5" />}
           {view.replies.length > 0 ? 'Regenerate' : 'Generate'}
         </Button>
+        {view.replies.length > 0 && callbacks.onRefine ? (
+          <div className="grid gap-2">
+            <textarea
+              aria-label="Follow-up instruction"
+              className="min-h-20 resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-[13.5px] leading-6 text-slate-900 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200 disabled:opacity-60"
+              disabled={isGenerating}
+              onChange={(event) => setRefinementInstruction(event.target.value)}
+              placeholder="Make this warmer"
+              value={refinementInstruction}
+            />
+            <Button
+              className="w-full px-3.5"
+              disabled={isGenerating || !refinementInstruction.trim()}
+              onClick={() => callbacks.onRefine?.(refinementInstruction)}
+              type="button"
+              variant="secondary"
+            >
+              <Wand2 aria-hidden="true" className="h-3.5 w-3.5" />
+              Refine
+            </Button>
+          </div>
+        ) : null}
       </div>
     </section>
   );

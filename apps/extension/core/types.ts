@@ -3,6 +3,8 @@ export type ConnectionStatus = 'connected' | 'disconnected';
 export type PanelState = 'empty' | 'loading' | 'streaming' | 'success' | 'error';
 export type PanelView = 'replies' | 'history';
 
+export type GenerationMode = 'initial' | 'refinement';
+
 export interface ReplyRequestPayload {
   selected_text: string;
   tone: Tone;
@@ -14,6 +16,7 @@ export interface ReplyRequestPayload {
   thread_id?: string;
   turn_id?: string;
   instruction?: string;
+  generation_mode?: GenerationMode;
 }
 
 export interface StreamedReply {

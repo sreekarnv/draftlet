@@ -50,6 +50,7 @@ export interface PanelCallbacks {
   onToneChange?: (tone: Tone) => void;
   onViewChange?: (activeView: PanelView) => void;
   onGenerate: () => void;
+  onRefine?: (instruction: string) => void;
   onInsert: (replyText: string) => Promise<InsertionResult>;
   onCloseRequest: () => void;
   onAfterRender: () => void;
