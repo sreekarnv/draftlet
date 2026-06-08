@@ -6,6 +6,7 @@ from app.schemas.domain import (
     ConversationThreadCreate,
     ConversationThreadSnapshot,
     DraftVariantCreate,
+    DraftVariantStateUpdate,
     SourceSnapshot,
     TurnCreate,
     WorkspaceSessionSnapshot,
@@ -136,6 +137,7 @@ def create_or_update_variant(session: Session, payload: DraftVariantCreate) -> D
         existing.content = payload.content
         existing.rank = payload.rank
         existing.status = payload.status
+        existing.is_current = payload.is_current
         existing.legacy_reply_id = payload.legacy_reply_id
         variant = existing
     else:
@@ -147,6 +149,7 @@ def create_or_update_variant(session: Session, payload: DraftVariantCreate) -> D
             content=payload.content,
             rank=payload.rank,
             status=payload.status,
+            is_current=payload.is_current,
             legacy_reply_id=payload.legacy_reply_id,
         )
 
@@ -154,6 +157,38 @@ def create_or_update_variant(session: Session, payload: DraftVariantCreate) -> D
     session.commit()
     session.refresh(variant)
     return variant
+
+
+def update_variant_state(session: Session, variant_id: str, payload: DraftVariantStateUpdate) -> ConversationThreadSnapshot | None:
+    variant = session.get(DraftVariant, variant_id)
+
+    if not variant:
+        return None
+
+    turn = session.get(Turn, variant.turn_id)
+
+    if not turn:
+        return None
+
+    thread_id = turn.thread_id
+
+    if payload.is_current:
+        # Current and accepted are intentionally bounded to one variant per thread for this phase.
+        for thread_variant in variants_for_thread(session, thread_id):
+            thread_variant.is_current = thread_variant.variant_id == variant_id
+            session.add(thread_variant)
+
+    if payload.status == "accepted":
+        for thread_variant in variants_for_thread(session, thread_id):
+            thread_variant.status = "accepted" if thread_variant.variant_id == variant_id else "generated"
+            thread_variant.is_current = thread_variant.variant_id == variant_id
+            session.add(thread_variant)
+    elif payload.status:
+        variant.status = payload.status
+        session.add(variant)
+
+    session.commit()
+    return get_thread_snapshot(session, thread_id)
 
 
 def get_session_snapshot(session: Session, session_id: str) -> WorkspaceSessionSnapshot | None:
@@ -183,6 +218,15 @@ def get_thread_snapshot(session: Session, thread_id: str | None) -> Conversation
     turns = list(thread.turns)
     variants = [variant for turn in turns for variant in turn.variants]
     return ConversationThreadSnapshot(thread=thread, turns=turns, variants=variants)
+
+
+def variants_for_thread(session: Session, thread_id: str) -> list[DraftVariant]:
+    statement = (
+        select(DraftVariant)
+        .join(Turn, DraftVariant.turn_id == Turn.turn_id)
+        .where(Turn.thread_id == thread_id)
+    )
+    return list(session.scalars(statement))
 
 
 def ensure_workspace_session_exists(session: Session, session_id: str, source: SourceSnapshot) -> None:

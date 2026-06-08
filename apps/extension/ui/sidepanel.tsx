@@ -2,6 +2,7 @@ import '../components/panel/panel.css';
 
 import { DEFAULT_PANEL_VIEW, DEFAULT_TONE } from '../core/constants';
 import {
+  ACCEPT_DRAFT_VARIANT,
   CANCEL_DRAFT_GENERATION,
   CONVERSATION_THREAD_UPDATED,
   DRAFT_GENERATION_COMPLETED,
@@ -11,11 +12,14 @@ import {
   GET_CURRENT_WORKSPACE_SESSION,
   GET_RUNTIME_STATUS,
   INSERT_REPLY,
+  SET_CURRENT_DRAFT_VARIANT,
   WORKSPACE_SESSION_UPDATED,
   START_DRAFT_GENERATION,
   START_DRAFT_REFINEMENT,
   type ConversationThreadSnapshot,
+  type DraftVariant,
   type DraftletMessage,
+  type DraftVariantStateResult,
   type InsertReplyResult,
   type RuntimeStatusResult,
   type StartDraftGenerationResult,
@@ -71,8 +75,14 @@ const mountedPanel = mountDraftletPanel(root, {
   onRefine(instruction) {
     void refineReplies(instruction);
   },
-  onInsert(replyText) {
-    return insertIntoActivePage(replyText);
+  onInsert(replyText, variantId) {
+    return insertIntoActivePage(replyText, variantId);
+  },
+  onSelectVariant(variantId) {
+    return setVariantCurrent(variantId);
+  },
+  onAcceptVariant(variantId) {
+    return acceptVariant(variantId);
   },
   onCloseRequest() {
     void closeSidePanel();
@@ -153,11 +163,7 @@ function handleDraftletMessage(message: DraftletMessage) {
     && message.sessionId === activeGenerationSessionId
     && message.generationId === activeGenerationId
   ) {
-    panel.addReply({
-      id: message.variant.variantId,
-      text: message.variant.content,
-      persistedId: message.variant.persistedReplyId,
-    });
+    panel.addReply(replyItemForVariant(message.variant));
     return;
   }
 
@@ -205,13 +211,19 @@ function applyThreadSnapshot(snapshot: ConversationThreadSnapshot, renderLatestT
 
   panel.clearReplies();
   for (const variant of variants) {
-    panel.addReply({
-      id: variant.variantId,
-      text: variant.content,
-      persistedId: variant.persistedReplyId,
-    });
+    panel.addReply(replyItemForVariant(variant));
   }
   panel.setState('success');
+}
+
+function replyItemForVariant(variant: DraftVariant) {
+  return {
+    id: variant.variantId,
+    text: variant.content,
+    persistedId: variant.persistedReplyId,
+    isCurrent: variant.isCurrent,
+    isAccepted: variant.status === 'accepted',
+  };
 }
 
 function shouldApplySessionUpdate(session: WorkspaceSession): boolean {
@@ -342,12 +354,51 @@ async function refineReplies(instruction: string) {
   }
 }
 
-async function insertIntoActivePage(replyText: string): Promise<InsertionResult> {
+async function setVariantCurrent(variantId: string) {
+  return updateVariantState(variantId, SET_CURRENT_DRAFT_VARIANT, 'Selected this draft.');
+}
+
+async function acceptVariant(variantId: string) {
+  return updateVariantState(variantId, ACCEPT_DRAFT_VARIANT, 'Accepted this draft.');
+}
+
+async function updateVariantState(
+  variantId: string,
+  type: typeof SET_CURRENT_DRAFT_VARIANT | typeof ACCEPT_DRAFT_VARIANT,
+  successMessage: string,
+) {
+  if (!currentSession) {
+    return { ok: false, message: 'No active Draftlet session.' };
+  }
+
+  try {
+    const response = await browser.runtime.sendMessage({
+      type,
+      sessionId: currentSession.sessionId,
+      variantId,
+    } satisfies DraftletMessage) as DraftVariantStateResult;
+
+    if (!response.updated || !response.snapshot) {
+      return { ok: false, message: response.error?.message ?? 'Could not update this draft.' };
+    }
+
+    applyThreadSnapshot(response.snapshot, true);
+    return { ok: true, message: successMessage };
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : 'Could not reach the Draftlet extension coordinator.',
+    };
+  }
+}
+
+async function insertIntoActivePage(replyText: string, variantId?: string): Promise<InsertionResult> {
   try {
     const response = await browser.runtime.sendMessage({
       type: INSERT_REPLY,
       sessionId: currentSession?.sessionId,
       replyText,
+      variantId,
     } satisfies DraftletMessage) as InsertReplyResult;
 
     if (response.result.status !== 'failed') {

@@ -59,8 +59,14 @@ class DraftVariantCreate(BaseModel):
     content: str = Field(min_length=1)
     rank: int = Field(ge=0)
     status: str = Field(default="generated", min_length=1, max_length=40)
+    is_current: bool = False
     length: str | None = Field(default=None, max_length=80)
     legacy_reply_id: int | None = Field(default=None, ge=1)
+
+
+class DraftVariantStateUpdate(BaseModel):
+    is_current: bool | None = None
+    status: str | None = Field(default=None, min_length=1, max_length=40)
 
 
 class WorkspaceSessionRead(BaseModel):
@@ -119,6 +125,7 @@ class DraftVariantRead(BaseModel):
     content: str
     rank: int
     status: str
+    is_current: bool
     legacy_reply_id: int | None
     created_at: datetime
     updated_at: datetime

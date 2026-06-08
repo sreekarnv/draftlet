@@ -1,18 +1,23 @@
-import { Copy, CornerDownLeft } from 'lucide-react';
+import { Check, Copy, CornerDownLeft, MousePointer2 } from 'lucide-react';
 import { useState } from 'react';
 
 import type { InsertionResult, ReplyItem } from '../../core/types';
+import type { VariantActionResult } from '../../ui/mount-panel';
 import { Button, Card, cn } from './ui';
 
 interface ReplyCardProps {
   reply: ReplyItem;
   index: number;
-  onInsert: (replyText: string) => Promise<InsertionResult>;
+  onInsert: (replyText: string, variantId?: string) => Promise<InsertionResult>;
+  onSelectVariant?: (variantId: string) => Promise<VariantActionResult>;
+  onAcceptVariant?: (variantId: string) => Promise<VariantActionResult>;
 }
 
-export function ReplyCard({ reply, index, onInsert }: ReplyCardProps) {
+export function ReplyCard({ reply, index, onInsert, onSelectVariant, onAcceptVariant }: ReplyCardProps) {
   const [copyLabel, setCopyLabel] = useState('Copy');
   const [insertLabel, setInsertLabel] = useState('Insert');
+  const [selectLabel, setSelectLabel] = useState('Use');
+  const [acceptLabel, setAcceptLabel] = useState('Accept');
   const [feedback, setFeedback] = useState('');
   const [isError, setIsError] = useState(false);
   const [isInserting, setIsInserting] = useState(false);
@@ -45,7 +50,7 @@ export function ReplyCard({ reply, index, onInsert }: ReplyCardProps) {
     showFeedback('Trying to insert...');
 
     try {
-      const result = await onInsert(reply.text);
+      const result = await onInsert(reply.text, reply.id);
       showFeedback(feedbackMessageFor(result), result.status === 'failed');
       flashButtonLabel(setInsertLabel, buttonMessageFor(result), 'Insert');
     } finally {
@@ -53,13 +58,50 @@ export function ReplyCard({ reply, index, onInsert }: ReplyCardProps) {
     }
   };
 
+  const updateVariantState = async (action: 'select' | 'accept') => {
+    const callback = action === 'select' ? onSelectVariant : onAcceptVariant;
+
+    if (!callback) {
+      return;
+    }
+
+    const setLabel = action === 'select' ? setSelectLabel : setAcceptLabel;
+    const fallback = action === 'select' ? 'Use' : 'Accept';
+    const working = action === 'select' ? 'Selecting...' : 'Accepting...';
+    setLabel(working);
+
+    const result = await callback(reply.id);
+    showFeedback(result.message, !result.ok);
+    flashButtonLabel(setLabel, result.ok ? 'Done' : 'Failed', fallback);
+  };
+
   return (
-    <Card className="grid gap-3 bg-white p-3.5 shadow-sm shadow-slate-200/80 ring-1 ring-slate-200/80">
+    <Card className={cn(
+      'grid gap-3 bg-white p-3.5 shadow-sm shadow-slate-200/80 ring-1 ring-slate-200/80',
+      reply.isCurrent && 'ring-slate-500',
+      reply.isAccepted && 'bg-emerald-50/60 ring-emerald-300',
+    )}>
       <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
         <div className="text-[11px] font-semibold uppercase tracking-normal text-slate-500">Draft {index + 1}</div>
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          {reply.isCurrent ? <StateBadge label="Selected" tone="slate" /> : null}
+          {reply.isAccepted ? <StateBadge label="Accepted" tone="emerald" /> : null}
+        </div>
       </div>
       <p className="m-0 whitespace-pre-wrap text-[14px] leading-[1.65] text-slate-900">{reply.text}</p>
       <div className="flex flex-wrap items-center gap-2 pt-0.5">
+        {onSelectVariant ? (
+          <Button disabled={reply.isCurrent} onClick={() => void updateVariantState('select')} type="button" variant="secondary">
+            <MousePointer2 aria-hidden="true" className="h-3.5 w-3.5" />
+            {reply.isCurrent ? 'Selected' : selectLabel}
+          </Button>
+        ) : null}
+        {onAcceptVariant ? (
+          <Button disabled={reply.isAccepted} onClick={() => void updateVariantState('accept')} type="button" variant="secondary">
+            <Check aria-hidden="true" className="h-3.5 w-3.5" />
+            {reply.isAccepted ? 'Accepted' : acceptLabel}
+          </Button>
+        ) : null}
         <Button onClick={copyReply} type="button" variant="secondary">
           <Copy aria-hidden="true" className="h-3.5 w-3.5" />
           {copyLabel}
@@ -98,4 +140,17 @@ function feedbackMessageFor(result: InsertionResult) {
   }
 
   return 'Could not insert or copy this reply.';
+}
+
+
+function StateBadge({ label, tone }: { label: string; tone: 'emerald' | 'slate' }) {
+  return (
+    <span className={cn(
+      'rounded-full px-2 py-0.5 text-[11px] font-semibold leading-4 ring-1',
+      tone === 'emerald' && 'bg-emerald-100 text-emerald-800 ring-emerald-200',
+      tone === 'slate' && 'bg-slate-100 text-slate-700 ring-slate-200',
+    )}>
+      {label}
+    </span>
+  );
 }

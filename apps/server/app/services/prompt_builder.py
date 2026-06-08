@@ -31,7 +31,7 @@ def build_reply_prompt(request: ReplyRequest, thread_snapshot: ConversationThrea
 
 
 def build_refinement_prompt(request: ReplyRequest, thread_snapshot: ConversationThreadSnapshot | None) -> str:
-    latest_variants = latest_completed_variants(thread_snapshot, request.turn_id)
+    latest_variants = preferred_refinement_variants(thread_snapshot, request.turn_id)
     prior_variant_text = "\n\n".join(
         f"Draft {index + 1}:\n{truncate(variant.content, MAX_VARIANT_CHARS)}"
         for index, variant in enumerate(latest_variants)
@@ -68,9 +68,25 @@ def build_refinement_prompt(request: ReplyRequest, thread_snapshot: Conversation
     return "\n".join(parts)
 
 
-def latest_completed_variants(thread_snapshot: ConversationThreadSnapshot | None, current_turn_id: str | None):
+def preferred_refinement_variants(thread_snapshot: ConversationThreadSnapshot | None, current_turn_id: str | None):
     if not thread_snapshot:
         return []
+
+    accepted = sorted(
+        [variant for variant in thread_snapshot.variants if variant.status == "accepted"],
+        key=lambda variant: variant.updated_at,
+        reverse=True,
+    )
+    if accepted:
+        return [accepted[0]]
+
+    current = sorted(
+        [variant for variant in thread_snapshot.variants if variant.is_current],
+        key=lambda variant: variant.updated_at,
+        reverse=True,
+    )
+    if current:
+        return [current[0]]
 
     prior_turn_ids = [turn.turn_id for turn in thread_snapshot.turns if turn.turn_id != current_turn_id]
 

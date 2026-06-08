@@ -139,10 +139,23 @@ export async function putDraftVariant(variant: DraftVariant): Promise<DraftVaria
     content: variant.content,
     rank: variant.rank,
     status: variant.status,
+    is_current: variant.isCurrent,
     legacy_reply_id: variant.persistedReplyId,
   });
 
   return mapDraftVariant(response);
+}
+
+export async function patchDraftVariantState(
+  variantId: string,
+  state: { isCurrent?: boolean; status?: DraftVariant['status'] },
+): Promise<ConversationThreadSnapshot> {
+  const response = await patchJson<ConversationThreadSnapshotRead>(`${SERVER_BASE_URL}/domain/variants/${encodeURIComponent(variantId)}/state`, {
+    is_current: state.isCurrent,
+    status: state.status,
+  });
+
+  return mapConversationThreadSnapshot(response);
 }
 
 export async function getHistory(signal?: AbortSignal): Promise<HistoryGeneration[]> {
@@ -175,6 +188,23 @@ async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(url, {
     headers: { Accept: 'application/json' },
     signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Request failed with ${response.status}`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+async function patchJson<T>(url: string, payload: unknown): Promise<T> {
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
@@ -327,6 +357,7 @@ function mapDraftVariant(variant: DraftVariantRead): DraftVariant {
     content: variant.content,
     rank: variant.rank,
     status: variant.status === 'accepted' || variant.status === 'rejected' ? variant.status : 'generated',
+    isCurrent: variant.is_current,
     persistedReplyId: variant.legacy_reply_id ?? undefined,
     createdAt: variant.created_at,
     updatedAt: variant.updated_at,
@@ -397,6 +428,7 @@ interface DraftVariantRead {
   content: string;
   rank: number;
   status: string;
+  is_current: boolean;
   legacy_reply_id: number | null;
   created_at: string;
   updated_at: string;

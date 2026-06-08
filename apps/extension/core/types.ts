@@ -31,6 +31,8 @@ export interface ReplyItem {
   id: string;
   text: string;
   persistedId?: number;
+  isCurrent?: boolean;
+  isAccepted?: boolean;
 }
 
 export interface HistoryReply {

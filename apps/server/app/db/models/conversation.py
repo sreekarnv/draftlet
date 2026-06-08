@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -65,6 +65,7 @@ class DraftVariant(Base):
     content: Mapped[str] = mapped_column(Text)
     rank: Mapped[int] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(40), default="generated")
+    is_current: Mapped[bool] = mapped_column(Boolean, default=False)
     legacy_reply_id: Mapped[int | None] = mapped_column(ForeignKey("replies.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

@@ -1,6 +1,7 @@
 import {
   checkServerHealth,
   getWorkspaceSessionSnapshot,
+  patchDraftVariantState,
   patchTurnStatus,
   putConversationThread,
   putTurn,
@@ -9,6 +10,7 @@ import {
 } from '../core/api';
 import { DEFAULT_TONE } from '../core/constants';
 import {
+  ACCEPT_DRAFT_VARIANT,
   CANCEL_DRAFT_GENERATION,
   CONVERSATION_THREAD_UPDATED,
   DRAFT_GENERATION_COMPLETED,
@@ -19,6 +21,7 @@ import {
   GET_RUNTIME_STATUS,
   INSERT_REPLY,
   LAUNCH_SIDE_PANEL,
+  SET_CURRENT_DRAFT_VARIANT,
   START_DRAFT_GENERATION,
   START_DRAFT_REFINEMENT,
   WORKSPACE_SESSION_UPDATED,
@@ -26,6 +29,7 @@ import {
   type ConversationThreadSnapshot,
   type ConversationThread,
   type DraftVariant,
+  type DraftVariantStateResult,
   type DraftletError,
   type DraftletMessage,
   type DraftletSidePanelContext,
@@ -89,6 +93,14 @@ export default defineBackground(() => {
 
     if (message.type === INSERT_REPLY) {
       return handleInsertReply(message.replyText, message.sessionId);
+    }
+
+    if (message.type === SET_CURRENT_DRAFT_VARIANT) {
+      return Promise.resolve(handleDraftVariantState(message.sessionId, message.variantId, { isCurrent: true }));
+    }
+
+    if (message.type === ACCEPT_DRAFT_VARIANT) {
+      return Promise.resolve(handleDraftVariantState(message.sessionId, message.variantId, { status: 'accepted' }));
     }
 
     return undefined;
@@ -394,6 +406,7 @@ async function runDraftGeneration(
             turnId: turn.turnId,
             tone: context.tone ?? DEFAULT_TONE,
             content: reply.text,
+            variantId: reply.variantId,
             persistedReplyId: reply.replyId,
           });
 
@@ -491,6 +504,38 @@ async function emitGenerationFailed(
     turnId,
     error,
   });
+}
+
+async function handleDraftVariantState(
+  sessionId: string,
+  variantId: string,
+  state: { isCurrent?: boolean; status?: DraftVariant['status'] },
+): Promise<DraftVariantStateResult> {
+  const session = sessions.getBySessionId(sessionId);
+
+  if (!session) {
+    return {
+      updated: false,
+      error: createDraftletError('session_not_found', 'Draftlet session was not found for this tab.', true, variantId),
+    };
+  }
+
+  try {
+    const runtimeSnapshot = await patchDraftVariantState(variantId, state);
+    const snapshot = threads.hydrateSnapshot(runtimeSnapshot);
+    void emitConversationThreadUpdated(session.sessionId, snapshot);
+    return { updated: true, snapshot };
+  } catch (error) {
+    return {
+      updated: false,
+      error: createDraftletError(
+        'variant_state_update_failed',
+        error instanceof Error ? error.message : 'Could not update draft variant state.',
+        true,
+        variantId,
+      ),
+    };
+  }
 }
 
 async function handleInsertReply(replyText: string, sessionId?: string): Promise<InsertReplyResult> {
