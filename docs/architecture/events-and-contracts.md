@@ -107,6 +107,22 @@ Each streaming event should include:
 The runtime should not emit UI-specific instructions. It should emit domain and transport events that the side panel can map into UI states.
 
 
+## Extension WorkspaceSession And Thread Flow
+
+The current v2 extension generation flow is intentionally transitional but now session- and thread-aware:
+- content script sends `draftlet:launch-side-panel` with a page context snapshot
+- service worker creates or updates a per-tab `WorkspaceSession`
+- side panel restores the active tab session with `draftlet:get-current-workspace-session`
+- service worker creates or reuses a session-backed `ConversationThread` when generation starts
+- each generation creates a `Turn` on that thread
+- each streamed runtime reply is stored as a `DraftVariant` on the active turn
+- service worker broadcasts `draftlet:workspace-session-updated` for session metadata and `draftlet:conversation-thread-updated` for thread snapshots
+- service worker emits `draftlet:draft-generation-started`, `draftlet:draft-variant-received`, `draftlet:draft-generation-completed`, and `draftlet:draft-generation-failed` with `sessionId`, `generationId`, and thread/turn/variant data
+- side panel temporarily projects `DraftVariant.content` into the existing reply-card UI
+- side panel can cancel with `draftlet:cancel-draft-generation` using `sessionId` and `generationId`
+- insertion remains explicit: side panel sends `draftlet:insert-reply` with `sessionId`, service worker forwards it to the session tab, and the content script performs best-effort DOM insertion
+
+This keeps the webpage out of runtime transport and generation workflow ownership while preserving the existing side panel UI. Thread/turn/variant storage is currently in-memory in the extension; durable runtime persistence and multi-turn chat UI remain future phases.
 ## Runtime-Backed Session And Thread Flow
 
 The current v2 generation flow is transitional but now uses durable runtime domain persistence:

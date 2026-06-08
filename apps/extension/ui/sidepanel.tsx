@@ -3,10 +3,10 @@ import '../components/panel/panel.css';
 import { DEFAULT_PANEL_VIEW, DEFAULT_TONE } from '../core/constants';
 import {
   CANCEL_DRAFT_GENERATION,
+  CONVERSATION_THREAD_UPDATED,
   DRAFT_GENERATION_COMPLETED,
   DRAFT_GENERATION_FAILED,
   DRAFT_GENERATION_STARTED,
-  CONVERSATION_THREAD_UPDATED,
   DRAFT_VARIANT_RECEIVED,
   GET_CURRENT_WORKSPACE_SESSION,
   GET_RUNTIME_STATUS,
@@ -127,6 +127,13 @@ function handleDraftletMessage(message: DraftletMessage) {
     return;
   }
 
+  if (message.type === CONVERSATION_THREAD_UPDATED) {
+    if (currentSession?.sessionId === message.sessionId) {
+      applyThreadSnapshot(message.snapshot, false);
+    }
+    return;
+  }
+
   if (
     message.type === DRAFT_GENERATION_STARTED
     && message.sessionId === activeGenerationSessionId
@@ -134,13 +141,6 @@ function handleDraftletMessage(message: DraftletMessage) {
   ) {
     panel.setConnectionStatus('connected');
     panel.setState('streaming');
-    return;
-  }
-
-  if (message.type === CONVERSATION_THREAD_UPDATED) {
-    if (currentSession?.sessionId === message.sessionId) {
-      applyThreadSnapshot(message.snapshot, false);
-    }
     return;
   }
 

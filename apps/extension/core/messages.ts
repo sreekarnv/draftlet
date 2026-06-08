@@ -124,16 +124,16 @@ export type DraftletMessage =
       type: typeof DRAFT_GENERATION_STARTED;
       sessionId: string;
       generationId: string;
-      threadId?: string;
-      turnId?: string;
+      thread: ConversationThread;
+      turn: Turn;
     }
   | { type: typeof DRAFT_VARIANT_RECEIVED; sessionId: string; generationId: string; variant: DraftVariant }
   | {
       type: typeof DRAFT_GENERATION_COMPLETED;
       sessionId: string;
       generationId: string;
-      threadId?: string;
-      turnId?: string;
+      thread: ConversationThread;
+      turn: Turn;
       variants: DraftVariant[];
     }
   | {
