@@ -21,6 +21,11 @@ export interface PanelOpenOptions {
   activeView?: PanelView;
 }
 
+export interface VariantActionResult {
+  ok: boolean;
+  message: string;
+}
+
 export type PanelAction =
   | { type: 'open'; options: PanelOpenOptions }
   | { type: 'setTone'; tone: Tone }
@@ -51,7 +56,9 @@ export interface PanelCallbacks {
   onViewChange?: (activeView: PanelView) => void;
   onGenerate: () => void;
   onRefine?: (instruction: string) => void;
-  onInsert: (replyText: string) => Promise<InsertionResult>;
+  onInsert: (replyText: string, variantId?: string) => Promise<InsertionResult>;
+  onSelectVariant?: (variantId: string) => Promise<VariantActionResult>;
+  onAcceptVariant?: (variantId: string) => Promise<VariantActionResult>;
   onCloseRequest: () => void;
   onAfterRender: () => void;
 }

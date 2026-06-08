@@ -205,7 +205,9 @@ function renderRepliesView(
         <ReplyCard
           index={index}
           key={reply.id}
+          onAcceptVariant={callbacks.onAcceptVariant}
           onInsert={callbacks.onInsert}
+          onSelectVariant={callbacks.onSelectVariant}
           reply={reply}
         />
       ))}

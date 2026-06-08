@@ -31,6 +31,7 @@ interface AddVariantInput {
   turnId: string;
   tone: Tone;
   content: string;
+  variantId?: string;
   persistedReplyId?: number;
 }
 
@@ -40,6 +41,7 @@ export interface ConversationThreadStore {
   getSnapshotForSession(sessionId: string): ConversationThreadSnapshot | null;
   createTurn(input: CreateTurnInput): { snapshot: ConversationThreadSnapshot; turn: Turn } | null;
   addVariant(input: AddVariantInput): { snapshot: ConversationThreadSnapshot; variant: DraftVariant } | null;
+  updateVariantState(variantId: string, state: { isCurrent?: boolean; status?: DraftVariant['status'] }): ConversationThreadSnapshot | null;
   updateTurnStatus(turnId: string, status: TurnGenerationStatus): ConversationThreadSnapshot | null;
   hydrateSnapshot(snapshot: ConversationThreadSnapshot): ConversationThreadSnapshot;
 }
@@ -131,7 +133,7 @@ export function createConversationThreadStore({
       return { snapshot: snapshot(threadId)!, turn };
     },
 
-    addVariant({ turnId, tone, content, persistedReplyId }) {
+    addVariant({ turnId, tone, content, variantId, persistedReplyId }) {
       const turn = turnsById.get(turnId);
 
       if (!turn) {
@@ -141,12 +143,13 @@ export function createConversationThreadStore({
       const variantIds = variantIdsByTurnId.get(turnId) ?? [];
       const createdAt = timestamp();
       const variant: DraftVariant = {
-        variantId: createId('variant'),
+        variantId: variantId ?? createId('variant'),
         turnId,
         tone,
         content,
         rank: variantIds.length,
         status: 'generated',
+        isCurrent: false,
         persistedReplyId,
         createdAt,
         updatedAt: createdAt,
@@ -157,6 +160,52 @@ export function createConversationThreadStore({
       touchThread(turn.threadId, createdAt);
 
       return { snapshot: snapshot(turn.threadId)!, variant };
+    },
+
+    updateVariantState(variantId, state) {
+      const variant = variantsById.get(variantId);
+
+      if (!variant) {
+        return null;
+      }
+
+      const turn = turnsById.get(variant.turnId);
+
+      if (!turn) {
+        return null;
+      }
+
+      const updatedAt = timestamp();
+
+      if (state.isCurrent) {
+        for (const threadVariant of variantsForThread(turn.threadId)) {
+          variantsById.set(threadVariant.variantId, {
+            ...threadVariant,
+            isCurrent: threadVariant.variantId === variantId,
+            updatedAt,
+          });
+        }
+      }
+
+      if (state.status === 'accepted') {
+        for (const threadVariant of variantsForThread(turn.threadId)) {
+          variantsById.set(threadVariant.variantId, {
+            ...threadVariant,
+            status: threadVariant.variantId === variantId ? 'accepted' : 'generated',
+            isCurrent: threadVariant.variantId === variantId,
+            updatedAt,
+          });
+        }
+      } else if (state.status) {
+        variantsById.set(variantId, {
+          ...variantsById.get(variantId)!,
+          status: state.status,
+          updatedAt,
+        });
+      }
+
+      touchThread(turn.threadId, updatedAt);
+      return snapshot(turn.threadId);
     },
 
     updateTurnStatus(turnId, status) {
@@ -214,6 +263,12 @@ export function createConversationThreadStore({
       ...thread,
       updatedAt,
     });
+  }
+
+  function variantsForThread(threadId: string): DraftVariant[] {
+    return (turnIdsByThreadId.get(threadId) ?? []).flatMap((turnId) => (variantIdsByTurnId.get(turnId) ?? [])
+      .map((variantId) => variantsById.get(variantId))
+      .filter((variant): variant is DraftVariant => Boolean(variant)));
   }
 
   function snapshot(threadId: string): ConversationThreadSnapshot | null {

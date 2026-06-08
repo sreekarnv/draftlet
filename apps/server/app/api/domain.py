@@ -8,6 +8,7 @@ from app.schemas.domain import (
     ConversationThreadSnapshot,
     DraftVariantCreate,
     DraftVariantRead,
+    DraftVariantStateUpdate,
     TurnCreate,
     TurnRead,
     WorkspaceSessionRead,
@@ -20,6 +21,7 @@ from app.services.domain_service import (
     create_or_update_variant,
     get_session_snapshot,
     get_thread_snapshot,
+    update_variant_state,
     update_turn_status,
     upsert_workspace_session,
 )
@@ -113,3 +115,18 @@ def put_draft_variant(
         raise HTTPException(status_code=400, detail="variant_id does not match path")
 
     return create_or_update_variant(session, payload)
+
+
+
+@router.patch("/variants/{variant_id}/state", response_model=ConversationThreadSnapshot)
+def patch_draft_variant_state(
+    variant_id: str,
+    payload: DraftVariantStateUpdate,
+    session: Session = Depends(get_session),
+) -> ConversationThreadSnapshot:
+    snapshot = update_variant_state(session, variant_id, payload)
+
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Draft variant not found")
+
+    return snapshot

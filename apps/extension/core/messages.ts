@@ -13,6 +13,8 @@ export const DRAFT_VARIANT_RECEIVED = 'draftlet:draft-variant-received';
 export const DRAFT_GENERATION_COMPLETED = 'draftlet:draft-generation-completed';
 export const DRAFT_GENERATION_FAILED = 'draftlet:draft-generation-failed';
 export const INSERT_REPLY = 'draftlet:insert-reply';
+export const SET_CURRENT_DRAFT_VARIANT = 'draftlet:set-current-draft-variant';
+export const ACCEPT_DRAFT_VARIANT = 'draftlet:accept-draft-variant';
 
 export interface DraftletSidePanelContext {
   selectedText: string;
@@ -90,6 +92,7 @@ export interface DraftVariant {
   content: string;
   rank: number;
   status: DraftVariantStatus;
+  isCurrent: boolean;
   persistedReplyId?: number;
   createdAt: string;
   updatedAt: string;
@@ -146,7 +149,9 @@ export type DraftletMessage =
       turnId?: string;
       error: DraftletError;
     }
-  | { type: typeof INSERT_REPLY; sessionId?: string; replyText: string };
+  | { type: typeof INSERT_REPLY; sessionId?: string; replyText: string; variantId?: string }
+  | { type: typeof SET_CURRENT_DRAFT_VARIANT; sessionId: string; variantId: string }
+  | { type: typeof ACCEPT_DRAFT_VARIANT; sessionId: string; variantId: string };
 
 export interface LaunchSidePanelResult {
   opened: boolean;
@@ -178,4 +183,10 @@ export interface CancelDraftGenerationResult {
 
 export interface InsertReplyResult {
   result: InsertionResult;
+}
+
+export interface DraftVariantStateResult {
+  updated: boolean;
+  snapshot?: ConversationThreadSnapshot;
+  error?: DraftletError;
 }

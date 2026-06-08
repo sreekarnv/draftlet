@@ -71,6 +71,41 @@ describe('conversation thread store', () => {
       'First draft',
       'Second draft',
     ]);
+    expect(firstVariant?.variant.isCurrent).toBe(false);
+  });
+
+  it('marks one selected and accepted variant per thread', () => {
+    const store = createTestStore();
+    const thread = store.ensureThreadForSession({
+      sessionId: 'session-1',
+      context: context('Original message'),
+    });
+    const turnResult = store.createTurn({
+      threadId: thread.thread.threadId,
+      context: context('Original message'),
+      tone: 'friendly',
+    })!;
+    const first = store.addVariant({
+      turnId: turnResult.turn.turnId,
+      tone: 'friendly',
+      content: 'First draft',
+      variantId: 'runtime-variant-1',
+    })!;
+    const second = store.addVariant({
+      turnId: turnResult.turn.turnId,
+      tone: 'friendly',
+      content: 'Second draft',
+      variantId: 'runtime-variant-2',
+    })!;
+
+    expect(first.variant.variantId).toBe('runtime-variant-1');
+    store.updateVariantState(first.variant.variantId, { isCurrent: true });
+    const accepted = store.updateVariantState(second.variant.variantId, { status: 'accepted' });
+
+    expect(accepted?.variants).toEqual(expect.arrayContaining([
+      expect.objectContaining({ variantId: 'runtime-variant-1', isCurrent: false, status: 'generated' }),
+      expect.objectContaining({ variantId: 'runtime-variant-2', isCurrent: true, status: 'accepted' }),
+    ]));
   });
 
   it('updates turn status without losing variants', () => {
