@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
 import { DEFAULT_PANEL_VIEW, DEFAULT_TONE } from '../core/constants';
+import type { ConversationThreadSnapshot } from '../core/messages';
 import type {
   ConnectionStatus,
   InsertionResult,
@@ -32,6 +33,7 @@ export type PanelAction =
   | { type: 'setActiveView'; activeView: PanelView }
   | { type: 'setConnectionStatus'; status: ConnectionStatus }
   | { type: 'setState'; state: PanelState; message: string }
+  | { type: 'setThreadSnapshot'; snapshot: ConversationThreadSnapshot | null }
   | { type: 'clearReplies' }
   | { type: 'addReply'; reply: ReplyItem };
 
@@ -43,6 +45,7 @@ export interface PanelController {
   getActiveView(): PanelView;
   setConnectionStatus(status: ConnectionStatus): void;
   setState(state: PanelState, message?: string): void;
+  setThreadSnapshot(snapshot: ConversationThreadSnapshot | null): void;
   clearReplies(): void;
   addReply(reply: StreamedReply | ReplyItem): void;
   subscribe(listener: (action: PanelAction) => void): () => void;
@@ -139,6 +142,9 @@ function createPanelController(initialTone: Tone, initialView: PanelView): Panel
     },
     setState(state, message = '') {
       emit({ type: 'setState', state, message });
+    },
+    setThreadSnapshot(snapshot) {
+      emit({ type: 'setThreadSnapshot', snapshot });
     },
     clearReplies() {
       emit({ type: 'clearReplies' });

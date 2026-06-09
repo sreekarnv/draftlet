@@ -35,7 +35,6 @@ let currentTone: Tone = DEFAULT_TONE;
 let currentPanelView: PanelView = DEFAULT_PANEL_VIEW;
 let activeGenerationId: string | null = null;
 let activeGenerationSessionId: string | null = null;
-let currentThreadSnapshot: ConversationThreadSnapshot | null = null;
 
 const root = document.getElementById('root');
 
@@ -117,7 +116,7 @@ async function initializeSidePanel() {
       applySession(response.session);
 
       if (response.thread) {
-        applyThreadSnapshot(response.thread, true);
+        applyThreadSnapshot(response.thread);
       }
 
       return;
@@ -143,7 +142,7 @@ function handleDraftletMessage(message: DraftletMessage) {
 
   if (message.type === CONVERSATION_THREAD_UPDATED) {
     if (currentSession?.sessionId === message.sessionId) {
-      applyThreadSnapshot(message.snapshot, false);
+      applyThreadSnapshot(message.snapshot);
     }
     return;
   }
@@ -188,32 +187,8 @@ function handleDraftletMessage(message: DraftletMessage) {
   }
 }
 
-function applyThreadSnapshot(snapshot: ConversationThreadSnapshot, renderLatestTurn: boolean) {
-  currentThreadSnapshot = snapshot;
-
-  if (!renderLatestTurn) {
-    return;
-  }
-
-  const latestTurn = [...snapshot.turns].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).at(-1);
-
-  if (!latestTurn) {
-    return;
-  }
-
-  const variants = snapshot.variants
-    .filter((variant) => variant.turnId === latestTurn.turnId)
-    .sort((a, b) => a.rank - b.rank);
-
-  if (variants.length === 0) {
-    return;
-  }
-
-  panel.clearReplies();
-  for (const variant of variants) {
-    panel.addReply(replyItemForVariant(variant));
-  }
-  panel.setState('success');
+function applyThreadSnapshot(snapshot: ConversationThreadSnapshot) {
+  panel.setThreadSnapshot(snapshot);
 }
 
 function replyItemForVariant(variant: DraftVariant) {
@@ -382,7 +357,7 @@ async function updateVariantState(
       return { ok: false, message: response.error?.message ?? 'Could not update this draft.' };
     }
 
-    applyThreadSnapshot(response.snapshot, true);
+    applyThreadSnapshot(response.snapshot);
     return { ok: true, message: successMessage };
   } catch (error) {
     return {
