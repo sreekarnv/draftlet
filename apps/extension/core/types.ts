@@ -19,41 +19,6 @@ export interface ReplyRequestPayload {
   generation_mode?: GenerationMode;
 }
 
-export interface StreamedReply {
-  text: string;
-  replyId?: number;
-  variantId?: string;
-  threadId?: string;
-  turnId?: string;
-}
-
-export interface ReplyItem {
-  id: string;
-  text: string;
-  persistedId?: number;
-  isCurrent?: boolean;
-  isAccepted?: boolean;
-}
-
-export interface HistoryReply {
-  id: number;
-  reply_index: number;
-  text: string;
-  created_at: string;
-}
-
-export interface HistoryGeneration {
-  id: number;
-  selected_text: string;
-  tone: string;
-  model: string;
-  source_url: string | null;
-  source_domain: string | null;
-  status: string;
-  created_at: string;
-  replies: HistoryReply[];
-}
-
 export interface PreferenceItem {
   id: number;
   scope: string;

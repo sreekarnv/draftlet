@@ -8,13 +8,10 @@ import type {
   InsertionResult,
   PanelState,
   PanelView,
-  ReplyItem,
-  StreamedReply,
   Tone,
 } from '../core/types';
 import { DraftletPanel } from '../components/panel/DraftletPanel';
 
-export type PanelSurface = 'overlay' | 'sidepanel';
 
 export interface PanelOpenOptions {
   selectedText: string;
@@ -33,9 +30,7 @@ export type PanelAction =
   | { type: 'setActiveView'; activeView: PanelView }
   | { type: 'setConnectionStatus'; status: ConnectionStatus }
   | { type: 'setState'; state: PanelState; message: string }
-  | { type: 'setThreadSnapshot'; snapshot: ConversationThreadSnapshot | null }
-  | { type: 'clearReplies' }
-  | { type: 'addReply'; reply: ReplyItem };
+  | { type: 'setThreadSnapshot'; snapshot: ConversationThreadSnapshot | null };
 
 export interface PanelController {
   open(options: PanelOpenOptions): void;
@@ -46,15 +41,12 @@ export interface PanelController {
   setConnectionStatus(status: ConnectionStatus): void;
   setState(state: PanelState, message?: string): void;
   setThreadSnapshot(snapshot: ConversationThreadSnapshot | null): void;
-  clearReplies(): void;
-  addReply(reply: StreamedReply | ReplyItem): void;
   subscribe(listener: (action: PanelAction) => void): () => void;
 }
 
 export interface PanelCallbacks {
   initialTone?: Tone;
   initialView?: PanelView;
-  surface?: PanelSurface;
   onToneChange?: (tone: Tone) => void;
   onViewChange?: (activeView: PanelView) => void;
   onGenerate: () => void;
@@ -147,21 +139,6 @@ function createPanelController(initialTone: Tone, initialView: PanelView): Panel
     },
     setThreadSnapshot(snapshot) {
       emit({ type: 'setThreadSnapshot', snapshot });
-    },
-    clearReplies() {
-      emit({ type: 'clearReplies' });
-    },
-    addReply(reply) {
-      emit({
-        type: 'addReply',
-        reply: 'id' in reply
-          ? reply
-          : {
-            id: reply.replyId ? `reply-${reply.replyId}` : crypto.randomUUID(),
-            text: reply.text,
-            persistedId: reply.replyId,
-          },
-      });
     },
     subscribe(nextListener) {
       listener = nextListener;
