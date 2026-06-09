@@ -11,7 +11,6 @@ export const START_DRAFT_GENERATION = 'draftlet:start-draft-generation';
 export const START_DRAFT_REFINEMENT = 'draftlet:start-draft-refinement';
 export const CANCEL_DRAFT_GENERATION = 'draftlet:cancel-draft-generation';
 export const DRAFT_GENERATION_STARTED = 'draftlet:draft-generation-started';
-export const DRAFT_VARIANT_RECEIVED = 'draftlet:draft-variant-received';
 export const DRAFT_GENERATION_COMPLETED = 'draftlet:draft-generation-completed';
 export const DRAFT_GENERATION_FAILED = 'draftlet:draft-generation-failed';
 export const INSERT_REPLY = 'draftlet:insert-reply';
@@ -141,7 +140,6 @@ export type DraftletMessage =
       thread: ConversationThread;
       turn: Turn;
     }
-  | { type: typeof DRAFT_VARIANT_RECEIVED; sessionId: string; generationId: string; variant: DraftVariant }
   | {
       type: typeof DRAFT_GENERATION_COMPLETED;
       sessionId: string;

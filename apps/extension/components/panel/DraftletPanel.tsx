@@ -3,8 +3,8 @@ import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 
 import { DEFAULT_PANEL_VIEW, DEFAULT_TONE } from '../../core/constants';
 import type { ConversationThreadSnapshot, DomainHistoryItem } from '../../core/messages';
-import type { ConnectionStatus, PanelState, PanelView, ReplyItem, Tone } from '../../core/types';
-import type { PanelAction, PanelCallbacks, PanelController, PanelSurface } from '../../ui/mount-panel';
+import type { ConnectionStatus, PanelState, PanelView, Tone } from '../../core/types';
+import type { PanelAction, PanelCallbacks, PanelController } from '../../ui/mount-panel';
 import { ReplyCard } from './ReplyCard';
 import { StatusBadge } from './StatusBadge';
 import { ToneTabs } from './ToneTabs';
@@ -24,7 +24,6 @@ interface PanelViewState {
   tone: Tone;
   state: PanelState;
   connectionStatus: ConnectionStatus;
-  replies: ReplyItem[];
   threadSnapshot: ConversationThreadSnapshot | null;
   history: DomainHistoryItem[];
   historyState: LoadState;
@@ -39,7 +38,6 @@ export function DraftletPanel({ callbacks, controller }: DraftletPanelProps) {
     tone: callbacks.initialTone ?? DEFAULT_TONE,
     state: 'empty',
     connectionStatus: 'disconnected',
-    replies: [],
     threadSnapshot: null,
     history: [],
     historyState: 'idle',
@@ -107,12 +105,10 @@ export function DraftletPanel({ callbacks, controller }: DraftletPanelProps) {
   };
 
   const [refinementInstruction, setRefinementInstruction] = useState('');
-  const surface = callbacks.surface ?? 'overlay';
-
   return (
     <section
       aria-label="Draftlet"
-      className={cn(panelSurfaceClass(surface), 'flex flex-col overflow-hidden bg-[#f4f1ea] font-sans text-sm leading-6 text-slate-900')}
+      className="flex min-h-screen w-full flex-col overflow-hidden border-0 bg-[#f4f1ea] font-sans text-sm leading-6 text-slate-900"
       role="dialog"
     >
       <div className="shrink-0 bg-[linear-gradient(180deg,#ffffff,#f4f7fb)] px-3.5 pb-3 pt-3.5 shadow-sm shadow-slate-200/80">
@@ -138,14 +134,6 @@ export function DraftletPanel({ callbacks, controller }: DraftletPanelProps) {
       </div>
     </section>
   );
-}
-
-function panelSurfaceClass(surface: PanelSurface) {
-  if (surface === 'sidepanel') {
-    return 'min-h-screen w-full border-0';
-  }
-
-  return 'max-h-[calc(100vh-24px)] w-[340px] max-w-[calc(100vw-24px)] rounded-xl border border-slate-200 bg-[#f4f1ea] shadow-2xl shadow-slate-400/25 ring-1 ring-white/70';
 }
 
 function renderComposerWorkspace(
@@ -219,28 +207,7 @@ function renderRepliesView(
     return renderThreadWorkspace(view.threadSnapshot, view, callbacks);
   }
 
-  if (view.replies.length === 0) {
-    return <EmptyState title={isGenerating ? 'Waiting for streamed replies...' : 'Generated drafts will appear here.'} />;
-  }
-
-  return (
-    <section className="grid gap-2.5" aria-label="Generated replies">
-      <div className="flex items-center justify-between gap-3 px-0.5">
-        <div className="text-[11px] font-semibold uppercase tracking-normal text-slate-500">Draft replies</div>
-        <div className="text-xs leading-5 text-slate-500">{view.replies.length} ready</div>
-      </div>
-      {view.replies.map((reply, index) => (
-        <ReplyCard
-          index={index}
-          key={reply.id}
-          onAcceptVariant={callbacks.onAcceptVariant}
-          onInsert={callbacks.onInsert}
-          onSelectVariant={callbacks.onSelectVariant}
-          reply={reply}
-        />
-      ))}
-    </section>
-  );
+  return <EmptyState title={isGenerating ? 'Waiting for streamed replies...' : 'Generated drafts will appear here.'} />;
 }
 
 function renderThreadWorkspace(
@@ -322,13 +289,7 @@ function renderTurnGroup(
               onAcceptVariant={callbacks.onAcceptVariant}
               onInsert={callbacks.onInsert}
               onSelectVariant={callbacks.onSelectVariant}
-              reply={{
-                id: variant.variantId,
-                text: variant.content,
-                persistedId: variant.persistedReplyId,
-                isCurrent: variant.isCurrent,
-                isAccepted: variant.status === 'accepted',
-              }}
+              variant={variant}
             />
           ))}
         </div>
@@ -451,8 +412,7 @@ function reducePanelAction(current: PanelViewState, action: PanelAction): PanelV
       selectedText: action.options.selectedText,
       tone: action.options.tone ?? current.tone,
       state: 'empty',
-      replies: [],
-      threadSnapshot: null,
+        threadSnapshot: null,
       errorMessage: '',
       persistenceMessage: '',
     };
@@ -478,13 +438,6 @@ function reducePanelAction(current: PanelViewState, action: PanelAction): PanelV
     return { ...current, threadSnapshot: action.snapshot, persistenceMessage: '' };
   }
 
-  if (action.type === 'clearReplies') {
-    return { ...current, replies: [], errorMessage: '', persistenceMessage: '' };
-  }
-
-  if (action.type === 'addReply') {
-    return { ...current, replies: [...current.replies, action.reply], state: 'streaming' };
-  }
 
   return current;
 }
@@ -526,11 +479,7 @@ function stateToneClass(state: PanelState) {
 }
 
 function draftCount(view: PanelViewState) {
-  if (view.threadSnapshot) {
-    return view.threadSnapshot.variants.length;
-  }
-
-  return view.replies.length;
+  return view.threadSnapshot?.variants.length ?? 0;
 }
 
 function latestHistoryActivity(item: DomainHistoryItem) {

@@ -8,7 +8,6 @@ import {
   DRAFT_GENERATION_COMPLETED,
   DRAFT_GENERATION_FAILED,
   DRAFT_GENERATION_STARTED,
-  DRAFT_VARIANT_RECEIVED,
   GET_CURRENT_WORKSPACE_SESSION,
   GET_DOMAIN_HISTORY,
   GET_RUNTIME_STATUS,
@@ -21,7 +20,6 @@ import {
   type ConversationThreadSnapshot,
   type DomainHistoryItem,
   type DomainHistoryResult,
-  type DraftVariant,
   type DraftletMessage,
   type DraftVariantStateResult,
   type InsertReplyResult,
@@ -50,7 +48,6 @@ if (!root) {
 const mountedPanel = mountDraftletPanel(root, {
   initialTone: currentTone,
   initialView: currentPanelView,
-  surface: 'sidepanel',
   onToneChange(tone) {
     currentTone = tone;
     currentSession = currentSession ? {
@@ -168,14 +165,6 @@ function handleDraftletMessage(message: DraftletMessage) {
     return;
   }
 
-  if (
-    message.type === DRAFT_VARIANT_RECEIVED
-    && message.sessionId === activeGenerationSessionId
-    && message.generationId === activeGenerationId
-  ) {
-    panel.addReply(replyItemForVariant(message.variant));
-    return;
-  }
 
   if (
     message.type === DRAFT_GENERATION_COMPLETED
@@ -202,15 +191,6 @@ function applyThreadSnapshot(snapshot: ConversationThreadSnapshot) {
   panel.setThreadSnapshot(snapshot);
 }
 
-function replyItemForVariant(variant: DraftVariant) {
-  return {
-    id: variant.variantId,
-    text: variant.content,
-    persistedId: variant.persistedReplyId,
-    isCurrent: variant.isCurrent,
-    isAccepted: variant.status === 'accepted',
-  };
-}
 
 function shouldApplySessionUpdate(session: WorkspaceSession): boolean {
   return !currentSession
@@ -312,7 +292,6 @@ async function generateReplies() {
   }
 
   await cancelActiveGeneration();
-  panel.clearReplies();
   panel.setState('loading');
 
   try {
@@ -354,7 +333,6 @@ async function refineReplies(instruction: string) {
   }
 
   await cancelActiveGeneration();
-  panel.clearReplies();
   panel.setState('loading');
 
   try {

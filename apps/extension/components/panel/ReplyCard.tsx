@@ -1,19 +1,20 @@
 import { Check, Copy, CornerDownLeft, MousePointer2 } from 'lucide-react';
 import { useState } from 'react';
 
-import type { InsertionResult, ReplyItem } from '../../core/types';
+import type { DraftVariant } from '../../core/messages';
+import type { InsertionResult } from '../../core/types';
 import type { VariantActionResult } from '../../ui/mount-panel';
 import { Button, Card, cn } from './ui';
 
 interface ReplyCardProps {
-  reply: ReplyItem;
+  variant: DraftVariant;
   index: number;
   onInsert: (replyText: string, variantId?: string) => Promise<InsertionResult>;
   onSelectVariant?: (variantId: string) => Promise<VariantActionResult>;
   onAcceptVariant?: (variantId: string) => Promise<VariantActionResult>;
 }
 
-export function ReplyCard({ reply, index, onInsert, onSelectVariant, onAcceptVariant }: ReplyCardProps) {
+export function ReplyCard({ variant, index, onInsert, onSelectVariant, onAcceptVariant }: ReplyCardProps) {
   const [copyLabel, setCopyLabel] = useState('Copy');
   const [insertLabel, setInsertLabel] = useState('Insert');
   const [selectLabel, setSelectLabel] = useState('Use');
@@ -36,7 +37,7 @@ export function ReplyCard({ reply, index, onInsert, onSelectVariant, onAcceptVar
 
   const copyReply = async () => {
     try {
-      await navigator.clipboard.writeText(reply.text);
+      await navigator.clipboard.writeText(variant.content);
       showFeedback('Copied to clipboard.');
       flashButtonLabel(setCopyLabel, 'Copied', 'Copy');
     } catch {
@@ -50,7 +51,7 @@ export function ReplyCard({ reply, index, onInsert, onSelectVariant, onAcceptVar
     showFeedback('Trying to insert...');
 
     try {
-      const result = await onInsert(reply.text, reply.id);
+      const result = await onInsert(variant.content, variant.variantId);
       showFeedback(feedbackMessageFor(result), result.status === 'failed');
       flashButtonLabel(setInsertLabel, buttonMessageFor(result), 'Insert');
     } finally {
@@ -70,7 +71,7 @@ export function ReplyCard({ reply, index, onInsert, onSelectVariant, onAcceptVar
     const working = action === 'select' ? 'Selecting...' : 'Accepting...';
     setLabel(working);
 
-    const result = await callback(reply.id);
+    const result = await callback(variant.variantId);
     showFeedback(result.message, !result.ok);
     flashButtonLabel(setLabel, result.ok ? 'Done' : 'Failed', fallback);
   };
@@ -78,28 +79,28 @@ export function ReplyCard({ reply, index, onInsert, onSelectVariant, onAcceptVar
   return (
     <Card className={cn(
       'grid gap-3 bg-white p-3.5 shadow-sm shadow-slate-200/80 ring-1 ring-slate-200/80',
-      reply.isCurrent && 'ring-slate-500',
-      reply.isAccepted && 'bg-emerald-50/60 ring-emerald-300',
+      variant.isCurrent && 'ring-slate-500',
+      variant.status === 'accepted' && 'bg-emerald-50/60 ring-emerald-300',
     )}>
       <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
         <div className="text-[11px] font-semibold uppercase tracking-normal text-slate-500">Draft {index + 1}</div>
         <div className="flex flex-wrap items-center justify-end gap-1.5">
-          {reply.isCurrent ? <StateBadge label="Selected" tone="slate" /> : null}
-          {reply.isAccepted ? <StateBadge label="Accepted" tone="emerald" /> : null}
+          {variant.isCurrent ? <StateBadge label="Selected" tone="slate" /> : null}
+          {variant.status === 'accepted' ? <StateBadge label="Accepted" tone="emerald" /> : null}
         </div>
       </div>
-      <p className="m-0 whitespace-pre-wrap text-[14px] leading-[1.65] text-slate-900">{reply.text}</p>
+      <p className="m-0 whitespace-pre-wrap text-[14px] leading-[1.65] text-slate-900">{variant.content}</p>
       <div className="flex flex-wrap items-center gap-2 pt-0.5">
         {onSelectVariant ? (
-          <Button disabled={reply.isCurrent} onClick={() => void updateVariantState('select')} type="button" variant="secondary">
+          <Button disabled={variant.isCurrent} onClick={() => void updateVariantState('select')} type="button" variant="secondary">
             <MousePointer2 aria-hidden="true" className="h-3.5 w-3.5" />
-            {reply.isCurrent ? 'Selected' : selectLabel}
+            {variant.isCurrent ? 'Selected' : selectLabel}
           </Button>
         ) : null}
         {onAcceptVariant ? (
-          <Button disabled={reply.isAccepted} onClick={() => void updateVariantState('accept')} type="button" variant="secondary">
+          <Button disabled={variant.status === 'accepted'} onClick={() => void updateVariantState('accept')} type="button" variant="secondary">
             <Check aria-hidden="true" className="h-3.5 w-3.5" />
-            {reply.isAccepted ? 'Accepted' : acceptLabel}
+            {variant.status === 'accepted' ? 'Accepted' : acceptLabel}
           </Button>
         ) : null}
         <Button onClick={copyReply} type="button" variant="secondary">

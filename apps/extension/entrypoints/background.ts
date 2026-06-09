@@ -18,7 +18,6 @@ import {
   DRAFT_GENERATION_COMPLETED,
   DRAFT_GENERATION_FAILED,
   DRAFT_GENERATION_STARTED,
-  DRAFT_VARIANT_RECEIVED,
   GET_CURRENT_WORKSPACE_SESSION,
   GET_DOMAIN_HISTORY,
   GET_RUNTIME_STATUS,
@@ -499,13 +498,6 @@ async function runDraftGeneration(
 
           void emitConversationThreadUpdated(sessionId, variantResult.snapshot);
           active.variants.push(variantResult.variant);
-
-          void emitDraftletMessage({
-            type: DRAFT_VARIANT_RECEIVED,
-            sessionId,
-            generationId,
-            variant: variantResult.variant,
-          });
         },
       },
     );

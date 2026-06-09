@@ -11,11 +11,9 @@ import type {
   WorkspaceSessionSnapshot,
 } from './messages';
 import type {
-  HistoryGeneration,
   PreferenceItem,
   PreferenceUpsert,
   ReplyRequestPayload,
-  StreamedReply,
 } from './types';
 
 export async function checkServerHealth(signal?: AbortSignal): Promise<boolean> {
@@ -37,7 +35,13 @@ export async function checkServerHealth(signal?: AbortSignal): Promise<boolean> 
 
 interface StreamRepliesOptions {
   signal?: AbortSignal;
-  onReply: (reply: StreamedReply) => void;
+  onReply: (variant: StreamedDraftVariant) => void;
+}
+
+interface StreamedDraftVariant {
+  text: string;
+  replyId?: number;
+  variantId?: string;
 }
 
 export async function streamReplies(
@@ -55,10 +59,10 @@ export async function streamReplies(
     },
     signal,
     onMessage(message) {
-      const reply = parseStreamedReply(message);
+      const variant = parseStreamedDraftVariant(message);
 
-      if (reply?.text) {
-        onReply(reply);
+      if (variant?.text) {
+        onReply(variant);
       }
     },
   });
@@ -179,10 +183,6 @@ export async function patchDraftVariantState(
   return mapConversationThreadSnapshot(response);
 }
 
-export async function getHistory(signal?: AbortSignal): Promise<HistoryGeneration[]> {
-  return getJson<HistoryGeneration[]>(`${SERVER_BASE_URL}/history`, signal);
-}
-
 export async function getPreferences(scope?: string, signal?: AbortSignal): Promise<PreferenceItem[]> {
   const query = scope ? `?scope=${encodeURIComponent(scope)}` : '';
   return getJson<PreferenceItem[]>(`${SERVER_BASE_URL}/preferences${query}`, signal);
@@ -252,7 +252,7 @@ async function putJson<T>(url: string, payload: unknown): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-function parseStreamedReply(message: SseMessage): StreamedReply | null {
+function parseStreamedDraftVariant(message: SseMessage): StreamedDraftVariant | null {
   if (message.eventType === 'draft_variant') {
     try {
       const payload = JSON.parse(message.data) as DraftVariantStreamPayload;
@@ -260,8 +260,6 @@ function parseStreamedReply(message: SseMessage): StreamedReply | null {
         text: payload.reply,
         replyId: payload.reply_id ?? undefined,
         variantId: payload.variant_id,
-        threadId: payload.thread_id ?? undefined,
-        turnId: payload.turn_id ?? undefined,
       };
     } catch {
       return null;
