@@ -10,17 +10,22 @@ import {
   DRAFT_GENERATION_STARTED,
   DRAFT_VARIANT_RECEIVED,
   GET_CURRENT_WORKSPACE_SESSION,
+  GET_DOMAIN_HISTORY,
   GET_RUNTIME_STATUS,
   INSERT_REPLY,
+  RESTORE_DOMAIN_THREAD,
   SET_CURRENT_DRAFT_VARIANT,
   WORKSPACE_SESSION_UPDATED,
   START_DRAFT_GENERATION,
   START_DRAFT_REFINEMENT,
   type ConversationThreadSnapshot,
+  type DomainHistoryItem,
+  type DomainHistoryResult,
   type DraftVariant,
   type DraftletMessage,
   type DraftVariantStateResult,
   type InsertReplyResult,
+  type RestoreDomainThreadResult,
   type RuntimeStatusResult,
   type StartDraftGenerationResult,
   type WorkspaceSession,
@@ -73,6 +78,12 @@ const mountedPanel = mountDraftletPanel(root, {
   },
   onRefine(instruction) {
     void refineReplies(instruction);
+  },
+  onLoadHistory() {
+    return loadDomainHistory();
+  },
+  onRestoreHistoryItem(item) {
+    return restoreDomainHistoryItem(item);
   },
   onInsert(replyText, variantId) {
     return insertIntoActivePage(replyText, variantId);
@@ -249,6 +260,48 @@ async function refreshHealth() {
   } catch {
     panel.setConnectionStatus('disconnected');
     return false;
+  }
+}
+
+async function loadDomainHistory(): Promise<DomainHistoryItem[]> {
+  try {
+    const response = await browser.runtime.sendMessage({
+      type: GET_DOMAIN_HISTORY,
+      limit: 20,
+    } satisfies DraftletMessage) as DomainHistoryResult;
+
+    if (response.error) {
+      throw new Error(response.error.message);
+    }
+
+    return response.items;
+  } catch (error) {
+    panel.setConnectionStatus('disconnected');
+    throw error;
+  }
+}
+
+async function restoreDomainHistoryItem(item: DomainHistoryItem) {
+  try {
+    const response = await browser.runtime.sendMessage({
+      type: RESTORE_DOMAIN_THREAD,
+      sessionId: item.session.sessionId,
+      threadId: item.thread.thread.threadId,
+    } satisfies DraftletMessage) as RestoreDomainThreadResult;
+
+    if (!response.restored || !response.session || !response.thread) {
+      return { ok: false, message: response.error?.message ?? 'Could not restore this thread.' };
+    }
+
+    applySession(response.session);
+    applyThreadSnapshot(response.thread);
+    panel.setActiveView('replies');
+    return { ok: true, message: 'Restored this thread.' };
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : 'Could not reach the Draftlet extension coordinator.',
+    };
   }
 }
 

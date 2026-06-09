@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.db.session import get_session
 from app.schemas.domain import (
     ConversationThreadCreate,
     ConversationThreadRead,
+    DomainHistoryItem,
     ConversationThreadSnapshot,
     DraftVariantCreate,
     DraftVariantRead,
@@ -21,12 +22,21 @@ from app.services.domain_service import (
     create_or_update_variant,
     get_session_snapshot,
     get_thread_snapshot,
+    list_recent_domain_history,
     update_variant_state,
     update_turn_status,
     upsert_workspace_session,
 )
 
 router = APIRouter(prefix="/domain", tags=["domain"])
+
+
+@router.get("/history", response_model=list[DomainHistoryItem])
+def get_domain_history(
+    limit: int = Query(default=20, ge=1, le=100),
+    session: Session = Depends(get_session),
+) -> list[DomainHistoryItem]:
+    return list_recent_domain_history(session, limit=limit)
 
 
 @router.put("/sessions/{session_id}", response_model=WorkspaceSessionRead)

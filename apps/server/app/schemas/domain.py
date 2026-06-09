@@ -140,3 +140,8 @@ class ConversationThreadSnapshot(BaseModel):
 class WorkspaceSessionSnapshot(BaseModel):
     session: WorkspaceSessionRead
     thread: ConversationThreadSnapshot | None = None
+
+
+class DomainHistoryItem(BaseModel):
+    session: WorkspaceSessionRead
+    thread: ConversationThreadSnapshot

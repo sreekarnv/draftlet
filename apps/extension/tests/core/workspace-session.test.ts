@@ -101,6 +101,26 @@ describe('workspace session store', () => {
     expect(store.getBySessionId(first.sessionId)?.activeGeneration).toBeUndefined();
     expect(store.getBySessionId(second.sessionId)?.activeGeneration?.generationId).toBe('generation-b');
   });
+  it('hydrates a persisted session for workspace restore', () => {
+    const store = createTestStore();
+
+    const restored = store.hydrateSession({
+      sessionId: 'session-history',
+      tabId: -1,
+      pageUrl: 'https://example.com/history',
+      pageTitle: 'History',
+      latestContext: context('Historical message', 'https://example.com/history'),
+      status: 'active',
+      activeThreadId: 'thread-history',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:01.000Z',
+    });
+
+    expect(restored.activeThreadId).toBe('thread-history');
+    expect(store.getBySessionId('session-history')?.latestContext.selectedText).toBe('Historical message');
+    expect(store.getByTabId(-1)?.sessionId).toBe('session-history');
+  });
+
 });
 
 function createTestStore() {
