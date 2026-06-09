@@ -116,14 +116,16 @@ The current v2 extension generation flow is intentionally transitional but now s
 - service worker creates or reuses a session-backed `ConversationThread` when generation starts
 - each generation creates a `Turn` on that thread
 - turn lifecycle is durable on the `Turn` with explicit status, lifecycle timestamps, and bounded error metadata
+- each live execution also claims a runtime `GenerationRun` lease tied to the session, thread, and turn
 - each streamed runtime reply is stored as a `DraftVariant` on the active turn
 - service worker broadcasts `draftlet:workspace-session-updated` for session metadata and `draftlet:conversation-thread-updated` for thread snapshots
 - service worker emits `draftlet:draft-generation-started`, `draftlet:draft-generation-completed`, and `draftlet:draft-generation-failed` for generation lifecycle, while streamed variants reach extension surfaces through `draftlet:conversation-thread-updated` snapshots
 - side panel renders thread snapshots as the primary thread workspace, grouped by `Turn` and `DraftVariant`
-- side panel can cancel with `draftlet:cancel-draft-generation` using `sessionId` and `generationId`
+- side panel can cancel with `draftlet:cancel-draft-generation` using `sessionId` and `generationId`; background reconciles the live browser abort and the runtime run state
 - insertion remains explicit: side panel sends `draftlet:insert-reply` with `sessionId`, service worker forwards it to the session tab, and the content script performs best-effort DOM insertion
 
-This keeps the webpage out of runtime transport and generation workflow ownership while preserving side-panel ownership of the workflow. Runtime persistence is the durable source for workspace sessions, threads, turns, and variants.
+This keeps the webpage out of runtime transport and generation workflow ownership while preserving side-panel ownership of the workflow. Runtime persistence is the durable source for workspace sessions, threads, turns, variants, and generation run state.
+
 ## Runtime-Backed Session And Thread Flow
 
 The current v2 generation flow is transitional but now uses durable runtime domain persistence:
@@ -133,6 +135,9 @@ The current v2 generation flow is transitional but now uses durable runtime doma
 - initial generation creates or reuses a session-backed `ConversationThread`, creates a `Turn`, and streams replies through `/replies` with `generation_mode: initial`
 - follow-up refinement uses `draftlet:start-draft-refinement`, appends a new `Turn` to the active persisted thread, and streams `/replies` with `generation_mode: refinement` plus the user instruction
 - runtime-backed `Turn` lifecycle records queued, started, streaming, completed, failed, and cancelled states with timestamps and bounded error details
+- runtime-backed `GenerationRun` records make live execution explicit with `run_id`, `turn_id`, `session_id`, `thread_id`, status, lease owner, claim/heartbeat/release timestamps, and bounded error metadata
+- service worker claims a `GenerationRun` before opening the live stream; runtime stream handling updates that run while preserving `Turn` lifecycle state for side panel restore
+- restore/startup can query or reconcile active runtime runs and mark stale live execution as interrupted without pretending stream resume exists
 - runtime loads prior persisted thread context for refinement prompts, then persists each streamed reply as a `DraftVariant` for the turn
 - runtime emits `draft_variant` SSE events with variant/thread/turn metadata
 - service worker maps each streamed result into the active `ConversationThread` snapshot and broadcasts `draftlet:conversation-thread-updated`
@@ -144,7 +149,7 @@ The current v2 generation flow is transitional but now uses durable runtime doma
 - refinement prompts prefer the accepted variant, then the current variant, then the latest prior turn variants as a compatibility fallback
 - insertion remains explicit: side panel sends `draftlet:insert-reply` with `sessionId` and `variantId` when available; service worker forwards approved text to the session tab, and the content script performs best-effort DOM insertion
 
-Legacy runtime `Generation`/`Reply` persistence and `/history` are retired. Side-panel history and streaming now use domain-backed `WorkspaceSession` / `ConversationThread` / `Turn` / `DraftVariant` data end to end. Current and accepted variant state is bounded to one variant per thread in this phase.
+Legacy runtime `Generation`/`Reply` persistence and `/history` are retired. Side-panel history and streaming now use domain-backed `WorkspaceSession` / `ConversationThread` / `Turn` / `DraftVariant` data end to end, with `GenerationRun` as the bounded durable execution lease for active/recoverable generation work. Current and accepted variant state is bounded to one variant per thread in this phase.
 
 ## Error Shape
 
@@ -173,6 +178,7 @@ Use stable identifiers to keep cross-boundary state coherent.
 - `session_id` identifies a WorkspaceSession.
 - `thread_id` identifies a ConversationThread.
 - `turn_id` identifies a Turn.
+- `run_id` identifies a GenerationRun lease for one live execution attempt.
 - `variant_id` identifies a DraftVariant.
 - `compose_target_id` or equivalent identifies a captured editable target snapshot, not a permanently valid DOM node.
 - `correlation_id` connects a request with logs, stream events, cancellation, retry, and final result.

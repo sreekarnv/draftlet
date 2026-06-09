@@ -65,6 +65,51 @@ class TurnStatusUpdate(BaseModel):
         return value.strip() or None
 
 
+class GenerationRunClaim(BaseModel):
+    run_id: str = Field(min_length=1, max_length=120)
+    session_id: str = Field(min_length=1, max_length=120)
+    thread_id: str = Field(min_length=1, max_length=120)
+    turn_id: str = Field(min_length=1, max_length=120)
+    lease_owner: str = Field(min_length=1, max_length=120)
+    status: str = Field(default="active", min_length=1, max_length=40)
+
+    @field_validator("run_id", "session_id", "thread_id", "turn_id", "lease_owner", "status", mode="before")
+    @classmethod
+    def strip_text_fields(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip() or None
+
+
+class GenerationRunStatusUpdate(BaseModel):
+    status: str = Field(min_length=1, max_length=40)
+    error_code: str | None = Field(default=None, max_length=120)
+    error_message: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("status", "error_code", "error_message", mode="before")
+    @classmethod
+    def strip_text_fields(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip() or None
+
+
+class GenerationRunReconcileRequest(BaseModel):
+    session_id: str | None = Field(default=None, max_length=120)
+    thread_id: str | None = Field(default=None, max_length=120)
+    turn_id: str | None = Field(default=None, max_length=120)
+    stale_after_seconds: int = Field(default=0, ge=0)
+    error_code: str = Field(default="generation_interrupted", min_length=1, max_length=120)
+    error_message: str = Field(default="Draft generation was interrupted before completion.", min_length=1, max_length=1000)
+
+    @field_validator("session_id", "thread_id", "turn_id", "error_code", "error_message", mode="before")
+    @classmethod
+    def strip_text_fields(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip() or None
+
+
 class DraftVariantCreate(BaseModel):
     variant_id: str = Field(min_length=1, max_length=120)
     turn_id: str = Field(min_length=1, max_length=120)
@@ -129,6 +174,28 @@ class TurnRead(BaseModel):
     generation_cancelled_at: datetime | None = None
     generation_error_code: str | None = None
     generation_error_message: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class GenerationRunRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    run_id: str
+    session_id: str
+    thread_id: str
+    turn_id: str
+    status: str
+    lease_owner: str
+    claimed_at: datetime
+    heartbeat_at: datetime | None = None
+    released_at: datetime | None = None
+    completed_at: datetime | None = None
+    cancelled_at: datetime | None = None
+    interrupted_at: datetime | None = None
+    failed_at: datetime | None = None
+    error_code: str | None = None
+    error_message: str | None = None
     created_at: datetime
     updated_at: datetime
 

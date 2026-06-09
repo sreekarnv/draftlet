@@ -5,6 +5,8 @@ import type {
   ConversationThreadSnapshot,
   DomainHistoryItem,
   DraftVariant,
+  GenerationRun,
+  GenerationRunStatus,
   SourceSnapshot,
   Turn,
   WorkspaceSession,
@@ -165,6 +167,82 @@ export async function patchTurnStatus(
   return mapTurn(await response.json() as TurnRead);
 }
 
+export async function claimGenerationRun(run: {
+  runId: string;
+  sessionId: string;
+  threadId: string;
+  turnId: string;
+  leaseOwner: string;
+}): Promise<GenerationRun> {
+  const response = await putJson<GenerationRunRead>(`${SERVER_BASE_URL}/domain/generation-runs/${encodeURIComponent(run.runId)}`, {
+    run_id: run.runId,
+    session_id: run.sessionId,
+    thread_id: run.threadId,
+    turn_id: run.turnId,
+    lease_owner: run.leaseOwner,
+    status: 'active',
+  });
+
+  return mapGenerationRun(response);
+}
+
+export async function getActiveGenerationRuns(filters: {
+  sessionId?: string;
+  threadId?: string;
+  turnId?: string;
+} = {}): Promise<GenerationRun[]> {
+  const params = new URLSearchParams();
+
+  if (filters.sessionId) {
+    params.set('session_id', filters.sessionId);
+  }
+
+  if (filters.threadId) {
+    params.set('thread_id', filters.threadId);
+  }
+
+  if (filters.turnId) {
+    params.set('turn_id', filters.turnId);
+  }
+
+  const query = params.size > 0 ? `?${params.toString()}` : '';
+  const response = await getJson<GenerationRunRead[]>(`${SERVER_BASE_URL}/domain/generation-runs/active${query}`);
+  return response.map(mapGenerationRun);
+}
+
+export async function patchGenerationRunStatus(
+  runId: string,
+  status: GenerationRunStatus,
+  error?: { code?: string; message?: string },
+): Promise<GenerationRun> {
+  const response = await patchJson<GenerationRunRead>(`${SERVER_BASE_URL}/domain/generation-runs/${encodeURIComponent(runId)}/status`, {
+    status,
+    error_code: error?.code,
+    error_message: error?.message,
+  });
+
+  return mapGenerationRun(response);
+}
+
+export async function reconcileGenerationRuns(filters: {
+  sessionId?: string;
+  threadId?: string;
+  turnId?: string;
+  staleAfterSeconds?: number;
+  error?: { code?: string; message?: string };
+} = {}): Promise<GenerationRun[]> {
+  const response = await postJson<GenerationRunRead[]>(`${SERVER_BASE_URL}/domain/generation-runs/reconcile`, {
+    session_id: filters.sessionId,
+    thread_id: filters.threadId,
+    turn_id: filters.turnId,
+    stale_after_seconds: filters.staleAfterSeconds ?? 0,
+    error_code: filters.error?.code,
+    error_message: filters.error?.message,
+  });
+
+  return response.map(mapGenerationRun);
+}
+
 export async function putDraftVariant(variant: DraftVariant): Promise<DraftVariant> {
   const response = await putJson<DraftVariantRead>(`${SERVER_BASE_URL}/domain/variants/${encodeURIComponent(variant.variantId)}`, {
     variant_id: variant.variantId,
@@ -230,6 +308,23 @@ async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
 async function patchJson<T>(url: string, payload: unknown): Promise<T> {
   const response = await fetch(url, {
     method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Request failed with ${response.status}`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+async function postJson<T>(url: string, payload: unknown): Promise<T> {
+  const response = await fetch(url, {
+    method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json',
@@ -396,12 +491,38 @@ function mapDraftVariant(variant: DraftVariantRead): DraftVariant {
   };
 }
 
+function mapGenerationRun(run: GenerationRunRead): GenerationRun {
+  return {
+    runId: run.run_id,
+    sessionId: run.session_id,
+    threadId: run.thread_id,
+    turnId: run.turn_id,
+    status: isGenerationRunStatus(run.status) ? run.status : 'active',
+    leaseOwner: run.lease_owner,
+    claimedAt: run.claimed_at,
+    heartbeatAt: run.heartbeat_at ?? undefined,
+    releasedAt: run.released_at ?? undefined,
+    completedAt: run.completed_at ?? undefined,
+    cancelledAt: run.cancelled_at ?? undefined,
+    interruptedAt: run.interrupted_at ?? undefined,
+    failedAt: run.failed_at ?? undefined,
+    errorCode: run.error_code ?? undefined,
+    errorMessage: run.error_message ?? undefined,
+    createdAt: run.created_at,
+    updatedAt: run.updated_at,
+  };
+}
+
 function isTone(value: string): value is DraftVariant['tone'] {
   return value === 'professional' || value === 'friendly' || value === 'concise';
 }
 
 function isTurnStatus(value: string): value is Turn['generationStatus'] {
   return value === 'queued' || value === 'started' || value === 'streaming' || value === 'completed' || value === 'failed' || value === 'cancelled';
+}
+
+function isGenerationRunStatus(value: string): value is GenerationRunStatus {
+  return value === 'active' || value === 'streaming' || value === 'completed' || value === 'failed' || value === 'cancelled' || value === 'interrupted';
 }
 
 interface DraftVariantStreamPayload {
@@ -466,6 +587,26 @@ interface DraftVariantRead {
   rank: number;
   status: string;
   is_current: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface GenerationRunRead {
+  run_id: string;
+  session_id: string;
+  thread_id: string;
+  turn_id: string;
+  status: string;
+  lease_owner: string;
+  claimed_at: string;
+  heartbeat_at: string | null;
+  released_at: string | null;
+  completed_at: string | null;
+  cancelled_at: string | null;
+  interrupted_at: string | null;
+  failed_at: string | null;
+  error_code: string | null;
+  error_message: string | null;
   created_at: string;
   updated_at: string;
 }

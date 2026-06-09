@@ -6,7 +6,15 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.database import SessionLocal
 from app.db.models import DraftVariant
-from app.schemas.domain import ConversationThreadCreate, DraftVariantCreate, SourceSnapshot, TurnCreate, WorkspaceSessionUpsert
+from app.schemas.domain import (
+    ConversationThreadCreate,
+    DraftVariantCreate,
+    GenerationRunClaim,
+    GenerationRunStatusUpdate,
+    SourceSnapshot,
+    TurnCreate,
+    WorkspaceSessionUpsert,
+)
 from app.schemas.reply_event import ReplyEvent
 from app.schemas.reply_request import ReplyRequest
 from app.services.domain_service import (
@@ -14,6 +22,8 @@ from app.services.domain_service import (
     create_or_update_turn,
     create_or_update_variant,
     get_thread_snapshot,
+    claim_generation_run,
+    update_generation_run_status,
     update_turn_status,
     upsert_workspace_session,
 )
@@ -40,7 +50,7 @@ async def stream_reply_events(request: ReplyRequest) -> AsyncIterator[ReplyEvent
 
         try:
             if turn:
-                update_turn_status(session, turn.turn_id, "streaming")
+                update_runtime_generation_status(session, request, turn.turn_id, "streaming")
 
             async for chunk in stream_ollama_generate(
                 base_url=settings.ollama_base_url,
@@ -68,14 +78,14 @@ async def stream_reply_events(request: ReplyRequest) -> AsyncIterator[ReplyEvent
                 )
 
             if turn:
-                update_turn_status(session, turn.turn_id, "completed")
+                update_runtime_generation_status(session, request, turn.turn_id, "completed")
         except OllamaClientError as error:
             if turn:
-                update_turn_status(session, turn.turn_id, "failed", "ollama_stream_failed", str(error))
+                update_runtime_generation_status(session, request, turn.turn_id, "failed", "ollama_stream_failed", str(error))
             raise
         except Exception as error:
             if turn:
-                update_turn_status(session, turn.turn_id, "failed", "generation_failed", str(error))
+                update_runtime_generation_status(session, request, turn.turn_id, "failed", "generation_failed", str(error))
             raise
 
 
@@ -109,7 +119,7 @@ def ensure_domain_generation(session: Session, request: ReplyRequest):
             source=source,
         ),
     )
-    return create_or_update_turn(
+    turn = create_or_update_turn(
         session,
         TurnCreate(
             turn_id=request.turn_id,
@@ -120,6 +130,41 @@ def ensure_domain_generation(session: Session, request: ReplyRequest):
             generation_status="queued",
         ),
     )
+
+    if request.run_id:
+        claim_generation_run(
+            session,
+            GenerationRunClaim(
+                run_id=request.run_id,
+                session_id=request.session_id,
+                thread_id=request.thread_id,
+                turn_id=request.turn_id,
+                lease_owner="extension-background",
+            ),
+        )
+
+    return turn
+
+
+def update_runtime_generation_status(
+    session: Session,
+    request: ReplyRequest,
+    turn_id: str,
+    status: str,
+    error_code: str | None = None,
+    error_message: str | None = None,
+) -> None:
+    if request.run_id:
+        updated = update_generation_run_status(
+            session,
+            request.run_id,
+            GenerationRunStatusUpdate(status=status, error_code=error_code, error_message=error_message),
+        )
+
+        if updated:
+            return
+
+    update_turn_status(session, turn_id, status, error_code, error_message)
 
 
 def persist_variant_for_reply(

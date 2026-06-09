@@ -4,13 +4,27 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.db.base import Base
-from app.schemas.domain import ConversationThreadCreate, DraftVariantCreate, DraftVariantStateUpdate, SourceSnapshot, TurnCreate, WorkspaceSessionUpsert
+from app.schemas.domain import (
+    ConversationThreadCreate,
+    DraftVariantCreate,
+    DraftVariantStateUpdate,
+    GenerationRunClaim,
+    GenerationRunReconcileRequest,
+    GenerationRunStatusUpdate,
+    SourceSnapshot,
+    TurnCreate,
+    WorkspaceSessionUpsert,
+)
 from app.services.domain_service import (
+    claim_generation_run,
     create_or_update_thread,
     create_or_update_turn,
     create_or_update_variant,
     get_session_snapshot,
+    list_active_generation_runs,
     list_recent_domain_history,
+    reconcile_stale_generation_runs,
+    update_generation_run_status,
     update_turn_status,
     update_variant_state,
     upsert_workspace_session,
@@ -119,6 +133,121 @@ class DomainServiceTest(unittest.TestCase):
             self.assertIsNotNone(failed.generation_failed_at)
             self.assertEqual(failed.generation_error_code, "runtime_unavailable")
             self.assertEqual(failed.generation_error_message, "Draftlet server is not reachable.")
+
+    def test_generation_run_claim_and_cancel_reconcile_turn_lifecycle(self) -> None:
+        with self.Session() as session:
+            source = SourceSnapshot(
+                selected_text="Can you send the report?",
+                source_url="https://example.com/thread",
+            )
+            workspace = upsert_workspace_session(
+                session,
+                WorkspaceSessionUpsert(
+                    session_id="session-1",
+                    page_url=source.source_url,
+                    selected_text=source.selected_text,
+                ),
+            )
+            thread = create_or_update_thread(
+                session,
+                ConversationThreadCreate(
+                    thread_id="thread-1",
+                    session_id=workspace.session_id,
+                    source=source,
+                ),
+            )
+            turn = create_or_update_turn(
+                session,
+                TurnCreate(
+                    turn_id="turn-1",
+                    thread_id=thread.thread_id,
+                    source=source,
+                    tone="friendly",
+                ),
+            )
+
+            run = claim_generation_run(
+                session,
+                GenerationRunClaim(
+                    run_id="run-1",
+                    session_id=workspace.session_id,
+                    thread_id=thread.thread_id,
+                    turn_id=turn.turn_id,
+                    lease_owner="extension-background",
+                ),
+            )
+            active_runs = list_active_generation_runs(session, session_id=workspace.session_id)
+            cancelled = update_generation_run_status(
+                session,
+                "run-1",
+                GenerationRunStatusUpdate(
+                    status="cancelled",
+                    error_code="generation_cancelled",
+                    error_message="Draft generation was cancelled.",
+                ),
+            )
+            snapshot = get_session_snapshot(session, workspace.session_id)
+
+            self.assertIsNotNone(run)
+            self.assertEqual(active_runs[0].run_id, "run-1")
+            self.assertEqual(cancelled.status, "cancelled")
+            self.assertIsNotNone(cancelled.cancelled_at)
+            self.assertEqual(snapshot.thread.turns[0].generation_status, "cancelled")
+            self.assertEqual(snapshot.thread.turns[0].generation_error_code, "generation_cancelled")
+
+    def test_reconcile_stale_generation_runs_marks_turn_failed_interrupted(self) -> None:
+        with self.Session() as session:
+            source = SourceSnapshot(
+                selected_text="Can you send the report?",
+                source_url="https://example.com/thread",
+            )
+            workspace = upsert_workspace_session(
+                session,
+                WorkspaceSessionUpsert(
+                    session_id="session-1",
+                    page_url=source.source_url,
+                    selected_text=source.selected_text,
+                ),
+            )
+            thread = create_or_update_thread(
+                session,
+                ConversationThreadCreate(
+                    thread_id="thread-1",
+                    session_id=workspace.session_id,
+                    source=source,
+                ),
+            )
+            turn = create_or_update_turn(
+                session,
+                TurnCreate(
+                    turn_id="turn-1",
+                    thread_id=thread.thread_id,
+                    source=source,
+                    tone="friendly",
+                ),
+            )
+            claim_generation_run(
+                session,
+                GenerationRunClaim(
+                    run_id="run-1",
+                    session_id=workspace.session_id,
+                    thread_id=thread.thread_id,
+                    turn_id=turn.turn_id,
+                    lease_owner="extension-background",
+                ),
+            )
+
+            reconciled = reconcile_stale_generation_runs(
+                session,
+                GenerationRunReconcileRequest(session_id=workspace.session_id, stale_after_seconds=0),
+            )
+            snapshot = get_session_snapshot(session, workspace.session_id)
+
+            self.assertEqual([run.run_id for run in reconciled], ["run-1"])
+            self.assertEqual(reconciled[0].status, "interrupted")
+            self.assertIsNotNone(reconciled[0].interrupted_at)
+            self.assertEqual(snapshot.thread.turns[0].generation_status, "failed")
+            self.assertEqual(snapshot.thread.turns[0].generation_error_code, "generation_interrupted")
 
     def test_upsert_session_updates_active_thread(self) -> None:
         with self.Session() as session:

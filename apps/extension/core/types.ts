@@ -15,6 +15,7 @@ export interface ReplyRequestPayload {
   session_id?: string;
   thread_id?: string;
   turn_id?: string;
+  run_id?: string;
   instruction?: string;
   generation_mode?: GenerationMode;
 }

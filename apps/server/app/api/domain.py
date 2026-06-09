@@ -10,6 +10,10 @@ from app.schemas.domain import (
     DraftVariantCreate,
     DraftVariantRead,
     DraftVariantStateUpdate,
+    GenerationRunClaim,
+    GenerationRunRead,
+    GenerationRunReconcileRequest,
+    GenerationRunStatusUpdate,
     TurnCreate,
     TurnRead,
     TurnStatusUpdate,
@@ -21,9 +25,13 @@ from app.services.domain_service import (
     create_or_update_thread,
     create_or_update_turn,
     create_or_update_variant,
+    claim_generation_run,
     get_session_snapshot,
     get_thread_snapshot,
+    list_active_generation_runs,
     list_recent_domain_history,
+    reconcile_stale_generation_runs,
+    update_generation_run_status,
     update_variant_state,
     update_turn_lifecycle,
     update_turn_status,
@@ -121,6 +129,55 @@ def patch_turn_status(
         raise HTTPException(status_code=404, detail="Turn not found")
 
     return turn
+
+
+@router.put("/generation-runs/{run_id}", response_model=GenerationRunRead)
+def put_generation_run(
+    run_id: str,
+    payload: GenerationRunClaim,
+    session: Session = Depends(get_session),
+) -> GenerationRunRead:
+    if payload.run_id != run_id:
+        raise HTTPException(status_code=400, detail="run_id does not match path")
+
+    run = claim_generation_run(session, payload)
+
+    if not run:
+        raise HTTPException(status_code=404, detail="Generation run domain refs not found")
+
+    return run
+
+
+@router.get("/generation-runs/active", response_model=list[GenerationRunRead])
+def get_active_generation_runs(
+    session_id: str | None = None,
+    thread_id: str | None = None,
+    turn_id: str | None = None,
+    session: Session = Depends(get_session),
+) -> list[GenerationRunRead]:
+    return list_active_generation_runs(session, session_id=session_id, thread_id=thread_id, turn_id=turn_id)
+
+
+@router.patch("/generation-runs/{run_id}/status", response_model=GenerationRunRead)
+def patch_generation_run_status(
+    run_id: str,
+    payload: GenerationRunStatusUpdate,
+    session: Session = Depends(get_session),
+) -> GenerationRunRead:
+    run = update_generation_run_status(session, run_id, payload)
+
+    if not run:
+        raise HTTPException(status_code=404, detail="Generation run not found")
+
+    return run
+
+
+@router.post("/generation-runs/reconcile", response_model=list[GenerationRunRead])
+def post_reconcile_generation_runs(
+    payload: GenerationRunReconcileRequest,
+    session: Session = Depends(get_session),
+) -> list[GenerationRunRead]:
+    return reconcile_stale_generation_runs(session, payload)
 
 
 @router.put("/variants/{variant_id}", response_model=DraftVariantRead)

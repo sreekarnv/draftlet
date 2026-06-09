@@ -58,6 +58,11 @@ class Turn(Base):
         cascade="all, delete-orphan",
         order_by="DraftVariant.rank",
     )
+    generation_runs: Mapped[list["GenerationRun"]] = relationship(
+        back_populates="turn",
+        cascade="all, delete-orphan",
+        order_by="GenerationRun.claimed_at",
+    )
 
 
 class DraftVariant(Base):
@@ -76,3 +81,27 @@ class DraftVariant(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     turn: Mapped["Turn"] = relationship(back_populates="variants")
+
+
+class GenerationRun(Base):
+    __tablename__ = "generation_runs"
+
+    run_id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    session_id: Mapped[str] = mapped_column(ForeignKey("workspace_sessions.session_id", ondelete="CASCADE"), index=True)
+    thread_id: Mapped[str] = mapped_column(ForeignKey("conversation_threads.thread_id", ondelete="CASCADE"), index=True)
+    turn_id: Mapped[str] = mapped_column(ForeignKey("turns.turn_id", ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(String(40), default="active", index=True)
+    lease_owner: Mapped[str] = mapped_column(String(120))
+    claimed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    interrupted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    turn: Mapped["Turn"] = relationship(back_populates="generation_runs")
