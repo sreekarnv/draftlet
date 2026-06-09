@@ -140,11 +140,22 @@ export async function putTurn(turn: Turn): Promise<Turn> {
   return mapTurn(response);
 }
 
-export async function patchTurnStatus(turnId: string, status: Turn['generationStatus']): Promise<Turn> {
-  const query = `?status=${encodeURIComponent(status)}`;
-  const response = await fetch(`${SERVER_BASE_URL}/domain/turns/${encodeURIComponent(turnId)}/status${query}`, {
+export async function patchTurnStatus(
+  turnId: string,
+  status: Turn['generationStatus'],
+  error?: { code?: string; message?: string },
+): Promise<Turn> {
+  const response = await fetch(`${SERVER_BASE_URL}/domain/turns/${encodeURIComponent(turnId)}/status`, {
     method: 'PATCH',
-    headers: { Accept: 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      status,
+      error_code: error?.code,
+      error_message: error?.message,
+    }),
   });
 
   if (!response.ok) {
@@ -359,6 +370,12 @@ function mapTurn(turn: TurnRead): Turn {
     },
     tone: isTone(turn.tone) ? turn.tone : 'professional',
     generationStatus: isTurnStatus(turn.generation_status) ? turn.generation_status : 'queued',
+    generationStartedAt: turn.generation_started_at ?? undefined,
+    generationCompletedAt: turn.generation_completed_at ?? undefined,
+    generationFailedAt: turn.generation_failed_at ?? undefined,
+    generationCancelledAt: turn.generation_cancelled_at ?? undefined,
+    generationErrorCode: turn.generation_error_code ?? undefined,
+    generationErrorMessage: turn.generation_error_message ?? undefined,
     createdAt: turn.created_at,
     updatedAt: turn.updated_at,
   };
@@ -384,7 +401,7 @@ function isTone(value: string): value is DraftVariant['tone'] {
 }
 
 function isTurnStatus(value: string): value is Turn['generationStatus'] {
-  return value === 'queued' || value === 'streaming' || value === 'completed' || value === 'failed' || value === 'cancelled';
+  return value === 'queued' || value === 'started' || value === 'streaming' || value === 'completed' || value === 'failed' || value === 'cancelled';
 }
 
 interface DraftVariantStreamPayload {
@@ -430,6 +447,12 @@ interface TurnRead {
   page_title: string | null;
   tone: string;
   generation_status: string;
+  generation_started_at: string | null;
+  generation_completed_at: string | null;
+  generation_failed_at: string | null;
+  generation_cancelled_at: string | null;
+  generation_error_code: string | null;
+  generation_error_message: string | null;
   created_at: string;
   updated_at: string;
 }

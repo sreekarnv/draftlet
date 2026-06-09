@@ -189,8 +189,41 @@ function handleDraftletMessage(message: DraftletMessage) {
 
 function applyThreadSnapshot(snapshot: ConversationThreadSnapshot) {
   panel.setThreadSnapshot(snapshot);
+  applyPanelStateFromThread(snapshot);
 }
 
+function applyPanelStateFromThread(snapshot: ConversationThreadSnapshot) {
+  const latestTurn = [...snapshot.turns].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).at(0);
+
+  if (!latestTurn) {
+    return;
+  }
+
+  if (latestTurn.generationStatus === 'queued' || latestTurn.generationStatus === 'started') {
+    panel.setState('loading');
+    return;
+  }
+
+  if (latestTurn.generationStatus === 'streaming') {
+    panel.setState('streaming');
+    return;
+  }
+
+  if (latestTurn.generationStatus === 'completed') {
+    const hasVariants = snapshot.variants.some((variant) => variant.turnId === latestTurn.turnId);
+    panel.setState(hasVariants ? 'success' : 'error', hasVariants ? '' : 'No replies returned.');
+    return;
+  }
+
+  if (latestTurn.generationStatus === 'failed') {
+    panel.setState('error', latestTurn.generationErrorMessage ?? 'Could not generate replies.');
+    return;
+  }
+
+  if (latestTurn.generationStatus === 'cancelled') {
+    panel.setState('error', latestTurn.generationErrorMessage ?? 'Draft generation was cancelled.');
+  }
+}
 
 function shouldApplySessionUpdate(session: WorkspaceSession): boolean {
   return !currentSession

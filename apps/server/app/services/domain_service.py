@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -10,6 +12,7 @@ from app.schemas.domain import (
     DraftVariantStateUpdate,
     SourceSnapshot,
     TurnCreate,
+    TurnStatusUpdate,
     WorkspaceSessionSnapshot,
     WorkspaceSessionUpsert,
 )
@@ -115,17 +118,54 @@ def create_or_update_turn(session: Session, payload: TurnCreate) -> Turn:
     return turn
 
 
-def update_turn_status(session: Session, turn_id: str, status: str) -> Turn | None:
+def update_turn_status(session: Session, turn_id: str, status: str, error_code: str | None = None, error_message: str | None = None) -> Turn | None:
+    return update_turn_lifecycle(
+        session,
+        turn_id,
+        TurnStatusUpdate(status=status, error_code=error_code, error_message=error_message),
+    )
+
+
+def update_turn_lifecycle(session: Session, turn_id: str, payload: TurnStatusUpdate) -> Turn | None:
     turn = session.get(Turn, turn_id)
 
     if not turn:
         return None
 
-    turn.generation_status = status
+    apply_turn_lifecycle(turn, payload.status, payload.error_code, payload.error_message)
     session.add(turn)
     session.commit()
     session.refresh(turn)
     return turn
+
+
+def apply_turn_lifecycle(turn: Turn, status: str, error_code: str | None = None, error_message: str | None = None) -> None:
+    now = datetime.now(UTC)
+    turn.generation_status = status
+
+    if status in {"started", "streaming"} and turn.generation_started_at is None:
+        turn.generation_started_at = now
+
+    if status == "completed":
+        if turn.generation_started_at is None:
+            turn.generation_started_at = now
+        turn.generation_completed_at = now
+        turn.generation_error_code = None
+        turn.generation_error_message = None
+
+    if status == "failed":
+        if turn.generation_started_at is None:
+            turn.generation_started_at = now
+        turn.generation_failed_at = now
+        turn.generation_error_code = error_code
+        turn.generation_error_message = error_message
+
+    if status == "cancelled":
+        if turn.generation_started_at is None:
+            turn.generation_started_at = now
+        turn.generation_cancelled_at = now
+        turn.generation_error_code = error_code
+        turn.generation_error_message = error_message
 
 
 def create_or_update_variant(session: Session, payload: DraftVariantCreate) -> DraftVariant:

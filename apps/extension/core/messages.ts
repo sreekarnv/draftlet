@@ -61,7 +61,7 @@ export interface SourceSnapshot {
 }
 
 export type ConversationThreadStatus = 'active' | 'archived';
-export type TurnGenerationStatus = 'queued' | 'streaming' | 'completed' | 'failed' | 'cancelled';
+export type TurnGenerationStatus = 'queued' | 'started' | 'streaming' | 'completed' | 'failed' | 'cancelled';
 export type DraftVariantStatus = 'generated' | 'accepted' | 'rejected';
 
 export interface ConversationThread {
@@ -81,6 +81,12 @@ export interface Turn {
   source: SourceSnapshot;
   tone: Tone;
   generationStatus: TurnGenerationStatus;
+  generationStartedAt?: string;
+  generationCompletedAt?: string;
+  generationFailedAt?: string;
+  generationCancelledAt?: string;
+  generationErrorCode?: string;
+  generationErrorMessage?: string;
   createdAt: string;
   updatedAt: string;
 }

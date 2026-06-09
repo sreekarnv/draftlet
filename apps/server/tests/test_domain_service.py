@@ -80,6 +80,46 @@ class DomainServiceTest(unittest.TestCase):
             self.assertEqual(snapshot.thread.turns[0].generation_status, "completed")
             self.assertEqual(snapshot.thread.variants[0].content, "Sure, I can send it today.")
 
+    def test_turn_lifecycle_status_records_timestamps_and_errors(self) -> None:
+        with self.Session() as session:
+            source = SourceSnapshot(
+                selected_text="Can you send the report?",
+                source_url="https://example.com/thread",
+            )
+            workspace = upsert_workspace_session(
+                session,
+                WorkspaceSessionUpsert(
+                    session_id="session-1",
+                    page_url=source.source_url,
+                    selected_text=source.selected_text,
+                ),
+            )
+            thread = create_or_update_thread(
+                session,
+                ConversationThreadCreate(
+                    thread_id="thread-1",
+                    session_id=workspace.session_id,
+                    source=source,
+                ),
+            )
+            turn = create_or_update_turn(
+                session,
+                TurnCreate(
+                    turn_id="turn-1",
+                    thread_id=thread.thread_id,
+                    source=source,
+                    tone="friendly",
+                ),
+            )
+
+            streaming = update_turn_status(session, turn.turn_id, "streaming")
+            failed = update_turn_status(session, turn.turn_id, "failed", "runtime_unavailable", "Draftlet server is not reachable.")
+
+            self.assertIsNotNone(streaming.generation_started_at)
+            self.assertIsNotNone(failed.generation_failed_at)
+            self.assertEqual(failed.generation_error_code, "runtime_unavailable")
+            self.assertEqual(failed.generation_error_message, "Draftlet server is not reachable.")
+
     def test_upsert_session_updates_active_thread(self) -> None:
         with self.Session() as session:
             first = upsert_workspace_session(

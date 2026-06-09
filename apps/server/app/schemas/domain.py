@@ -52,6 +52,19 @@ class TurnCreate(BaseModel):
     generation_status: str = Field(default="queued", min_length=1, max_length=40)
 
 
+class TurnStatusUpdate(BaseModel):
+    status: str = Field(min_length=1, max_length=40)
+    error_code: str | None = Field(default=None, max_length=120)
+    error_message: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("status", "error_code", "error_message", mode="before")
+    @classmethod
+    def strip_text_fields(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip() or None
+
+
 class DraftVariantCreate(BaseModel):
     variant_id: str = Field(min_length=1, max_length=120)
     turn_id: str = Field(min_length=1, max_length=120)
@@ -110,6 +123,12 @@ class TurnRead(BaseModel):
     page_title: str | None
     tone: str
     generation_status: str
+    generation_started_at: datetime | None = None
+    generation_completed_at: datetime | None = None
+    generation_failed_at: datetime | None = None
+    generation_cancelled_at: datetime | None = None
+    generation_error_code: str | None = None
+    generation_error_message: str | None = None
     created_at: datetime
     updated_at: datetime
 
