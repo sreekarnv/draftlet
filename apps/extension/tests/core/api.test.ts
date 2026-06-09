@@ -12,7 +12,7 @@ describe('streamReplies', () => {
     const received: unknown[] = [];
     vi.stubGlobal('fetch', vi.fn(async () => createStreamResponse([
       'event: draft_variant\n',
-      'data: {"reply":"Domain draft","reply_id":12,"variant_id":"variant-1","thread_id":"thread-1","turn_id":"turn-1"}\n\n',
+      'data: {"reply":"Domain draft","variant_id":"variant-1","thread_id":"thread-1","turn_id":"turn-1"}\n\n',
     ])));
 
     await streamReplies(payload(), {
@@ -24,7 +24,6 @@ describe('streamReplies', () => {
     expect(received).toEqual([
       {
         text: 'Domain draft',
-        replyId: 12,
         variantId: 'variant-1',
       },
     ]);

@@ -49,7 +49,6 @@ describe('conversation thread store', () => {
       turnId: turnResult!.turn.turnId,
       tone: 'friendly',
       content: 'First draft',
-      persistedReplyId: 101,
     });
     const secondVariant = store.addVariant({
       turnId: turnResult!.turn.turnId,
@@ -60,7 +59,6 @@ describe('conversation thread store', () => {
     expect(firstVariant?.variant).toMatchObject({
       variantId: 'variant-3',
       rank: 0,
-      persistedReplyId: 101,
     });
     expect(secondVariant?.variant).toMatchObject({
       variantId: 'variant-4',
@@ -163,7 +161,6 @@ describe('conversation thread store', () => {
       turnId: turnResult.turn.turnId,
       tone: 'friendly',
       content: 'Prior draft',
-      persistedReplyId: 101,
     });
 
     const restored = createTestStore();

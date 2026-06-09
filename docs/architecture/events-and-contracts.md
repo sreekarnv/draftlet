@@ -131,7 +131,7 @@ The current v2 generation flow is transitional but now uses durable runtime doma
 - side panel restores the active tab session with `draftlet:get-current-workspace-session`; background also asks runtime for the persisted session/thread snapshot when available
 - initial generation creates or reuses a session-backed `ConversationThread`, creates a `Turn`, and streams replies through `/replies` with `generation_mode: initial`
 - follow-up refinement uses `draftlet:start-draft-refinement`, appends a new `Turn` to the active persisted thread, and streams `/replies` with `generation_mode: refinement` plus the user instruction
-- runtime loads prior persisted thread context for refinement prompts, then persists each streamed reply as both a legacy `Reply` and a new `DraftVariant` for the turn
+- runtime loads prior persisted thread context for refinement prompts, then persists each streamed reply as a `DraftVariant` for the turn
 - runtime emits `draft_variant` SSE events with variant/thread/turn metadata
 - service worker maps each streamed result into the active `ConversationThread` snapshot and broadcasts `draftlet:conversation-thread-updated`
 - service worker emits `draftlet:draft-generation-started`, `draftlet:draft-generation-completed`, and `draftlet:draft-generation-failed` for generation lifecycle state
@@ -142,7 +142,7 @@ The current v2 generation flow is transitional but now uses durable runtime doma
 - refinement prompts prefer the accepted variant, then the current variant, then the latest prior turn variants as a compatibility fallback
 - insertion remains explicit: side panel sends `draftlet:insert-reply` with `sessionId` and `variantId` when available; service worker forwards approved text to the session tab, and the content script performs best-effort DOM insertion
 
-Old runtime `Generation`/`Reply` persistence remains as a bounded server-side compatibility bridge for legacy APIs, but extension surfaces no longer render flat `ReplyItem` data or use the retired in-page panel path. Side-panel history and streaming browse domain-backed `WorkspaceSession` / `ConversationThread` / `Turn` / `DraftVariant` data. Current and accepted variant state is bounded to one variant per thread in this phase.
+Legacy runtime `Generation`/`Reply` persistence and `/history` are retired. Side-panel history and streaming now use domain-backed `WorkspaceSession` / `ConversationThread` / `Turn` / `DraftVariant` data end to end. Current and accepted variant state is bounded to one variant per thread in this phase.
 
 ## Error Shape
 

@@ -139,7 +139,6 @@ def create_or_update_variant(session: Session, payload: DraftVariantCreate) -> D
         existing.rank = payload.rank
         existing.status = payload.status
         existing.is_current = payload.is_current
-        existing.legacy_reply_id = payload.legacy_reply_id
         variant = existing
     else:
         variant = DraftVariant(
@@ -151,7 +150,6 @@ def create_or_update_variant(session: Session, payload: DraftVariantCreate) -> D
             rank=payload.rank,
             status=payload.status,
             is_current=payload.is_current,
-            legacy_reply_id=payload.legacy_reply_id,
         )
 
     session.add(variant)

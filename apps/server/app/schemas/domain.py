@@ -61,7 +61,6 @@ class DraftVariantCreate(BaseModel):
     status: str = Field(default="generated", min_length=1, max_length=40)
     is_current: bool = False
     length: str | None = Field(default=None, max_length=80)
-    legacy_reply_id: int | None = Field(default=None, ge=1)
 
 
 class DraftVariantStateUpdate(BaseModel):
@@ -126,7 +125,6 @@ class DraftVariantRead(BaseModel):
     rank: int
     status: str
     is_current: bool
-    legacy_reply_id: int | None
     created_at: datetime
     updated_at: datetime
 
