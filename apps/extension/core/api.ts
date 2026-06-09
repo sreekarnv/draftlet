@@ -3,6 +3,7 @@ import { streamSse, type SseMessage } from './sse-client';
 import type {
   ConversationThread,
   ConversationThreadSnapshot,
+  DomainHistoryItem,
   DraftVariant,
   SourceSnapshot,
   Turn,
@@ -83,6 +84,26 @@ export async function getWorkspaceSessionSnapshot(sessionId: string, signal?: Ab
   try {
     const response = await getJson<WorkspaceSessionSnapshotRead>(`${SERVER_BASE_URL}/domain/sessions/${encodeURIComponent(sessionId)}`, signal);
     return mapWorkspaceSessionSnapshot(response);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('404')) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+
+export async function getDomainHistory(limit = 20, signal?: AbortSignal): Promise<DomainHistoryItem[]> {
+  const query = `?limit=${encodeURIComponent(String(limit))}`;
+  const response = await getJson<DomainHistoryItemRead[]>(`${SERVER_BASE_URL}/domain/history${query}`, signal);
+  return response.map(mapDomainHistoryItem);
+}
+
+export async function getConversationThreadSnapshot(threadId: string, signal?: AbortSignal): Promise<ConversationThreadSnapshot | null> {
+  try {
+    const response = await getJson<ConversationThreadSnapshotRead>(`${SERVER_BASE_URL}/domain/threads/${encodeURIComponent(threadId)}`, signal);
+    return mapConversationThreadSnapshot(response);
   } catch (error) {
     if (error instanceof Error && error.message.includes('404')) {
       return null;
@@ -274,6 +295,14 @@ function toSourcePayload(source: SourceSnapshot) {
   };
 }
 
+
+function mapDomainHistoryItem(item: DomainHistoryItemRead): DomainHistoryItem {
+  return {
+    session: mapWorkspaceSession(item.session),
+    thread: mapConversationThreadSnapshot(item.thread),
+  };
+}
+
 function mapWorkspaceSessionSnapshot(snapshot: WorkspaceSessionSnapshotRead): WorkspaceSessionSnapshot {
   return {
     session: mapWorkspaceSession(snapshot.session),
@@ -438,6 +467,12 @@ interface ConversationThreadSnapshotRead {
   thread: ConversationThreadRead;
   turns: TurnRead[];
   variants: DraftVariantRead[];
+}
+
+
+interface DomainHistoryItemRead {
+  session: WorkspaceSessionRead;
+  thread: ConversationThreadSnapshotRead;
 }
 
 interface WorkspaceSessionSnapshotRead {

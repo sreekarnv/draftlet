@@ -118,11 +118,11 @@ The current v2 extension generation flow is intentionally transitional but now s
 - each streamed runtime reply is stored as a `DraftVariant` on the active turn
 - service worker broadcasts `draftlet:workspace-session-updated` for session metadata and `draftlet:conversation-thread-updated` for thread snapshots
 - service worker emits `draftlet:draft-generation-started`, `draftlet:draft-variant-received`, `draftlet:draft-generation-completed`, and `draftlet:draft-generation-failed` with `sessionId`, `generationId`, and thread/turn/variant data
-- side panel temporarily projects `DraftVariant.content` into the existing reply-card UI
+- side panel renders thread snapshots as the primary thread workspace, grouped by `Turn` and `DraftVariant`
 - side panel can cancel with `draftlet:cancel-draft-generation` using `sessionId` and `generationId`
 - insertion remains explicit: side panel sends `draftlet:insert-reply` with `sessionId`, service worker forwards it to the session tab, and the content script performs best-effort DOM insertion
 
-This keeps the webpage out of runtime transport and generation workflow ownership while preserving the existing side panel UI. Thread/turn/variant storage is currently in-memory in the extension; durable runtime persistence and multi-turn chat UI remain future phases.
+This keeps the webpage out of runtime transport and generation workflow ownership while preserving side-panel ownership of the workflow. Runtime persistence is the durable source for workspace sessions, threads, turns, and variants.
 ## Runtime-Backed Session And Thread Flow
 
 The current v2 generation flow is transitional but now uses durable runtime domain persistence:
@@ -134,12 +134,14 @@ The current v2 generation flow is transitional but now uses durable runtime doma
 - runtime loads prior persisted thread context for refinement prompts, then persists each streamed reply as both a legacy `Reply` and a new `DraftVariant` for the turn
 - runtime emits `draft_variant` SSE events with variant/thread/turn metadata
 - service worker emits `draftlet:draft-generation-started`, `draftlet:draft-variant-received`, `draftlet:draft-generation-completed`, and `draftlet:draft-generation-failed` with `sessionId`, `generationId`, and thread/turn/variant data
-- side panel projects the latest turn variants into the existing reply-card UI and displays `isCurrent` / `accepted` state
+- side panel renders the restored thread workspace with chronological turns, grouped variants, and `isCurrent` / `accepted` state
+- side panel requests domain-backed history with `draftlet:get-domain-history`; background reads `/domain/history` from the runtime
+- side panel restores a selected history item with `draftlet:restore-domain-thread`; background hydrates the selected runtime session/thread snapshot and emits workspace/thread updates
 - side panel can request `draftlet:set-current-draft-variant` or `draftlet:accept-draft-variant`; background patches runtime state and emits an updated thread snapshot
 - refinement prompts prefer the accepted variant, then the current variant, then the latest prior turn variants as a compatibility fallback
 - insertion remains explicit: side panel sends `draftlet:insert-reply` with `sessionId` and `variantId` when available; service worker forwards approved text to the session tab, and the content script performs best-effort DOM insertion
 
-Old `Generation`/`Reply` history remains as a compatibility bridge. The durable direction is `WorkspaceSession` -> `ConversationThread` -> `Turn` -> `DraftVariant`. Current and accepted variant state is bounded to one variant per thread in this phase.
+Old `Generation`/`Reply` history remains as a compatibility bridge for legacy APIs, but side-panel history now browses domain-backed `WorkspaceSession` / `ConversationThread` / `Turn` / `DraftVariant` data. Current and accepted variant state is bounded to one variant per thread in this phase.
 
 ## Error Shape
 

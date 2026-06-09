@@ -1,5 +1,7 @@
 import {
   checkServerHealth,
+  getConversationThreadSnapshot,
+  getDomainHistory,
   getWorkspaceSessionSnapshot,
   patchDraftVariantState,
   patchTurnStatus,
@@ -18,9 +20,11 @@ import {
   DRAFT_GENERATION_STARTED,
   DRAFT_VARIANT_RECEIVED,
   GET_CURRENT_WORKSPACE_SESSION,
+  GET_DOMAIN_HISTORY,
   GET_RUNTIME_STATUS,
   INSERT_REPLY,
   LAUNCH_SIDE_PANEL,
+  RESTORE_DOMAIN_THREAD,
   SET_CURRENT_DRAFT_VARIANT,
   START_DRAFT_GENERATION,
   START_DRAFT_REFINEMENT,
@@ -31,10 +35,12 @@ import {
   type DraftVariant,
   type DraftVariantStateResult,
   type DraftletError,
+  type DomainHistoryResult,
   type DraftletMessage,
   type DraftletSidePanelContext,
   type InsertReplyResult,
   type LaunchSidePanelResult,
+  type RestoreDomainThreadResult,
   type RuntimeStatusResult,
   type StartDraftGenerationResult,
   type Turn,
@@ -69,6 +75,14 @@ export default defineBackground(() => {
 
     if (message.type === GET_RUNTIME_STATUS) {
       return handleGetRuntimeStatus();
+    }
+
+    if (message.type === GET_DOMAIN_HISTORY) {
+      return handleGetDomainHistory(message.limit);
+    }
+
+    if (message.type === RESTORE_DOMAIN_THREAD) {
+      return handleRestoreDomainThread(message.sessionId, message.threadId);
     }
 
     if (message.type === START_DRAFT_GENERATION) {
@@ -175,6 +189,75 @@ async function handleGetCurrentWorkspaceSession(tabId?: number): Promise<Workspa
 async function handleGetRuntimeStatus(): Promise<RuntimeStatusResult> {
   const connected = await checkServerHealth();
   return { status: connected ? 'connected' : 'disconnected' };
+}
+
+async function handleGetDomainHistory(limit = 20): Promise<DomainHistoryResult> {
+  try {
+    return { items: await getDomainHistory(limit) };
+  } catch (error) {
+    return {
+      items: [],
+      error: createDraftletError(
+        'domain_history_unavailable',
+        error instanceof Error ? error.message : 'Could not load Draftlet history.',
+        true,
+      ),
+    };
+  }
+}
+
+async function handleRestoreDomainThread(sessionId: string, threadId: string): Promise<RestoreDomainThreadResult> {
+  try {
+    const [sessionSnapshot, threadSnapshot] = await Promise.all([
+      getWorkspaceSessionSnapshot(sessionId),
+      getConversationThreadSnapshot(threadId),
+    ]);
+
+    if (!sessionSnapshot?.session || !threadSnapshot) {
+      return {
+        restored: false,
+        error: createDraftletError('domain_thread_not_found', 'Draftlet thread was not found in history.', true, threadId),
+      };
+    }
+
+    const previous = sessions.getBySessionId(sessionId);
+    const restoredSession: WorkspaceSession = {
+      ...sessionSnapshot.session,
+      tabId: previous?.tabId ?? sessionSnapshot.session.tabId,
+      windowId: previous?.windowId ?? sessionSnapshot.session.windowId,
+      activeThreadId: threadId,
+      latestContext: {
+        selectedText: threadSnapshot.thread.source.selectedText,
+        sourceUrl: threadSnapshot.thread.source.sourceUrl,
+        sourceDomain: threadSnapshot.thread.source.sourceDomain,
+        pageTitle: threadSnapshot.thread.source.pageTitle,
+        tabId: previous?.tabId ?? sessionSnapshot.session.tabId,
+        windowId: previous?.windowId ?? sessionSnapshot.session.windowId,
+        tone: previous?.latestContext.tone ?? sessionSnapshot.session.latestContext.tone,
+        activeView: 'replies',
+      },
+    };
+    sessions.hydrateSession(restoredSession);
+    threads.hydrateSnapshot(threadSnapshot);
+    void emitWorkspaceSessionUpdated(restoredSession);
+    void emitConversationThreadUpdated(restoredSession.sessionId, threadSnapshot);
+
+    return {
+      restored: true,
+      session: restoredSession,
+      thread: threadSnapshot,
+    };
+  } catch (error) {
+    return {
+      restored: false,
+      error: createDraftletError(
+        'domain_thread_restore_failed',
+        error instanceof Error ? error.message : 'Could not restore this Draftlet thread.',
+        true,
+        threadId,
+      ),
+    };
+  }
 }
 
 async function handleStartDraftGeneration(

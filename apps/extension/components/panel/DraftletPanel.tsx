@@ -1,10 +1,9 @@
 import { FileText, History, RefreshCw, Sparkles, Wand2, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 
-import { getHistory } from '../../core/api';
 import { DEFAULT_PANEL_VIEW, DEFAULT_TONE } from '../../core/constants';
-import type { ConversationThreadSnapshot } from '../../core/messages';
-import type { ConnectionStatus, HistoryGeneration, PanelState, PanelView, ReplyItem, Tone } from '../../core/types';
+import type { ConversationThreadSnapshot, DomainHistoryItem } from '../../core/messages';
+import type { ConnectionStatus, PanelState, PanelView, ReplyItem, Tone } from '../../core/types';
 import type { PanelAction, PanelCallbacks, PanelController, PanelSurface } from '../../ui/mount-panel';
 import { ReplyCard } from './ReplyCard';
 import { StatusBadge } from './StatusBadge';
@@ -27,7 +26,7 @@ interface PanelViewState {
   connectionStatus: ConnectionStatus;
   replies: ReplyItem[];
   threadSnapshot: ConversationThreadSnapshot | null;
-  history: HistoryGeneration[];
+  history: DomainHistoryItem[];
   historyState: LoadState;
   errorMessage: string;
   persistenceMessage: string;
@@ -49,10 +48,15 @@ export function DraftletPanel({ callbacks, controller }: DraftletPanelProps) {
   });
 
   const loadHistory = async () => {
+    if (!callbacks.onLoadHistory) {
+      setView((current) => ({ ...current, historyState: 'error', persistenceMessage: 'History is unavailable here.' }));
+      return;
+    }
+
     setView((current) => ({ ...current, historyState: 'loading', persistenceMessage: '' }));
 
     try {
-      const history = await getHistory();
+      const history = await callbacks.onLoadHistory();
       setView((current) => ({ ...current, history, historyState: 'success' }));
     } catch {
       setView((current) => ({
@@ -61,6 +65,21 @@ export function DraftletPanel({ callbacks, controller }: DraftletPanelProps) {
         persistenceMessage: 'Could not load history.',
       }));
     }
+  };
+
+  const restoreHistoryItem = async (item: DomainHistoryItem) => {
+    if (!callbacks.onRestoreHistoryItem) {
+      setView((current) => ({ ...current, persistenceMessage: 'History restore is unavailable here.' }));
+      return;
+    }
+
+    setView((current) => ({ ...current, persistenceMessage: 'Restoring thread...' }));
+    const result = await callbacks.onRestoreHistoryItem(item);
+    setView((current) => ({
+      ...current,
+      activeView: result.ok ? 'replies' : current.activeView,
+      persistenceMessage: result.message,
+    }));
   };
 
   useEffect(() => controller.subscribe((action) => {
@@ -114,7 +133,7 @@ export function DraftletPanel({ callbacks, controller }: DraftletPanelProps) {
       </div>
       <div className="grid min-h-0 gap-3 overflow-y-auto bg-[linear-gradient(180deg,#fbfaf7,#f1f5f9)] p-3.5">
         {view.activeView === 'replies' ? renderRepliesView(view, callbacks) : null}
-        {view.activeView === 'history' ? renderHistoryView(view, loadHistory) : null}
+        {view.activeView === 'history' ? renderHistoryView(view, loadHistory, restoreHistoryItem) : null}
         {view.persistenceMessage ? <p className="m-0 text-xs leading-5 text-slate-600" role="status">{view.persistenceMessage}</p> : null}
       </div>
     </section>
@@ -338,6 +357,7 @@ function renderViewNavigation(view: PanelViewState, selectView: (activeView: Pan
 function renderHistoryView(
   view: PanelViewState,
   loadHistory: () => Promise<void>,
+  restoreHistoryItem: (item: DomainHistoryItem) => Promise<void>,
 ) {
   if (view.historyState === 'loading') {
     return <EmptyState title="Loading history..." />;
@@ -352,31 +372,37 @@ function renderHistoryView(
   }
 
   if (view.history.length === 0) {
-    return <EmptyState title="No history yet." />;
+    return <EmptyState title="No saved threads yet." />;
   }
 
   return (
     <div className="grid gap-3">
-      {view.history.map((generation) => (
-        <Card className="grid gap-3 bg-white/85 p-3.5 shadow-sm shadow-slate-200/70 ring-1 ring-slate-200/70" key={generation.id}>
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-[11px] font-semibold uppercase tracking-normal text-slate-500">{generation.tone} draft set</div>
-              <div className="mt-0.5 text-xs leading-5 text-slate-500">{formatDate(generation.created_at)}</div>
-            </div>
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200">{generation.status}</span>
-          </div>
-          <SourceContext domain={generation.source_domain} url={generation.source_url} />
-          <p className="m-0 max-h-14 overflow-hidden pl-2.5 text-[13px] leading-6 text-slate-600 shadow-[-2px_0_0_rgba(100,116,139,0.20)]">{generation.selected_text}</p>
-          <div className="divide-y divide-slate-200">
-            {[...generation.replies].sort((a, b) => a.reply_index - b.reply_index).map((reply) => (
-              <div className="grid gap-2 py-2.5 first:pt-0 last:pb-0" key={reply.id}>
-                <p className="m-0 whitespace-pre-wrap text-[13.5px] leading-6 text-slate-800">{reply.text}</p>
+      {view.history.map((item) => {
+        const summary = summarizeHistoryItem(item);
+
+        return (
+          <Card className="grid gap-3 bg-white/85 p-3.5 shadow-sm shadow-slate-200/70 ring-1 ring-slate-200/70" key={item.thread.thread.threadId}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[11px] font-semibold uppercase tracking-normal text-slate-500">{summary.title}</div>
+                <div className="mt-0.5 text-xs leading-5 text-slate-500">{formatDate(summary.updatedAt)}</div>
               </div>
-            ))}
-          </div>
-        </Card>
-      ))}
+              <StatePill label={item.thread.thread.status} tone="slate" />
+            </div>
+            <SourceContext domain={item.thread.thread.source.sourceDomain ?? null} url={item.thread.thread.source.sourceUrl ?? null} />
+            <p className="m-0 max-h-14 overflow-hidden pl-2.5 text-[13px] leading-6 text-slate-600 shadow-[-2px_0_0_rgba(100,116,139,0.20)]">{item.thread.thread.source.selectedText}</p>
+            <div className="grid gap-1.5 text-xs leading-5 text-slate-500">
+              <div>{summary.counts}</div>
+              {summary.latestInstruction ? <div className="text-slate-600">{summary.latestInstruction}</div> : null}
+              {summary.latestDraft ? <p className="m-0 max-h-12 overflow-hidden text-[13px] leading-6 text-slate-700">{summary.latestDraft}</p> : null}
+            </div>
+            <Button className="justify-self-start" onClick={() => void restoreHistoryItem(item)} type="button" variant="secondary">
+              <FileText aria-hidden="true" className="h-3.5 w-3.5" />
+              Open
+            </Button>
+          </Card>
+        );
+      })}
     </div>
   );
 }
@@ -505,6 +531,35 @@ function draftCount(view: PanelViewState) {
   }
 
   return view.replies.length;
+}
+
+function latestHistoryActivity(item: DomainHistoryItem) {
+  const timestamps = [
+    item.session.updatedAt,
+    item.thread.thread.updatedAt,
+    ...item.thread.turns.map((turn) => turn.updatedAt),
+    ...item.thread.variants.map((variant) => variant.updatedAt),
+  ].filter(Boolean);
+
+  return timestamps.sort((a, b) => b.localeCompare(a))[0] ?? item.thread.thread.updatedAt;
+}
+
+function summarizeHistoryItem(item: DomainHistoryItem) {
+  const latestTurn = [...item.thread.turns].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).at(0);
+  const preferredVariant = item.thread.variants.find((variant) => variant.status === 'accepted')
+    ?? item.thread.variants.find((variant) => variant.isCurrent)
+    ?? [...item.thread.variants].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).at(0);
+  const title = item.thread.thread.source.pageTitle || item.session.pageTitle || item.thread.thread.source.sourceDomain || 'Saved thread';
+  const turnCount = item.thread.turns.length;
+  const variantCount = item.thread.variants.length;
+
+  return {
+    title,
+    counts: `${turnCount} ${turnCount === 1 ? 'turn' : 'turns'} · ${variantCount} ${variantCount === 1 ? 'variant' : 'variants'}`,
+    latestInstruction: latestTurn ? turnInstructionLabel(latestTurn.instruction, 0) : '',
+    latestDraft: preferredVariant?.content ?? '',
+    updatedAt: latestHistoryActivity(item),
+  };
 }
 
 function turnInstructionLabel(instruction: string, index: number) {

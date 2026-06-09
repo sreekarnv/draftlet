@@ -2,7 +2,7 @@ import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
 import { DEFAULT_PANEL_VIEW, DEFAULT_TONE } from '../core/constants';
-import type { ConversationThreadSnapshot } from '../core/messages';
+import type { ConversationThreadSnapshot, DomainHistoryItem } from '../core/messages';
 import type {
   ConnectionStatus,
   InsertionResult,
@@ -59,6 +59,8 @@ export interface PanelCallbacks {
   onViewChange?: (activeView: PanelView) => void;
   onGenerate: () => void;
   onRefine?: (instruction: string) => void;
+  onLoadHistory?: () => Promise<DomainHistoryItem[]>;
+  onRestoreHistoryItem?: (item: DomainHistoryItem) => Promise<VariantActionResult>;
   onInsert: (replyText: string, variantId?: string) => Promise<InsertionResult>;
   onSelectVariant?: (variantId: string) => Promise<VariantActionResult>;
   onAcceptVariant?: (variantId: string) => Promise<VariantActionResult>;

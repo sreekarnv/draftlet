@@ -2,6 +2,8 @@ import type { ConnectionStatus, InsertionResult, PanelView, Tone } from './types
 
 export const LAUNCH_SIDE_PANEL = 'draftlet:launch-side-panel';
 export const GET_CURRENT_WORKSPACE_SESSION = 'draftlet:get-current-workspace-session';
+export const GET_DOMAIN_HISTORY = 'draftlet:get-domain-history';
+export const RESTORE_DOMAIN_THREAD = 'draftlet:restore-domain-thread';
 export const WORKSPACE_SESSION_UPDATED = 'draftlet:workspace-session-updated';
 export const CONVERSATION_THREAD_UPDATED = 'draftlet:conversation-thread-updated';
 export const GET_RUNTIME_STATUS = 'draftlet:get-runtime-status';
@@ -109,6 +111,11 @@ export interface WorkspaceSessionSnapshot {
   thread: ConversationThreadSnapshot | null;
 }
 
+export interface DomainHistoryItem {
+  session: WorkspaceSession;
+  thread: ConversationThreadSnapshot;
+}
+
 export interface DraftletError {
   code: string;
   message: string;
@@ -119,6 +126,8 @@ export interface DraftletError {
 export type DraftletMessage =
   | { type: typeof LAUNCH_SIDE_PANEL; context: DraftletSidePanelContext }
   | { type: typeof GET_CURRENT_WORKSPACE_SESSION; tabId?: number }
+  | { type: typeof GET_DOMAIN_HISTORY; limit?: number }
+  | { type: typeof RESTORE_DOMAIN_THREAD; sessionId: string; threadId: string }
   | { type: typeof WORKSPACE_SESSION_UPDATED; session: WorkspaceSession }
   | { type: typeof CONVERSATION_THREAD_UPDATED; sessionId: string; snapshot: ConversationThreadSnapshot }
   | { type: typeof GET_RUNTIME_STATUS }
@@ -166,6 +175,18 @@ export interface WorkspaceSessionResult {
 
 export interface RuntimeStatusResult {
   status: ConnectionStatus;
+}
+
+export interface DomainHistoryResult {
+  items: DomainHistoryItem[];
+  error?: DraftletError;
+}
+
+export interface RestoreDomainThreadResult {
+  restored: boolean;
+  session?: WorkspaceSession;
+  thread?: ConversationThreadSnapshot;
+  error?: DraftletError;
 }
 
 export interface StartDraftGenerationResult {

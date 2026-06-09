@@ -166,6 +166,7 @@ Useful checks:
 
 ```bash
 curl http://127.0.0.1:47632/health
+curl http://127.0.0.1:47632/domain/history
 curl http://127.0.0.1:47632/history
 curl http://127.0.0.1:47632/preferences
 curl http://127.0.0.1:11434/api/tags
@@ -175,6 +176,7 @@ curl http://127.0.0.1:11434/api/tags
 
 - `GET /health` identifies and checks the Draftlet server
 - `POST /replies` streams generated replies as SSE
-- `GET /history` returns recent generations with replies
+- `GET /domain/history` returns recent persisted Draftlet workspace threads
+- `GET /history` returns legacy recent generations with replies
 - `GET /preferences` lists saved preferences
 - `PUT /preferences` upserts a preference

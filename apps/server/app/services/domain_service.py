@@ -5,6 +5,7 @@ from app.db.models import ConversationThread, DraftVariant, Turn, WorkspaceSessi
 from app.schemas.domain import (
     ConversationThreadCreate,
     ConversationThreadSnapshot,
+    DomainHistoryItem,
     DraftVariantCreate,
     DraftVariantStateUpdate,
     SourceSnapshot,
@@ -218,6 +219,42 @@ def get_thread_snapshot(session: Session, thread_id: str | None) -> Conversation
     turns = list(thread.turns)
     variants = [variant for turn in turns for variant in turn.variants]
     return ConversationThreadSnapshot(thread=thread, turns=turns, variants=variants)
+
+
+def list_recent_domain_history(session: Session, limit: int = 20) -> list[DomainHistoryItem]:
+    statement = select(ConversationThread).options(
+        selectinload(ConversationThread.session),
+        selectinload(ConversationThread.turns).selectinload(Turn.variants),
+    )
+    threads = sorted(
+        session.scalars(statement).all(),
+        key=latest_thread_activity,
+        reverse=True,
+    )[:limit]
+    items: list[DomainHistoryItem] = []
+
+    for thread in threads:
+        turns = list(thread.turns)
+        variants = [variant for turn in turns for variant in turn.variants]
+        items.append(
+            DomainHistoryItem(
+                session=thread.session,
+                thread=ConversationThreadSnapshot(thread=thread, turns=turns, variants=variants),
+            )
+        )
+
+    return items
+
+
+def latest_thread_activity(thread: ConversationThread) -> object:
+    timestamps = [thread.updated_at, thread.created_at]
+
+    for turn in thread.turns:
+        timestamps.extend([turn.updated_at, turn.created_at])
+        for variant in turn.variants:
+            timestamps.extend([variant.updated_at, variant.created_at])
+
+    return max(timestamp for timestamp in timestamps if timestamp is not None)
 
 
 def variants_for_thread(session: Session, thread_id: str) -> list[DraftVariant]:

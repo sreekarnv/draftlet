@@ -17,6 +17,7 @@ interface UpsertWorkspaceSessionInput {
 
 export interface WorkspaceSessionStore {
   upsertFromPageContext(input: UpsertWorkspaceSessionInput): WorkspaceSession;
+  hydrateSession(session: WorkspaceSession): WorkspaceSession;
   getBySessionId(sessionId: string): WorkspaceSession | null;
   getByTabId(tabId: number): WorkspaceSession | null;
   updateContext(sessionId: string, context: DraftletSidePanelContext): WorkspaceSession | null;
@@ -84,6 +85,16 @@ export function createWorkspaceSessionStore({
         createdAt,
         updatedAt: createdAt,
       };
+
+      return save(session);
+    },
+
+    hydrateSession(session) {
+      const previous = sessionsById.get(session.sessionId);
+
+      if (previous && previous.tabId !== session.tabId) {
+        sessionIdByTabId.delete(previous.tabId);
+      }
 
       return save(session);
     },
