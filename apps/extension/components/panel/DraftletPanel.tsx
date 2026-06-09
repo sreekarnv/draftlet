@@ -3,11 +3,13 @@ import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 
 import { getHistory } from '../../core/api';
 import { DEFAULT_PANEL_VIEW, DEFAULT_TONE } from '../../core/constants';
+import type { ConversationThreadSnapshot } from '../../core/messages';
 import type { ConnectionStatus, HistoryGeneration, PanelState, PanelView, ReplyItem, Tone } from '../../core/types';
 import type { PanelAction, PanelCallbacks, PanelController, PanelSurface } from '../../ui/mount-panel';
 import { ReplyCard } from './ReplyCard';
 import { StatusBadge } from './StatusBadge';
 import { ToneTabs } from './ToneTabs';
+import { buildThreadWorkspace, type ThreadTurnGroup } from './thread-workspace';
 import { Button, Card, cn } from './ui';
 
 interface DraftletPanelProps {
@@ -24,6 +26,7 @@ interface PanelViewState {
   state: PanelState;
   connectionStatus: ConnectionStatus;
   replies: ReplyItem[];
+  threadSnapshot: ConversationThreadSnapshot | null;
   history: HistoryGeneration[];
   historyState: LoadState;
   errorMessage: string;
@@ -38,6 +41,7 @@ export function DraftletPanel({ callbacks, controller }: DraftletPanelProps) {
     state: 'empty',
     connectionStatus: 'disconnected',
     replies: [],
+    threadSnapshot: null,
     history: [],
     historyState: 'idle',
     errorMessage: '',
@@ -133,6 +137,7 @@ function renderComposerWorkspace(
   setRefinementInstruction: (instruction: string) => void,
 ) {
   const isGenerating = view.state === 'loading' || view.state === 'streaming';
+  const hasDrafts = draftCount(view) > 0;
 
   return (
     <section className="mt-3 grid gap-3 rounded-lg bg-white/75 p-3 shadow-sm shadow-slate-200/70 ring-1 ring-slate-200/70">
@@ -155,10 +160,10 @@ function renderComposerWorkspace(
           type="button"
           variant="primary"
         >
-          {view.replies.length > 0 ? <RefreshCw aria-hidden="true" className="h-3.5 w-3.5" /> : <Sparkles aria-hidden="true" className="h-3.5 w-3.5" />}
-          {view.replies.length > 0 ? 'Regenerate' : 'Generate'}
+          {hasDrafts ? <RefreshCw aria-hidden="true" className="h-3.5 w-3.5" /> : <Sparkles aria-hidden="true" className="h-3.5 w-3.5" />}
+          {hasDrafts ? 'Regenerate' : 'Generate'}
         </Button>
-        {view.replies.length > 0 && callbacks.onRefine ? (
+        {hasDrafts && callbacks.onRefine ? (
           <div className="grid gap-2">
             <textarea
               aria-label="Follow-up instruction"
@@ -191,6 +196,10 @@ function renderRepliesView(
 ) {
   const isGenerating = view.state === 'loading' || view.state === 'streaming';
 
+  if (view.threadSnapshot) {
+    return renderThreadWorkspace(view.threadSnapshot, view, callbacks);
+  }
+
   if (view.replies.length === 0) {
     return <EmptyState title={isGenerating ? 'Waiting for streamed replies...' : 'Generated drafts will appear here.'} />;
   }
@@ -211,6 +220,100 @@ function renderRepliesView(
           reply={reply}
         />
       ))}
+    </section>
+  );
+}
+
+function renderThreadWorkspace(
+  snapshot: ConversationThreadSnapshot,
+  view: PanelViewState,
+  callbacks: PanelCallbacks,
+) {
+  const model = buildThreadWorkspace(snapshot);
+  const source = formatSource(snapshot.thread.source.sourceDomain ?? null, snapshot.thread.source.sourceUrl ?? null);
+
+  if (model.groups.length === 0) {
+    return <EmptyState title="Generated drafts will appear here." />;
+  }
+
+  return (
+    <section className="grid gap-4" aria-label="Thread workspace">
+      <div className="grid gap-2 rounded-lg bg-white/80 p-3.5 ring-1 ring-slate-200/80">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[11px] font-semibold uppercase tracking-normal text-slate-500">Active thread</div>
+            <div className="mt-0.5 text-xs leading-5 text-slate-500">
+              {model.groups.length} {model.groups.length === 1 ? 'turn' : 'turns'} · {model.totalVariants} {model.totalVariants === 1 ? 'variant' : 'variants'}
+            </div>
+          </div>
+          <StatePill label={snapshot.thread.status} tone="slate" />
+        </div>
+        {source ? <SourceContext domain={snapshot.thread.source.sourceDomain ?? null} url={snapshot.thread.source.sourceUrl ?? null} /> : null}
+        <p className="m-0 max-h-16 overflow-hidden pl-2.5 text-[13px] leading-6 text-slate-600 shadow-[-2px_0_0_rgba(100,116,139,0.20)]">
+          {snapshot.thread.source.selectedText}
+        </p>
+      </div>
+      <div className="grid gap-4">
+        {model.groups.map((group, index) => renderTurnGroup(group, index, view, callbacks))}
+      </div>
+    </section>
+  );
+}
+
+function renderTurnGroup(
+  group: ThreadTurnGroup,
+  index: number,
+  view: PanelViewState,
+  callbacks: PanelCallbacks,
+) {
+  const isGenerating = view.state === 'loading' || view.state === 'streaming';
+  const waitingForVariants = group.isLatest && isGenerating && group.variants.length === 0;
+
+  return (
+    <section
+      aria-label={`Turn ${index + 1}`}
+      className={cn(
+        'grid gap-2.5 pl-3',
+        group.isLatest ? 'border-l-2 border-slate-500' : 'border-l border-slate-200',
+      )}
+      key={group.turn.turnId}
+    >
+      <div className="grid gap-1 rounded-md bg-white/70 px-3 py-2 ring-1 ring-slate-200/70">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[11px] font-semibold uppercase tracking-normal text-slate-500">Turn {index + 1}</div>
+            <div className="mt-0.5 text-xs leading-5 text-slate-500">
+              {group.turn.tone} · {formatDate(group.turn.createdAt)}
+            </div>
+          </div>
+          <div className="flex flex-wrap justify-end gap-1.5">
+            {group.isLatest ? <StatePill label="Latest" tone="slate" /> : null}
+            <StatePill label={group.turn.generationStatus} tone={group.turn.generationStatus === 'failed' ? 'rose' : 'slate'} />
+          </div>
+        </div>
+        <p className="m-0 text-[13px] leading-6 text-slate-700">{turnInstructionLabel(group.turn.instruction, index)}</p>
+      </div>
+      {waitingForVariants ? <div className="rounded-md bg-white/65 p-3 text-[13px] leading-6 text-slate-500 ring-1 ring-slate-200/70">Waiting for streamed variants...</div> : null}
+      {group.variants.length > 0 ? (
+        <div className="grid gap-2.5">
+          {group.variants.map((variant, variantIndex) => (
+            <ReplyCard
+              index={variantIndex}
+              key={variant.variantId}
+              onAcceptVariant={callbacks.onAcceptVariant}
+              onInsert={callbacks.onInsert}
+              onSelectVariant={callbacks.onSelectVariant}
+              reply={{
+                id: variant.variantId,
+                text: variant.content,
+                persistedId: variant.persistedReplyId,
+                isCurrent: variant.isCurrent,
+                isAccepted: variant.status === 'accepted',
+              }}
+            />
+          ))}
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -264,7 +367,7 @@ function renderHistoryView(
             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200">{generation.status}</span>
           </div>
           <SourceContext domain={generation.source_domain} url={generation.source_url} />
-          <p className="m-0 max-h-14 overflow-hidden pl-2.5 shadow-[-2px_0_0_rgba(100,116,139,0.20)] text-[13px] leading-6 text-slate-600">{generation.selected_text}</p>
+          <p className="m-0 max-h-14 overflow-hidden pl-2.5 text-[13px] leading-6 text-slate-600 shadow-[-2px_0_0_rgba(100,116,139,0.20)]">{generation.selected_text}</p>
           <div className="divide-y divide-slate-200">
             {[...generation.replies].sort((a, b) => a.reply_index - b.reply_index).map((reply) => (
               <div className="grid gap-2 py-2.5 first:pt-0 last:pb-0" key={reply.id}>
@@ -302,6 +405,18 @@ function EmptyState({ children, title }: { children?: ReactNode; title: string }
   );
 }
 
+function StatePill({ label, tone }: { label: string; tone: 'slate' | 'rose' }) {
+  return (
+    <span className={cn(
+      'rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize leading-4 ring-1',
+      tone === 'slate' && 'bg-slate-100 text-slate-700 ring-slate-200',
+      tone === 'rose' && 'bg-rose-50 text-rose-700 ring-rose-200',
+    )}>
+      {label}
+    </span>
+  );
+}
+
 function reducePanelAction(current: PanelViewState, action: PanelAction): PanelViewState {
   if (action.type === 'open') {
     return {
@@ -311,6 +426,7 @@ function reducePanelAction(current: PanelViewState, action: PanelAction): PanelV
       tone: action.options.tone ?? current.tone,
       state: 'empty',
       replies: [],
+      threadSnapshot: null,
       errorMessage: '',
       persistenceMessage: '',
     };
@@ -330,6 +446,10 @@ function reducePanelAction(current: PanelViewState, action: PanelAction): PanelV
 
   if (action.type === 'setState') {
     return { ...current, state: action.state, errorMessage: action.message };
+  }
+
+  if (action.type === 'setThreadSnapshot') {
+    return { ...current, threadSnapshot: action.snapshot, persistenceMessage: '' };
   }
 
   if (action.type === 'clearReplies') {
@@ -353,14 +473,14 @@ function getStateText(view: PanelViewState) {
   }
 
   if (view.state === 'success') {
-    return view.replies.length > 0 ? 'Ready' : 'No replies returned.';
+    return draftCount(view) > 0 ? 'Ready' : 'No replies returned.';
   }
 
   if (view.state === 'error') {
     return view.errorMessage || 'Could not generate replies.';
   }
 
-  return 'Choose tone';
+  return draftCount(view) > 0 ? 'Ready' : 'Choose tone';
 }
 
 function stateToneClass(state: PanelState) {
@@ -377,6 +497,22 @@ function stateToneClass(state: PanelState) {
   }
 
   return '';
+}
+
+function draftCount(view: PanelViewState) {
+  if (view.threadSnapshot) {
+    return view.threadSnapshot.variants.length;
+  }
+
+  return view.replies.length;
+}
+
+function turnInstructionLabel(instruction: string, index: number) {
+  if (index === 0 && instruction === 'Generate reply drafts') {
+    return 'Initial draft generation';
+  }
+
+  return instruction;
 }
 
 function formatSource(domain: string | null, url: string | null): { domain: string; path: string; title: string } | null {
