@@ -1,21 +1,26 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.db.models import ConversationThread, DraftVariant, Turn, WorkspaceSession
+from app.db.models import ConversationThread, DraftVariant, GenerationRun, Turn, WorkspaceSession
 from app.schemas.domain import (
     ConversationThreadCreate,
     ConversationThreadSnapshot,
     DomainHistoryItem,
     DraftVariantCreate,
     DraftVariantStateUpdate,
+    GenerationRunClaim,
+    GenerationRunReconcileRequest,
+    GenerationRunStatusUpdate,
     SourceSnapshot,
     TurnCreate,
     TurnStatusUpdate,
     WorkspaceSessionSnapshot,
     WorkspaceSessionUpsert,
 )
+
+ACTIVE_GENERATION_RUN_STATUSES = {"active", "streaming"}
 
 
 def upsert_workspace_session(session: Session, payload: WorkspaceSessionUpsert) -> WorkspaceSession:
@@ -137,6 +142,187 @@ def update_turn_lifecycle(session: Session, turn_id: str, payload: TurnStatusUpd
     session.commit()
     session.refresh(turn)
     return turn
+
+
+def claim_generation_run(session: Session, payload: GenerationRunClaim) -> GenerationRun | None:
+    turn = session.get(Turn, payload.turn_id)
+
+    if not turn or turn.thread_id != payload.thread_id:
+        return None
+
+    thread = session.get(ConversationThread, payload.thread_id)
+
+    if not thread or thread.session_id != payload.session_id:
+        return None
+
+    run = session.get(GenerationRun, payload.run_id)
+    now = datetime.now(UTC)
+
+    if run:
+        run.session_id = payload.session_id
+        run.thread_id = payload.thread_id
+        run.turn_id = payload.turn_id
+        run.status = payload.status
+        run.lease_owner = payload.lease_owner
+        run.claimed_at = now
+        run.heartbeat_at = now
+        run.released_at = None
+        run.completed_at = None
+        run.cancelled_at = None
+        run.interrupted_at = None
+        run.failed_at = None
+        run.error_code = None
+        run.error_message = None
+    else:
+        run = GenerationRun(
+            run_id=payload.run_id,
+            session_id=payload.session_id,
+            thread_id=payload.thread_id,
+            turn_id=payload.turn_id,
+            status=payload.status,
+            lease_owner=payload.lease_owner,
+            heartbeat_at=now,
+        )
+
+    session.add(run)
+    session.commit()
+    session.refresh(run)
+    return run
+
+
+def list_active_generation_runs(
+    session: Session,
+    session_id: str | None = None,
+    thread_id: str | None = None,
+    turn_id: str | None = None,
+) -> list[GenerationRun]:
+    statement = select(GenerationRun).where(GenerationRun.status.in_(ACTIVE_GENERATION_RUN_STATUSES))
+
+    if session_id:
+        statement = statement.where(GenerationRun.session_id == session_id)
+
+    if thread_id:
+        statement = statement.where(GenerationRun.thread_id == thread_id)
+
+    if turn_id:
+        statement = statement.where(GenerationRun.turn_id == turn_id)
+
+    return list(session.scalars(statement.order_by(GenerationRun.claimed_at.desc())))
+
+
+def update_generation_run_status(session: Session, run_id: str, payload: GenerationRunStatusUpdate) -> GenerationRun | None:
+    run = session.get(GenerationRun, run_id)
+
+    if not run:
+        return None
+
+    apply_generation_run_lifecycle(run, payload.status, payload.error_code, payload.error_message)
+    reconcile_turn_for_generation_run(session, run, payload.status, payload.error_code, payload.error_message)
+    session.add(run)
+    session.commit()
+    session.refresh(run)
+    return run
+
+
+def reconcile_stale_generation_runs(session: Session, payload: GenerationRunReconcileRequest) -> list[GenerationRun]:
+    now = datetime.now(UTC)
+    cutoff = now - timedelta(seconds=payload.stale_after_seconds)
+    runs = list_active_generation_runs(
+        session,
+        session_id=payload.session_id,
+        thread_id=payload.thread_id,
+        turn_id=payload.turn_id,
+    )
+    reconciled: list[GenerationRun] = []
+
+    for run in runs:
+        activity_at = as_utc(run.heartbeat_at or run.claimed_at or run.updated_at)
+
+        if activity_at and activity_at > cutoff:
+            continue
+
+        apply_generation_run_lifecycle(run, "interrupted", payload.error_code, payload.error_message)
+        reconcile_turn_for_generation_run(session, run, "interrupted", payload.error_code, payload.error_message)
+        session.add(run)
+        reconciled.append(run)
+
+    session.commit()
+
+    for run in reconciled:
+        session.refresh(run)
+
+    return reconciled
+
+
+def as_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+
+    return value.astimezone(UTC)
+
+
+def apply_generation_run_lifecycle(run: GenerationRun, status: str, error_code: str | None = None, error_message: str | None = None) -> None:
+    now = datetime.now(UTC)
+    run.status = status
+    run.heartbeat_at = now
+
+    if status == "streaming":
+        return
+
+    if status == "completed":
+        run.completed_at = now
+        run.released_at = now
+        run.error_code = None
+        run.error_message = None
+        return
+
+    if status == "cancelled":
+        run.cancelled_at = now
+        run.released_at = now
+        run.error_code = error_code
+        run.error_message = error_message
+        return
+
+    if status == "interrupted":
+        run.interrupted_at = now
+        run.released_at = now
+        run.error_code = error_code
+        run.error_message = error_message
+        return
+
+    if status == "failed":
+        run.failed_at = now
+        run.released_at = now
+        run.error_code = error_code
+        run.error_message = error_message
+
+
+def reconcile_turn_for_generation_run(
+    session: Session,
+    run: GenerationRun,
+    status: str,
+    error_code: str | None = None,
+    error_message: str | None = None,
+) -> None:
+    if status == "streaming":
+        turn_status = "streaming"
+    elif status == "completed":
+        turn_status = "completed"
+    elif status == "cancelled":
+        turn_status = "cancelled"
+    elif status in {"failed", "interrupted"}:
+        turn_status = "failed"
+    else:
+        return
+
+    turn = session.get(Turn, run.turn_id)
+
+    if turn:
+        apply_turn_lifecycle(turn, turn_status, error_code, error_message)
+        session.add(turn)
 
 
 def apply_turn_lifecycle(turn: Turn, status: str, error_code: str | None = None, error_message: str | None = None) -> None:

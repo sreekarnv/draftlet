@@ -30,6 +30,7 @@ export interface DraftletSidePanelContext {
 
 export type WorkspaceSessionStatus = 'active' | 'stale';
 export type WorkspaceGenerationStatus = 'starting' | 'streaming';
+export type GenerationRunStatus = 'active' | 'streaming' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
 
 export interface WorkspaceSessionGeneration {
   generationId: string;
@@ -100,6 +101,26 @@ export interface DraftVariant {
   rank: number;
   status: DraftVariantStatus;
   isCurrent: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GenerationRun {
+  runId: string;
+  sessionId: string;
+  threadId: string;
+  turnId: string;
+  status: GenerationRunStatus;
+  leaseOwner: string;
+  claimedAt: string;
+  heartbeatAt?: string;
+  releasedAt?: string;
+  completedAt?: string;
+  cancelledAt?: string;
+  interruptedAt?: string;
+  failedAt?: string;
+  errorCode?: string;
+  errorMessage?: string;
   createdAt: string;
   updatedAt: string;
 }

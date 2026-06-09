@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { streamReplies } from '../../core/api';
+import { claimGenerationRun, reconcileGenerationRuns, streamReplies } from '../../core/api';
 import type { ReplyRequestPayload } from '../../core/types';
 
 afterEach(() => {
@@ -30,6 +30,55 @@ describe('streamReplies', () => {
   });
 });
 
+describe('generation run runtime API', () => {
+  it('claims and maps a runtime generation run', async () => {
+    const fetchMock = vi.fn(async () => Response.json(generationRunRead({ status: 'active' })));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const run = await claimGenerationRun({
+      runId: 'generation-1',
+      sessionId: 'session-1',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      leaseOwner: 'extension-background',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/domain/generation-runs/generation-1'), expect.objectContaining({
+      method: 'PUT',
+    }));
+    expect(run).toMatchObject({
+      runId: 'generation-1',
+      sessionId: 'session-1',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'active',
+      leaseOwner: 'extension-background',
+    });
+  });
+
+  it('requests runtime reconciliation for stale generation runs', async () => {
+    const fetchMock = vi.fn(async () => Response.json([generationRunRead({ status: 'interrupted' })]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const runs = await reconcileGenerationRuns({
+      sessionId: 'session-1',
+      staleAfterSeconds: 0,
+      error: {
+        code: 'generation_interrupted',
+        message: 'Draft generation was interrupted before completion.',
+      },
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/domain/generation-runs/reconcile'), expect.objectContaining({
+      method: 'POST',
+    }));
+    expect(runs[0]).toMatchObject({
+      runId: 'generation-1',
+      status: 'interrupted',
+    });
+  });
+});
+
 function payload(): ReplyRequestPayload {
   return {
     selected_text: 'Please reply to this.',
@@ -55,4 +104,26 @@ function createStreamResponse(chunks: string[]): Response {
       controller.close();
     },
   }), { status: 200 });
+}
+
+function generationRunRead({ status }: { status: string }) {
+  return {
+    run_id: 'generation-1',
+    session_id: 'session-1',
+    thread_id: 'thread-1',
+    turn_id: 'turn-1',
+    status,
+    lease_owner: 'extension-background',
+    claimed_at: '2026-06-09T00:00:00.000Z',
+    heartbeat_at: '2026-06-09T00:00:00.000Z',
+    released_at: status === 'interrupted' ? '2026-06-09T00:00:01.000Z' : null,
+    completed_at: null,
+    cancelled_at: null,
+    interrupted_at: status === 'interrupted' ? '2026-06-09T00:00:01.000Z' : null,
+    failed_at: null,
+    error_code: status === 'interrupted' ? 'generation_interrupted' : null,
+    error_message: status === 'interrupted' ? 'Draft generation was interrupted before completion.' : null,
+    created_at: '2026-06-09T00:00:00.000Z',
+    updated_at: '2026-06-09T00:00:01.000Z',
+  };
 }

@@ -11,6 +11,7 @@ class ReplyRequest(BaseModel):
     session_id: str | None = Field(default=None, max_length=120)
     thread_id: str | None = Field(default=None, max_length=120)
     turn_id: str | None = Field(default=None, max_length=120)
+    run_id: str | None = Field(default=None, max_length=120)
     instruction: str | None = Field(default=None, max_length=4000)
     generation_mode: str = Field(default="initial", min_length=1, max_length=40)
 
@@ -24,6 +25,7 @@ class ReplyRequest(BaseModel):
         "session_id",
         "thread_id",
         "turn_id",
+        "run_id",
         "instruction",
         "generation_mode",
         mode="before",
