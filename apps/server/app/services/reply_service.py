@@ -69,13 +69,13 @@ async def stream_reply_events(request: ReplyRequest) -> AsyncIterator[ReplyEvent
 
             if turn:
                 update_turn_status(session, turn.turn_id, "completed")
-        except OllamaClientError:
+        except OllamaClientError as error:
             if turn:
-                update_turn_status(session, turn.turn_id, "failed")
+                update_turn_status(session, turn.turn_id, "failed", "ollama_stream_failed", str(error))
             raise
-        except Exception:
+        except Exception as error:
             if turn:
-                update_turn_status(session, turn.turn_id, "failed")
+                update_turn_status(session, turn.turn_id, "failed", "generation_failed", str(error))
             raise
 
 

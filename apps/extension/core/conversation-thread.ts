@@ -27,6 +27,11 @@ interface CreateTurnInput {
   instruction?: string;
 }
 
+interface TurnStatusUpdate {
+  status: TurnGenerationStatus;
+  error?: { code?: string; message?: string };
+}
+
 interface AddVariantInput {
   turnId: string;
   tone: Tone;
@@ -41,7 +46,7 @@ export interface ConversationThreadStore {
   createTurn(input: CreateTurnInput): { snapshot: ConversationThreadSnapshot; turn: Turn } | null;
   addVariant(input: AddVariantInput): { snapshot: ConversationThreadSnapshot; variant: DraftVariant } | null;
   updateVariantState(variantId: string, state: { isCurrent?: boolean; status?: DraftVariant['status'] }): ConversationThreadSnapshot | null;
-  updateTurnStatus(turnId: string, status: TurnGenerationStatus): ConversationThreadSnapshot | null;
+  updateTurnStatus(turnId: string, status: TurnGenerationStatus, error?: { code?: string; message?: string }): ConversationThreadSnapshot | null;
   hydrateSnapshot(snapshot: ConversationThreadSnapshot): ConversationThreadSnapshot;
 }
 
@@ -206,7 +211,7 @@ export function createConversationThreadStore({
       return snapshot(turn.threadId);
     },
 
-    updateTurnStatus(turnId, status) {
+    updateTurnStatus(turnId, status, error) {
       const turn = turnsById.get(turnId);
 
       if (!turn) {
@@ -214,11 +219,7 @@ export function createConversationThreadStore({
       }
 
       const updatedAt = timestamp();
-      turnsById.set(turnId, {
-        ...turn,
-        generationStatus: status,
-        updatedAt,
-      });
+      turnsById.set(turnId, applyTurnLifecycle(turn, { status, error }, updatedAt));
       touchThread(turn.threadId, updatedAt);
       return snapshot(turn.threadId);
     },
@@ -267,6 +268,41 @@ export function createConversationThreadStore({
     return (turnIdsByThreadId.get(threadId) ?? []).flatMap((turnId) => (variantIdsByTurnId.get(turnId) ?? [])
       .map((variantId) => variantsById.get(variantId))
       .filter((variant): variant is DraftVariant => Boolean(variant)));
+  }
+
+  function applyTurnLifecycle(turn: Turn, update: TurnStatusUpdate, updatedAt: string): Turn {
+    const next: Turn = {
+      ...turn,
+      generationStatus: update.status,
+      updatedAt,
+    };
+
+    if ((update.status === 'started' || update.status === 'streaming') && !next.generationStartedAt) {
+      next.generationStartedAt = updatedAt;
+    }
+
+    if (update.status === 'completed') {
+      next.generationStartedAt = next.generationStartedAt ?? updatedAt;
+      next.generationCompletedAt = updatedAt;
+      next.generationErrorCode = undefined;
+      next.generationErrorMessage = undefined;
+    }
+
+    if (update.status === 'failed') {
+      next.generationStartedAt = next.generationStartedAt ?? updatedAt;
+      next.generationFailedAt = updatedAt;
+      next.generationErrorCode = update.error?.code;
+      next.generationErrorMessage = update.error?.message;
+    }
+
+    if (update.status === 'cancelled') {
+      next.generationStartedAt = next.generationStartedAt ?? updatedAt;
+      next.generationCancelledAt = updatedAt;
+      next.generationErrorCode = update.error?.code;
+      next.generationErrorMessage = update.error?.message;
+    }
+
+    return next;
   }
 
   function snapshot(threadId: string): ConversationThreadSnapshot | null {

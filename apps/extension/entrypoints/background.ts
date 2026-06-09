@@ -101,7 +101,7 @@ export default defineBackground(() => {
     }
 
     if (message.type === CANCEL_DRAFT_GENERATION) {
-      return Promise.resolve(handleCancelDraftGeneration(message.sessionId, message.generationId));
+      return handleCancelDraftGeneration(message.sessionId, message.generationId);
     }
 
     if (message.type === INSERT_REPLY) {
@@ -141,7 +141,7 @@ async function handleLaunchSidePanel(
   });
 
   if (previousSession?.activeGeneration) {
-    handleCancelDraftGeneration(previousSession.sessionId, previousSession.activeGeneration.generationId);
+    void handleCancelDraftGeneration(previousSession.sessionId, previousSession.activeGeneration.generationId);
     session = sessions.getBySessionId(session.sessionId) ?? session;
   }
 
@@ -282,7 +282,7 @@ async function handleStartDraftGeneration(
     };
   }
 
-  handleCancelDraftGeneration(sessionId);
+  await handleCancelDraftGeneration(sessionId);
 
   const mode = options.mode ?? 'initial';
   const instruction = normalizeInstruction(options.instruction, mode);
@@ -354,6 +354,15 @@ async function handleStartDraftGeneration(
     };
   }
 
+  const startedSnapshot = threads.updateTurnStatus(turn.turnId, 'started') ?? turnResult.snapshot;
+  const startedTurn = findTurn(startedSnapshot, turn.turnId) ?? { ...turn, generationStatus: 'started' as const };
+
+  try {
+    await patchTurnStatus(turn.turnId, 'started');
+  } catch {
+    // Runtime persistence already has the queued turn; a later stream transition will reconcile status.
+  }
+
   activeGenerationsBySessionId.set(sessionId, {
     generationId,
     threadId: thread.threadId,
@@ -370,8 +379,8 @@ async function handleStartDraftGeneration(
   }) ?? updatedSession;
 
   void emitWorkspaceSessionUpdated(generatingSession);
-  void emitConversationThreadUpdated(sessionId, turnResult.snapshot);
-  void runDraftGeneration(generatingSession.sessionId, context, generationId, mode, thread, turn, controller);
+  void emitConversationThreadUpdated(sessionId, startedSnapshot);
+  void runDraftGeneration(generatingSession.sessionId, context, generationId, mode, thread, startedTurn, controller);
 
   return {
     started: true,
@@ -382,7 +391,7 @@ async function handleStartDraftGeneration(
   };
 }
 
-function handleCancelDraftGeneration(sessionId?: string, generationId?: string): CancelDraftGenerationResult {
+async function handleCancelDraftGeneration(sessionId?: string, generationId?: string): Promise<CancelDraftGenerationResult> {
   const session = resolveGenerationSession(sessionId, generationId);
 
   if (!session) {
@@ -391,25 +400,37 @@ function handleCancelDraftGeneration(sessionId?: string, generationId?: string):
 
   const activeGeneration = activeGenerationsBySessionId.get(session.sessionId);
 
-  if (!activeGeneration || (generationId && activeGeneration.generationId !== generationId)) {
+  if (activeGeneration && (!generationId || activeGeneration.generationId === generationId)) {
+    activeGeneration.controller.abort();
+    activeGenerationsBySessionId.delete(session.sessionId);
+    const updatedSession = sessions.clearActiveGeneration(session.sessionId, activeGeneration.generationId);
+    const error = { code: 'generation_cancelled', message: 'Draft generation was cancelled.' };
+    const snapshot = threads.updateTurnStatus(activeGeneration.turnId, 'cancelled', error);
+
+    await patchTurnStatus(activeGeneration.turnId, 'cancelled', error).catch(() => null);
+
+    if (updatedSession) {
+      void emitWorkspaceSessionUpdated(updatedSession);
+    }
+
+    if (snapshot) {
+      void emitConversationThreadUpdated(session.sessionId, snapshot);
+    }
+
+    return { canceled: true };
+  }
+
+  const snapshot = await getRestorableThreadSnapshot(session);
+  const latestTurn = snapshot ? latestGenerationTurn(snapshot) : null;
+
+  if (!snapshot || !latestTurn || !isInProgressTurn(latestTurn)) {
     return { canceled: false };
   }
 
-  activeGeneration.controller.abort();
-  activeGenerationsBySessionId.delete(session.sessionId);
-  const updatedSession = sessions.clearActiveGeneration(session.sessionId, activeGeneration.generationId);
-  const snapshot = threads.updateTurnStatus(activeGeneration.turnId, 'cancelled');
-
-  void patchTurnStatus(activeGeneration.turnId, 'cancelled').catch(() => {});
-
-  if (updatedSession) {
-    void emitWorkspaceSessionUpdated(updatedSession);
-  }
-
-  if (snapshot) {
-    void emitConversationThreadUpdated(session.sessionId, snapshot);
-  }
-
+  const error = { code: 'generation_cancelled', message: 'Draft generation was cancelled.' };
+  await patchTurnStatus(latestTurn.turnId, 'cancelled', error).catch(() => null);
+  const cancelledSnapshot = threads.updateTurnStatus(latestTurn.turnId, 'cancelled', error) ?? snapshot;
+  void emitConversationThreadUpdated(session.sessionId, cancelledSnapshot);
   return { canceled: true };
 }
 
@@ -564,7 +585,9 @@ async function emitGenerationFailed(
     return;
   }
 
-  const failedSnapshot = threads.updateTurnStatus(turnId, 'failed');
+  const failedSnapshot = threads.updateTurnStatus(turnId, 'failed', { code: error.code, message: error.message });
+
+  await patchTurnStatus(turnId, 'failed', { code: error.code, message: error.message }).catch(() => null);
 
   if (failedSnapshot) {
     void emitConversationThreadUpdated(sessionId, failedSnapshot);
@@ -703,15 +726,59 @@ async function restoreRuntimeSnapshot(session: WorkspaceSession): Promise<Worksp
       sessions.setActiveThread(restoredSession.sessionId, restoredSession.activeThreadId);
     }
 
-    if (snapshot.thread) {
-      threads.hydrateSnapshot(snapshot.thread);
-      void emitConversationThreadUpdated(restoredSession.sessionId, snapshot.thread);
+    const restoredThread = snapshot.thread
+      ? await reconcileInterruptedGeneration(restoredSession.sessionId, snapshot.thread)
+      : null;
+
+    if (restoredThread) {
+      threads.hydrateSnapshot(restoredThread);
+      void emitConversationThreadUpdated(restoredSession.sessionId, restoredThread);
     }
 
-    return { session: restoredSession, thread: snapshot.thread };
+    return { session: restoredSession, thread: restoredThread };
   } catch {
     return { session };
   }
+}
+
+async function reconcileInterruptedGeneration(sessionId: string, snapshot: ConversationThreadSnapshot): Promise<ConversationThreadSnapshot> {
+  if (activeGenerationsBySessionId.has(sessionId)) {
+    return snapshot;
+  }
+
+  const latestTurn = latestGenerationTurn(snapshot);
+
+  if (!latestTurn || !isInProgressTurn(latestTurn)) {
+    return snapshot;
+  }
+
+  const error = {
+    code: 'generation_interrupted',
+    message: 'Draft generation was interrupted before completion.',
+  };
+
+  await patchTurnStatus(latestTurn.turnId, 'failed', error).catch(() => null);
+  const localSnapshot = threads.hydrateSnapshot(snapshot);
+  const failedSnapshot = threads.updateTurnStatus(latestTurn.turnId, 'failed', error) ?? localSnapshot;
+  const refreshed = await getConversationThreadSnapshot(snapshot.thread.threadId).catch(() => null);
+  return refreshed ?? failedSnapshot;
+}
+
+async function getRestorableThreadSnapshot(session: WorkspaceSession): Promise<ConversationThreadSnapshot | null> {
+  if (session.activeThreadId) {
+    return threads.getSnapshot(session.activeThreadId)
+      ?? await getConversationThreadSnapshot(session.activeThreadId).catch(() => null);
+  }
+
+  return threads.getSnapshotForSession(session.sessionId);
+}
+
+function latestGenerationTurn(snapshot: ConversationThreadSnapshot): Turn | null {
+  return [...snapshot.turns].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).at(0) ?? null;
+}
+
+function isInProgressTurn(turn: Turn): boolean {
+  return turn.generationStatus === 'queued' || turn.generationStatus === 'started' || turn.generationStatus === 'streaming';
 }
 
 async function persistWorkspaceSession(session: WorkspaceSession): Promise<WorkspaceSession | null> {

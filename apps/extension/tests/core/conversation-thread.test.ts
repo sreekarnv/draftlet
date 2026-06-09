@@ -106,7 +106,7 @@ describe('conversation thread store', () => {
     ]));
   });
 
-  it('updates turn status without losing variants', () => {
+  it('updates turn lifecycle without losing variants', () => {
     const store = createTestStore();
     const thread = store.ensureThreadForSession({
       sessionId: 'session-1',
@@ -123,10 +123,20 @@ describe('conversation thread store', () => {
       content: 'Draft',
     });
 
-    const completed = store.updateTurnStatus(turnResult.turn.turnId, 'completed');
+    const streaming = store.updateTurnStatus(turnResult.turn.turnId, 'streaming');
+    const failed = store.updateTurnStatus(turnResult.turn.turnId, 'failed', {
+      code: 'runtime_unavailable',
+      message: 'Draftlet server is not reachable.',
+    });
 
-    expect(completed?.turns[0].generationStatus).toBe('completed');
-    expect(completed?.variants).toHaveLength(1);
+    expect(streaming?.turns[0].generationStartedAt).toBeTruthy();
+    expect(failed?.turns[0]).toMatchObject({
+      generationStatus: 'failed',
+      generationErrorCode: 'runtime_unavailable',
+      generationErrorMessage: 'Draftlet server is not reachable.',
+    });
+    expect(failed?.turns[0].generationFailedAt).toBeTruthy();
+    expect(failed?.variants).toHaveLength(1);
   });
 
   it('reuses the active thread for the same session', () => {

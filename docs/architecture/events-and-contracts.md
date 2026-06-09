@@ -115,6 +115,7 @@ The current v2 extension generation flow is intentionally transitional but now s
 - side panel restores the active tab session with `draftlet:get-current-workspace-session`
 - service worker creates or reuses a session-backed `ConversationThread` when generation starts
 - each generation creates a `Turn` on that thread
+- turn lifecycle is durable on the `Turn` with explicit status, lifecycle timestamps, and bounded error metadata
 - each streamed runtime reply is stored as a `DraftVariant` on the active turn
 - service worker broadcasts `draftlet:workspace-session-updated` for session metadata and `draftlet:conversation-thread-updated` for thread snapshots
 - service worker emits `draftlet:draft-generation-started`, `draftlet:draft-generation-completed`, and `draftlet:draft-generation-failed` for generation lifecycle, while streamed variants reach extension surfaces through `draftlet:conversation-thread-updated` snapshots
@@ -131,6 +132,7 @@ The current v2 generation flow is transitional but now uses durable runtime doma
 - side panel restores the active tab session with `draftlet:get-current-workspace-session`; background also asks runtime for the persisted session/thread snapshot when available
 - initial generation creates or reuses a session-backed `ConversationThread`, creates a `Turn`, and streams replies through `/replies` with `generation_mode: initial`
 - follow-up refinement uses `draftlet:start-draft-refinement`, appends a new `Turn` to the active persisted thread, and streams `/replies` with `generation_mode: refinement` plus the user instruction
+- runtime-backed `Turn` lifecycle records queued, started, streaming, completed, failed, and cancelled states with timestamps and bounded error details
 - runtime loads prior persisted thread context for refinement prompts, then persists each streamed reply as a `DraftVariant` for the turn
 - runtime emits `draft_variant` SSE events with variant/thread/turn metadata
 - service worker maps each streamed result into the active `ConversationThread` snapshot and broadcasts `draftlet:conversation-thread-updated`

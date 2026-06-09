@@ -12,6 +12,7 @@ from app.schemas.domain import (
     DraftVariantStateUpdate,
     TurnCreate,
     TurnRead,
+    TurnStatusUpdate,
     WorkspaceSessionRead,
     WorkspaceSessionSnapshot,
     WorkspaceSessionUpsert,
@@ -24,6 +25,7 @@ from app.services.domain_service import (
     get_thread_snapshot,
     list_recent_domain_history,
     update_variant_state,
+    update_turn_lifecycle,
     update_turn_status,
     upsert_workspace_session,
 )
@@ -104,10 +106,16 @@ def put_turn(
 @router.patch("/turns/{turn_id}/status", response_model=TurnRead)
 def patch_turn_status(
     turn_id: str,
-    status: str,
+    payload: TurnStatusUpdate | None = None,
+    status: str | None = None,
     session: Session = Depends(get_session),
 ) -> TurnRead:
-    turn = update_turn_status(session, turn_id, status)
+    if payload is not None:
+        turn = update_turn_lifecycle(session, turn_id, payload)
+    elif status is not None:
+        turn = update_turn_status(session, turn_id, status)
+    else:
+        raise HTTPException(status_code=400, detail="status is required")
 
     if not turn:
         raise HTTPException(status_code=404, detail="Turn not found")

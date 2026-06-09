@@ -43,6 +43,12 @@ class Turn(Base):
     page_title: Mapped[str | None] = mapped_column(Text, nullable=True)
     tone: Mapped[str] = mapped_column(String(80))
     generation_status: Mapped[str] = mapped_column(String(40), default="queued")
+    generation_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    generation_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    generation_failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    generation_cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    generation_error_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    generation_error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
