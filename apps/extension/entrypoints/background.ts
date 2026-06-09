@@ -489,7 +489,6 @@ async function runDraftGeneration(
             tone: context.tone ?? DEFAULT_TONE,
             content: reply.text,
             variantId: reply.variantId,
-            persistedReplyId: reply.replyId,
           });
 
           if (!variantResult) {

@@ -66,7 +66,6 @@ class DraftVariant(Base):
     rank: Mapped[int] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(40), default="generated")
     is_current: Mapped[bool] = mapped_column(Boolean, default=False)
-    legacy_reply_id: Mapped[int | None] = mapped_column(ForeignKey("replies.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

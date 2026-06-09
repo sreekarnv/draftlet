@@ -40,7 +40,6 @@ interface StreamRepliesOptions {
 
 interface StreamedDraftVariant {
   text: string;
-  replyId?: number;
   variantId?: string;
 }
 
@@ -165,7 +164,6 @@ export async function putDraftVariant(variant: DraftVariant): Promise<DraftVaria
     rank: variant.rank,
     status: variant.status,
     is_current: variant.isCurrent,
-    legacy_reply_id: variant.persistedReplyId,
   });
 
   return mapDraftVariant(response);
@@ -258,7 +256,6 @@ function parseStreamedDraftVariant(message: SseMessage): StreamedDraftVariant | 
       const payload = JSON.parse(message.data) as DraftVariantStreamPayload;
       return {
         text: payload.reply,
-        replyId: payload.reply_id ?? undefined,
         variantId: payload.variant_id,
       };
     } catch {
@@ -272,17 +269,9 @@ function parseStreamedDraftVariant(message: SseMessage): StreamedDraftVariant | 
     return null;
   }
 
-  return { text: reply, replyId: parseSseId(message.id) };
+  return { text: reply };
 }
 
-function parseSseId(id: string | undefined): number | undefined {
-  if (!id) {
-    return undefined;
-  }
-
-  const value = Number.parseInt(id, 10);
-  return Number.isFinite(value) ? value : undefined;
-}
 
 function toSourcePayload(source: SourceSnapshot) {
   return {
@@ -385,7 +374,6 @@ function mapDraftVariant(variant: DraftVariantRead): DraftVariant {
     rank: variant.rank,
     status: variant.status === 'accepted' || variant.status === 'rejected' ? variant.status : 'generated',
     isCurrent: variant.is_current,
-    persistedReplyId: variant.legacy_reply_id ?? undefined,
     createdAt: variant.created_at,
     updatedAt: variant.updated_at,
   };
@@ -401,7 +389,6 @@ function isTurnStatus(value: string): value is Turn['generationStatus'] {
 
 interface DraftVariantStreamPayload {
   reply: string;
-  reply_id?: number | null;
   variant_id: string;
   turn_id?: string | null;
   thread_id?: string | null;
@@ -456,7 +443,6 @@ interface DraftVariantRead {
   rank: number;
   status: string;
   is_current: boolean;
-  legacy_reply_id: number | null;
   created_at: string;
   updated_at: string;
 }

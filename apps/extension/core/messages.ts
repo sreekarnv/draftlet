@@ -94,7 +94,6 @@ export interface DraftVariant {
   rank: number;
   status: DraftVariantStatus;
   isCurrent: boolean;
-  persistedReplyId?: number;
   createdAt: string;
   updatedAt: string;
 }

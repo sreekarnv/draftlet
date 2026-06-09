@@ -32,7 +32,6 @@ interface AddVariantInput {
   tone: Tone;
   content: string;
   variantId?: string;
-  persistedReplyId?: number;
 }
 
 export interface ConversationThreadStore {
@@ -133,7 +132,7 @@ export function createConversationThreadStore({
       return { snapshot: snapshot(threadId)!, turn };
     },
 
-    addVariant({ turnId, tone, content, variantId, persistedReplyId }) {
+    addVariant({ turnId, tone, content, variantId }) {
       const turn = turnsById.get(turnId);
 
       if (!turn) {
@@ -150,7 +149,6 @@ export function createConversationThreadStore({
         rank: variantIds.length,
         status: 'generated',
         isCurrent: false,
-        persistedReplyId,
         createdAt,
         updatedAt: createdAt,
       };
