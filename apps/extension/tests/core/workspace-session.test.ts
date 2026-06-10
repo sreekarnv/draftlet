@@ -69,6 +69,35 @@ describe('workspace session store', () => {
     expect(store.getBySessionId(session.sessionId)?.activeThreadId).toBe('thread-1');
   });
 
+  it('stores bounded insertion target metadata with page context', () => {
+    const store = createTestStore();
+    const composeTarget = {
+      targetId: 'input-a',
+      kind: 'textarea' as const,
+      pageUrl: 'https://example.com/thread',
+      origin: 'https://example.com',
+      selector: 'textarea[name="reply"]',
+      fingerprint: 'textarea|reply',
+      lastSeenAt: '2026-01-01T00:00:00.000Z',
+    };
+
+    const session = store.upsertFromPageContext({
+      context: {
+        ...context('First'),
+        composeTarget,
+      },
+      tabId: 10,
+    });
+
+    expect(session.insertionTarget).toEqual(composeTarget);
+    expect(session.insertionTargetStatus).toBe('live');
+
+    const stale = store.updateInsertionTarget(session.sessionId, composeTarget, 'stale');
+
+    expect(stale?.insertionTargetStatus).toBe('stale');
+    expect(stale?.latestContext.composeTarget).toEqual(composeTarget);
+  });
+
   it('tracks active generation metadata per session', () => {
     const store = createTestStore();
     const first = store.upsertFromPageContext({ context: context('First'), tabId: 10 });

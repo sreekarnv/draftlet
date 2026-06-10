@@ -6,6 +6,7 @@ import type { ConversationThreadSnapshot, DomainHistoryItem } from '../core/mess
 import type {
   ConnectionStatus,
   InsertionResult,
+  InsertionTargetStatus,
   PanelState,
   PanelView,
   Tone,
@@ -24,11 +25,17 @@ export interface VariantActionResult {
   message: string;
 }
 
+export interface InsertionTargetViewState {
+  status: InsertionTargetStatus;
+  message?: string;
+}
+
 export type PanelAction =
   | { type: 'open'; options: PanelOpenOptions }
   | { type: 'setTone'; tone: Tone }
   | { type: 'setActiveView'; activeView: PanelView }
   | { type: 'setConnectionStatus'; status: ConnectionStatus }
+  | { type: 'setInsertionTargetStatus'; target: InsertionTargetViewState }
   | { type: 'setState'; state: PanelState; message: string }
   | { type: 'setThreadSnapshot'; snapshot: ConversationThreadSnapshot | null };
 
@@ -39,6 +46,7 @@ export interface PanelController {
   setActiveView(activeView: PanelView): void;
   getActiveView(): PanelView;
   setConnectionStatus(status: ConnectionStatus): void;
+  setInsertionTargetStatus(target: InsertionTargetViewState): void;
   setState(state: PanelState, message?: string): void;
   setThreadSnapshot(snapshot: ConversationThreadSnapshot | null): void;
   subscribe(listener: (action: PanelAction) => void): () => void;
@@ -133,6 +141,9 @@ function createPanelController(initialTone: Tone, initialView: PanelView): Panel
     },
     setConnectionStatus(status) {
       emit({ type: 'setConnectionStatus', status });
+    },
+    setInsertionTargetStatus(target) {
+      emit({ type: 'setInsertionTargetStatus', target });
     },
     setState(state, message = '') {
       emit({ type: 'setState', state, message });

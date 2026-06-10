@@ -75,6 +75,8 @@ describe('insertReply', () => {
     const result = await insertReply('Copy me', null);
 
     expect(result.status).toBe('copied');
+    expect(result.targetStatus).toBe('needs_recapture');
+    expect(result.errorCode).toBe('target_missing');
     expect(writeText).toHaveBeenCalledWith('Copy me');
   });
 
@@ -89,5 +91,7 @@ describe('insertReply', () => {
     const result = await insertReply('Nope', { element: input } as FocusSnapshot);
 
     expect(result.status).toBe('failed');
+    expect(result.targetStatus).toBe('stale');
+    expect(result.errorCode).toBe('target_stale_clipboard_failed');
   });
 });

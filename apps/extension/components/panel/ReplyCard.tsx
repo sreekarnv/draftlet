@@ -2,7 +2,7 @@ import { Check, Copy, CornerDownLeft, MousePointer2 } from 'lucide-react';
 import { useState } from 'react';
 
 import type { DraftVariant } from '../../core/messages';
-import type { InsertionResult } from '../../core/types';
+import type { InsertionResult, InsertionTargetStatus } from '../../core/types';
 import type { VariantActionResult } from '../../ui/mount-panel';
 import { Button, Card, cn } from './ui';
 
@@ -12,9 +12,10 @@ interface ReplyCardProps {
   onInsert: (replyText: string, variantId?: string) => Promise<InsertionResult>;
   onSelectVariant?: (variantId: string) => Promise<VariantActionResult>;
   onAcceptVariant?: (variantId: string) => Promise<VariantActionResult>;
+  targetStatus: InsertionTargetStatus;
 }
 
-export function ReplyCard({ variant, index, onInsert, onSelectVariant, onAcceptVariant }: ReplyCardProps) {
+export function ReplyCard({ variant, index, onInsert, onSelectVariant, onAcceptVariant, targetStatus }: ReplyCardProps) {
   const [copyLabel, setCopyLabel] = useState('Copy');
   const [insertLabel, setInsertLabel] = useState('Insert');
   const [selectLabel, setSelectLabel] = useState('Use');
@@ -52,7 +53,7 @@ export function ReplyCard({ variant, index, onInsert, onSelectVariant, onAcceptV
 
     try {
       const result = await onInsert(variant.content, variant.variantId);
-      showFeedback(feedbackMessageFor(result), result.status === 'failed');
+      showFeedback(feedbackMessageFor(result, targetStatus), result.status === 'failed');
       flashButtonLabel(setInsertLabel, buttonMessageFor(result), 'Insert');
     } finally {
       setIsInserting(false);
@@ -131,13 +132,25 @@ function buttonMessageFor(result: InsertionResult) {
   return 'Failed';
 }
 
-function feedbackMessageFor(result: InsertionResult) {
+function feedbackMessageFor(result: InsertionResult, previousTargetStatus: InsertionTargetStatus) {
   if (result.status === 'inserted') {
     return 'Inserted into the focused field.';
   }
 
   if (result.status === 'copied') {
+    if (result.targetStatus === 'stale' || previousTargetStatus === 'stale') {
+      return 'Saved target was stale, so this was copied instead.';
+    }
+
+    if (result.targetStatus === 'needs_recapture' || previousTargetStatus === 'needs_recapture') {
+      return 'Focus a compose field and reopen Draftlet to insert. Copied instead.';
+    }
+
     return 'Could not insert here, so it was copied instead.';
+  }
+
+  if (result.targetStatus === 'unavailable') {
+    return 'Target unavailable. Copy this reply to use it manually.';
   }
 
   return 'Could not insert or copy this reply.';

@@ -10,6 +10,7 @@ import {
   DRAFT_GENERATION_STARTED,
   GET_CURRENT_WORKSPACE_SESSION,
   GET_DOMAIN_HISTORY,
+  GET_INSERTION_TARGET_STATUS,
   GET_RUNTIME_STATUS,
   INSERT_REPLY,
   RESTORE_DOMAIN_THREAD,
@@ -23,6 +24,7 @@ import {
   type DraftletMessage,
   type DraftVariantStateResult,
   type InsertReplyResult,
+  type InsertionTargetStatusResult,
   type RestoreDomainThreadResult,
   type RuntimeStatusResult,
   type StartDraftGenerationResult,
@@ -259,7 +261,12 @@ function applySession(session: WorkspaceSession) {
     });
   }
 
+  panel.setInsertionTargetStatus({
+    status: session.insertionTargetStatus ?? (session.insertionTarget ? 'stale' : 'needs_recapture'),
+    message: insertionTargetMessage(session),
+  });
   void refreshHealth();
+  void refreshInsertionTargetStatus();
 }
 
 async function refreshHealth() {
@@ -273,6 +280,33 @@ async function refreshHealth() {
   } catch {
     panel.setConnectionStatus('disconnected');
     return false;
+  }
+}
+
+async function refreshInsertionTargetStatus() {
+  if (!currentSession) {
+    panel.setInsertionTargetStatus({
+      status: 'needs_recapture',
+      message: 'Open Draftlet from a compose field to enable insertion.',
+    });
+    return;
+  }
+
+  try {
+    const response = await browser.runtime.sendMessage({
+      type: GET_INSERTION_TARGET_STATUS,
+      sessionId: currentSession.sessionId,
+    } satisfies DraftletMessage) as InsertionTargetStatusResult;
+
+    panel.setInsertionTargetStatus({
+      status: response.status,
+      message: response.message,
+    });
+  } catch {
+    panel.setInsertionTargetStatus({
+      status: 'unavailable',
+      message: 'Insertion target is unavailable.',
+    });
   }
 }
 
@@ -432,6 +466,8 @@ async function updateVariantState(
 }
 
 async function insertIntoActivePage(replyText: string, variantId?: string): Promise<InsertionResult> {
+  await refreshInsertionTargetStatus();
+
   try {
     const response = await browser.runtime.sendMessage({
       type: INSERT_REPLY,
@@ -439,6 +475,13 @@ async function insertIntoActivePage(replyText: string, variantId?: string): Prom
       replyText,
       variantId,
     } satisfies DraftletMessage) as InsertReplyResult;
+
+    if (response.result.targetStatus) {
+      panel.setInsertionTargetStatus({
+        status: response.result.targetStatus,
+        message: response.result.message,
+      });
+    }
 
     if (response.result.status !== 'failed') {
       return response.result;
@@ -449,10 +492,28 @@ async function insertIntoActivePage(replyText: string, variantId?: string): Prom
 
   try {
     await navigator.clipboard.writeText(replyText);
-    return { status: 'copied', message: 'Copied instead' };
+    return { status: 'copied', message: 'Insertion target unavailable; copied instead.', targetStatus: 'needs_recapture' };
   } catch {
-    return { status: 'failed', message: 'Insert failed' };
+    return { status: 'failed', message: 'Insert failed', targetStatus: 'unavailable' };
   }
+}
+
+function insertionTargetMessage(session: WorkspaceSession): string {
+  const status = session.insertionTargetStatus ?? (session.insertionTarget ? 'stale' : 'needs_recapture');
+
+  if (status === 'live') {
+    return 'Target available';
+  }
+
+  if (status === 'stale') {
+    return 'Target stale; Draftlet will recheck before inserting.';
+  }
+
+  if (status === 'unavailable') {
+    return 'Target unavailable; Copy still works.';
+  }
+
+  return 'Focus a compose field and reopen Draftlet to enable insertion.';
 }
 
 async function closeSidePanel() {

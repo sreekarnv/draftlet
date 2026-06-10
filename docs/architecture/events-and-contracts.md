@@ -122,7 +122,7 @@ The current v2 extension generation flow is intentionally transitional but now s
 - service worker emits `draftlet:draft-generation-started`, `draftlet:draft-generation-completed`, and `draftlet:draft-generation-failed` for generation lifecycle, while streamed variants reach extension surfaces through `draftlet:conversation-thread-updated` snapshots
 - side panel renders thread snapshots as the primary thread workspace, grouped by `Turn` and `DraftVariant`
 - side panel can cancel with `draftlet:cancel-draft-generation` using `sessionId` and `generationId`; background records runtime cancellation intent, aborts the browser-local fetch handle when present, and the runtime stream stops on the cancelled run state at the next bounded stream check
-- insertion remains explicit: side panel sends `draftlet:insert-reply` with `sessionId`, service worker forwards it to the session tab, and the content script performs best-effort DOM insertion
+- insertion remains explicit: side panel sends `draftlet:insert-reply` with `sessionId`, service worker revalidates the bounded compose target when available, forwards approved text to the plausible live tab, and the content script performs best-effort DOM insertion
 
 This keeps the webpage out of runtime transport and generation workflow ownership while preserving side-panel ownership of the workflow. Runtime persistence is the durable source for workspace sessions, threads, turns, variants, and generation run state.
 
@@ -148,7 +148,7 @@ The current v2 generation flow is transitional but now uses durable runtime doma
 - side panel restores a selected history item with `draftlet:restore-domain-thread`; background hydrates the selected runtime session/thread snapshot and emits workspace/thread updates
 - side panel can request `draftlet:set-current-draft-variant` or `draftlet:accept-draft-variant`; background patches runtime state and emits an updated thread snapshot
 - refinement prompts prefer the accepted variant, then the current variant, then the latest prior turn variants as a compatibility fallback
-- insertion remains explicit: side panel sends `draftlet:insert-reply` with `sessionId` and `variantId` when available; service worker forwards approved text to the session tab, and the content script performs best-effort DOM insertion
+- insertion remains explicit: side panel sends `draftlet:insert-reply` with `sessionId` and `variantId` when available; service worker checks `ComposeTargetRef` metadata, asks the content script to revalidate the target with `draftlet:revalidate-insertion-target`, and reports live/stale/unavailable status for fallback copy/manual use
 
 Legacy runtime `Generation`/`Reply` persistence and `/history` are retired. Side-panel history and streaming now use domain-backed `WorkspaceSession` / `ConversationThread` / `Turn` / `DraftVariant` data end to end, with `GenerationRun` as the bounded durable execution lease for active/recoverable generation work. Current and accepted variant state is bounded to one variant per thread in this phase.
 
@@ -206,6 +206,7 @@ These names can adapt to existing repo conventions, but the concepts should rema
 Content script to service worker:
 - selection captured
 - compose target detected
+- compose target revalidated
 - insertion requested
 - insertion succeeded or failed
 

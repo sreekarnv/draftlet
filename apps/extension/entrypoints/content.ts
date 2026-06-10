@@ -2,12 +2,14 @@ import { createFloatingButton } from '../components/floating-button';
 import {
   INSERT_REPLY,
   LAUNCH_SIDE_PANEL,
+  REVALIDATE_INSERTION_TARGET,
   type DraftletMessage,
   type DraftletSidePanelContext,
+  type InsertionTargetStatusResult,
   type InsertReplyResult,
   type LaunchSidePanelResult,
 } from '../core/messages';
-import { captureFocusedTarget, type FocusSnapshot } from '../core/focus';
+import { captureFocusedTarget, isTargetRefLive, restoreTargetFromRef, type FocusSnapshot } from '../core/focus';
 import { insertReply } from '../core/insertion';
 import { getPageSelection, type PageSelection } from '../core/selection';
 
@@ -22,7 +24,7 @@ export default defineContentScript({
         return false;
       }
 
-      const context = createSidePanelContext(activeSelection.text);
+      const context = createSidePanelContext(activeSelection.text, insertionTarget);
 
       try {
         const response = await browser.runtime.sendMessage({
@@ -83,12 +85,60 @@ export default defineContentScript({
       }
     };
 
-    const handleRuntimeMessage = (message: DraftletMessage): Promise<InsertReplyResult> | undefined => {
-      if (message.type !== INSERT_REPLY) {
-        return undefined;
+    const resolveInsertionTarget = (targetRef = insertionTarget?.targetRef): FocusSnapshot | null => {
+      if (!targetRef) {
+        return insertionTarget;
       }
 
-      return insertReply(message.replyText, insertionTarget).then((result) => ({ result }));
+      if (isTargetRefLive(targetRef, insertionTarget)) {
+        return insertionTarget;
+      }
+
+      const restored = restoreTargetFromRef(targetRef);
+
+      if (restored) {
+        insertionTarget = restored;
+        return restored;
+      }
+
+      return null;
+    };
+
+    const revalidateInsertionTarget = (targetRef = insertionTarget?.targetRef): InsertionTargetStatusResult => {
+      if (!targetRef) {
+        const captured = captureFocusedTarget();
+        insertionTarget = captured ?? insertionTarget;
+
+        if (captured?.targetRef) {
+          return { status: 'live', target: captured.targetRef, message: 'Active compose target is available.' };
+        }
+
+        return { status: 'needs_recapture', message: 'Focus a compose field before inserting.' };
+      }
+
+      const target = resolveInsertionTarget(targetRef);
+
+      if (!target?.targetRef) {
+        return { status: 'stale', target: targetRef, message: 'The saved compose target is no longer available on this page.' };
+      }
+
+      return { status: 'live', target: target.targetRef, message: 'Compose target is available.' };
+    };
+
+    const handleRuntimeMessage = (message: DraftletMessage): Promise<InsertReplyResult | InsertionTargetStatusResult> | undefined => {
+      if (message.type === REVALIDATE_INSERTION_TARGET) {
+        return Promise.resolve(revalidateInsertionTarget(message.target));
+      }
+
+      if (message.type === INSERT_REPLY) {
+        const target = resolveInsertionTarget(message.target);
+        return insertReply(message.replyText, target).then((result) => {
+          insertionTarget = target?.element.isConnected ? target : insertionTarget;
+          return { result };
+        });
+      }
+
+      return undefined;
     };
 
     browser.runtime.onMessage.addListener(handleRuntimeMessage);
@@ -111,11 +161,12 @@ export default defineContentScript({
   },
 });
 
-function createSidePanelContext(selectedText: string): DraftletSidePanelContext {
+function createSidePanelContext(selectedText: string, target: FocusSnapshot | null): DraftletSidePanelContext {
   return {
     selectedText,
     sourceUrl: window.location.href,
     sourceDomain: window.location.hostname || undefined,
     pageTitle: document.title || undefined,
+    composeTarget: target?.targetRef,
   };
 }

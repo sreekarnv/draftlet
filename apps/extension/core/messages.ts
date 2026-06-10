@@ -1,4 +1,4 @@
-import type { ConnectionStatus, InsertionResult, PanelView, Tone } from './types';
+import type { ComposeTargetRef, ConnectionStatus, InsertionResult, InsertionTargetStatus, PanelView, Tone } from './types';
 
 export const LAUNCH_SIDE_PANEL = 'draftlet:launch-side-panel';
 export const GET_CURRENT_WORKSPACE_SESSION = 'draftlet:get-current-workspace-session';
@@ -14,6 +14,8 @@ export const DRAFT_GENERATION_STARTED = 'draftlet:draft-generation-started';
 export const DRAFT_GENERATION_COMPLETED = 'draftlet:draft-generation-completed';
 export const DRAFT_GENERATION_FAILED = 'draftlet:draft-generation-failed';
 export const INSERT_REPLY = 'draftlet:insert-reply';
+export const GET_INSERTION_TARGET_STATUS = 'draftlet:get-insertion-target-status';
+export const REVALIDATE_INSERTION_TARGET = 'draftlet:revalidate-insertion-target';
 export const SET_CURRENT_DRAFT_VARIANT = 'draftlet:set-current-draft-variant';
 export const ACCEPT_DRAFT_VARIANT = 'draftlet:accept-draft-variant';
 
@@ -26,6 +28,7 @@ export interface DraftletSidePanelContext {
   pageTitle?: string;
   tabId?: number;
   windowId?: number;
+  composeTarget?: ComposeTargetRef;
 }
 
 export type WorkspaceSessionStatus = 'active' | 'stale';
@@ -52,6 +55,8 @@ export interface WorkspaceSession {
   updatedAt: string;
   activeThreadId?: string;
   activeGeneration?: WorkspaceSessionGeneration;
+  insertionTarget?: ComposeTargetRef;
+  insertionTargetStatus?: InsertionTargetStatus;
 }
 
 export interface SourceSnapshot {
@@ -182,7 +187,9 @@ export type DraftletMessage =
       turnId?: string;
       error: DraftletError;
     }
-  | { type: typeof INSERT_REPLY; sessionId?: string; replyText: string; variantId?: string }
+  | { type: typeof INSERT_REPLY; sessionId?: string; replyText: string; variantId?: string; target?: ComposeTargetRef }
+  | { type: typeof GET_INSERTION_TARGET_STATUS; sessionId?: string }
+  | { type: typeof REVALIDATE_INSERTION_TARGET; sessionId: string; target?: ComposeTargetRef }
   | { type: typeof SET_CURRENT_DRAFT_VARIANT; sessionId: string; variantId: string }
   | { type: typeof ACCEPT_DRAFT_VARIANT; sessionId: string; variantId: string };
 
@@ -228,6 +235,12 @@ export interface CancelDraftGenerationResult {
 
 export interface InsertReplyResult {
   result: InsertionResult;
+}
+
+export interface InsertionTargetStatusResult {
+  status: InsertionTargetStatus;
+  target?: ComposeTargetRef;
+  message?: string;
 }
 
 export interface DraftVariantStateResult {

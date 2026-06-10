@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 import { DEFAULT_PANEL_VIEW, DEFAULT_TONE } from '../../core/constants';
 import type { ConversationThreadSnapshot, DomainHistoryItem } from '../../core/messages';
 import type { ConnectionStatus, PanelState, PanelView, Tone } from '../../core/types';
-import type { PanelAction, PanelCallbacks, PanelController } from '../../ui/mount-panel';
+import type { InsertionTargetViewState, PanelAction, PanelCallbacks, PanelController } from '../../ui/mount-panel';
 import { ReplyCard } from './ReplyCard';
 import { StatusBadge } from './StatusBadge';
 import { ToneTabs } from './ToneTabs';
@@ -24,6 +24,7 @@ interface PanelViewState {
   tone: Tone;
   state: PanelState;
   connectionStatus: ConnectionStatus;
+  insertionTarget: InsertionTargetViewState;
   threadSnapshot: ConversationThreadSnapshot | null;
   history: DomainHistoryItem[];
   historyState: LoadState;
@@ -38,6 +39,7 @@ export function DraftletPanel({ callbacks, controller }: DraftletPanelProps) {
     tone: callbacks.initialTone ?? DEFAULT_TONE,
     state: 'empty',
     connectionStatus: 'disconnected',
+    insertionTarget: { status: 'needs_recapture', message: 'Open Draftlet from a compose field to enable insertion.' },
     threadSnapshot: null,
     history: [],
     historyState: 'idle',
@@ -154,7 +156,12 @@ function renderComposerWorkspace(
             <FileText aria-hidden="true" className="h-3.5 w-3.5" />
             Context
           </div>
-          <div className={cn('text-xs font-semibold leading-5 text-slate-500', stateToneClass(view.state))}>{getStateText(view)}</div>
+          <div className="grid justify-items-end gap-0.5 text-right">
+            <div className={cn('text-xs font-semibold leading-5 text-slate-500', stateToneClass(view.state))}>{getStateText(view)}</div>
+            <div className={cn('text-[11px] font-medium leading-4', targetToneClass(view.insertionTarget.status))}>
+              {targetStatusLabel(view.insertionTarget)}
+            </div>
+          </div>
         </div>
         <p className="m-0 max-h-[4.75rem] overflow-hidden text-[13.5px] leading-6 text-slate-800">{view.selectedText}</p>
       </div>
@@ -289,6 +296,7 @@ function renderTurnGroup(
               onAcceptVariant={callbacks.onAcceptVariant}
               onInsert={callbacks.onInsert}
               onSelectVariant={callbacks.onSelectVariant}
+              targetStatus={view.insertionTarget.status}
               variant={variant}
             />
           ))}
@@ -430,6 +438,10 @@ function reducePanelAction(current: PanelViewState, action: PanelAction): PanelV
     return { ...current, connectionStatus: action.status };
   }
 
+  if (action.type === 'setInsertionTargetStatus') {
+    return { ...current, insertionTarget: action.target };
+  }
+
   if (action.type === 'setState') {
     return { ...current, state: action.state, errorMessage: action.message };
   }
@@ -476,6 +488,34 @@ function stateToneClass(state: PanelState) {
   }
 
   return '';
+}
+
+function targetStatusLabel(target: InsertionTargetViewState) {
+  if (target.status === 'live') {
+    return 'Target available';
+  }
+
+  if (target.status === 'stale') {
+    return 'Target stale';
+  }
+
+  if (target.status === 'unavailable') {
+    return 'Target unavailable';
+  }
+
+  return 'Needs recapture';
+}
+
+function targetToneClass(status: InsertionTargetViewState['status']) {
+  if (status === 'live') {
+    return 'text-emerald-700';
+  }
+
+  if (status === 'stale') {
+    return 'text-amber-700';
+  }
+
+  return 'text-slate-500';
 }
 
 function draftCount(view: PanelViewState) {

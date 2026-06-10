@@ -13,6 +13,7 @@ import type {
   WorkspaceSessionSnapshot,
 } from './messages';
 import type {
+  ComposeTargetRef,
   PreferenceItem,
   PreferenceUpsert,
   ReplyRequestPayload,
@@ -85,9 +86,10 @@ export async function putWorkspaceSession(session: WorkspaceSession): Promise<Wo
     source_domain: session.latestContext.sourceDomain,
     status: session.status,
     active_thread_id: session.activeThreadId,
+    compose_target: mapComposeTargetWrite(session.insertionTarget ?? session.latestContext.composeTarget),
   });
 
-  return mapWorkspaceSession(response, session.latestContext.activeView, session.latestContext.tone);
+  return mapWorkspaceSession(response, session.latestContext.activeView, session.latestContext.tone, session.insertionTargetStatus);
 }
 
 export async function getWorkspaceSessionSnapshot(sessionId: string, signal?: AbortSignal): Promise<WorkspaceSessionSnapshot | null> {
@@ -469,7 +471,12 @@ function mapConversationThreadSnapshot(snapshot: ConversationThreadSnapshotRead)
   };
 }
 
-function mapWorkspaceSession(session: WorkspaceSessionRead, activeView?: WorkspaceSession['latestContext']['activeView'], tone?: WorkspaceSession['latestContext']['tone']): WorkspaceSession {
+function mapWorkspaceSession(
+  session: WorkspaceSessionRead,
+  activeView?: WorkspaceSession['latestContext']['activeView'],
+  tone?: WorkspaceSession['latestContext']['tone'],
+  insertionTargetStatus?: WorkspaceSession['insertionTargetStatus'],
+): WorkspaceSession {
   return {
     sessionId: session.session_id,
     tabId: session.tab_id ?? -1,
@@ -485,11 +492,50 @@ function mapWorkspaceSession(session: WorkspaceSessionRead, activeView?: Workspa
       windowId: session.window_id ?? undefined,
       activeView,
       tone,
+      composeTarget: mapComposeTarget(session.compose_target),
     },
     status: session.status === 'stale' ? 'stale' : 'active',
     activeThreadId: session.active_thread_id ?? undefined,
+    insertionTarget: mapComposeTarget(session.compose_target),
+    insertionTargetStatus: insertionTargetStatus ?? (session.compose_target ? 'stale' : 'needs_recapture'),
     createdAt: session.created_at,
     updatedAt: session.updated_at,
+  };
+}
+
+function mapComposeTarget(target?: ComposeTargetRead | null): ComposeTargetRef | undefined {
+  if (!target) {
+    return undefined;
+  }
+
+  return {
+    targetId: target.target_id,
+    kind: target.kind === 'textarea' || target.kind === 'contenteditable' ? target.kind : 'input',
+    pageUrl: target.page_url,
+    origin: target.origin ?? undefined,
+    pageTitle: target.page_title ?? undefined,
+    selector: target.selector ?? undefined,
+    fingerprint: target.fingerprint,
+    label: target.label ?? undefined,
+    lastSeenAt: target.last_seen_at,
+  };
+}
+
+function mapComposeTargetWrite(target?: ComposeTargetRef): ComposeTargetWrite | undefined {
+  if (!target) {
+    return undefined;
+  }
+
+  return {
+    target_id: target.targetId,
+    kind: target.kind,
+    page_url: target.pageUrl,
+    origin: target.origin,
+    page_title: target.pageTitle,
+    selector: target.selector,
+    fingerprint: target.fingerprint,
+    label: target.label,
+    last_seen_at: target.lastSeenAt,
   };
 }
 
@@ -600,8 +646,33 @@ interface WorkspaceSessionRead {
   source_domain: string | null;
   status: string;
   active_thread_id: string | null;
+  compose_target?: ComposeTargetRead | null;
   created_at: string;
   updated_at: string;
+}
+
+interface ComposeTargetRead {
+  target_id: string;
+  kind: string;
+  page_url: string;
+  origin: string | null;
+  page_title: string | null;
+  selector: string | null;
+  fingerprint: string;
+  label: string | null;
+  last_seen_at: string;
+}
+
+interface ComposeTargetWrite {
+  target_id: string;
+  kind: string;
+  page_url: string;
+  origin?: string;
+  page_title?: string;
+  selector?: string;
+  fingerprint: string;
+  label?: string;
+  last_seen_at: string;
 }
 
 interface ConversationThreadRead {
