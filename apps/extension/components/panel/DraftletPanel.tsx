@@ -106,6 +106,17 @@ export function DraftletPanel({ callbacks, controller }: DraftletPanelProps) {
     callbacks.onViewChange?.(activeView);
   };
 
+  const recaptureInsertionTarget = async () => {
+    if (!callbacks.onRecaptureInsertionTarget) {
+      setView((current) => ({ ...current, persistenceMessage: 'Target recapture is unavailable here.' }));
+      return;
+    }
+
+    setView((current) => ({ ...current, persistenceMessage: 'Recapturing target...' }));
+    const result = await callbacks.onRecaptureInsertionTarget();
+    setView((current) => ({ ...current, persistenceMessage: result.message }));
+  };
+
   const [refinementInstruction, setRefinementInstruction] = useState('');
   return (
     <section
@@ -124,7 +135,9 @@ export function DraftletPanel({ callbacks, controller }: DraftletPanelProps) {
             <X aria-hidden="true" className="h-4 w-4" />
           </Button>
         </div>
-        {view.activeView === 'replies' ? renderComposerWorkspace(view, callbacks, selectTone, refinementInstruction, setRefinementInstruction) : null}
+        {view.activeView === 'replies'
+          ? renderComposerWorkspace(view, callbacks, selectTone, recaptureInsertionTarget, refinementInstruction, setRefinementInstruction)
+          : null}
         <div className="mt-3">
           {renderViewNavigation(view, selectView)}
         </div>
@@ -142,6 +155,7 @@ function renderComposerWorkspace(
   view: PanelViewState,
   callbacks: PanelCallbacks,
   selectTone: (tone: Tone) => void,
+  recaptureInsertionTarget: () => Promise<void>,
   refinementInstruction: string,
   setRefinementInstruction: (instruction: string) => void,
 ) {
@@ -156,11 +170,9 @@ function renderComposerWorkspace(
             <FileText aria-hidden="true" className="h-3.5 w-3.5" />
             Context
           </div>
-          <div className="grid justify-items-end gap-0.5 text-right">
+          <div className="grid justify-items-end gap-1 text-right">
             <div className={cn('text-xs font-semibold leading-5 text-slate-500', stateToneClass(view.state))}>{getStateText(view)}</div>
-            <div className={cn('text-[11px] font-medium leading-4', targetToneClass(view.insertionTarget.status))}>
-              {targetStatusLabel(view.insertionTarget)}
-            </div>
+            {renderTargetStatus(view, recaptureInsertionTarget)}
           </div>
         </div>
         <p className="m-0 max-h-[4.75rem] overflow-hidden text-[13.5px] leading-6 text-slate-800">{view.selectedText}</p>
@@ -201,6 +213,33 @@ function renderComposerWorkspace(
         ) : null}
       </div>
     </section>
+  );
+}
+
+function renderTargetStatus(view: PanelViewState, recaptureInsertionTarget: () => Promise<void>) {
+  const canRecapture = view.insertionTarget.status !== 'live';
+
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-1.5">
+      <div
+        className={cn('text-[11px] font-medium leading-4', targetToneClass(view.insertionTarget.status))}
+        title={view.insertionTarget.message}
+      >
+        {targetStatusLabel(view.insertionTarget)}
+      </div>
+      {canRecapture ? (
+        <Button
+          aria-label="Recapture insertion target"
+          className="h-6 px-2 text-[11px] leading-4"
+          onClick={() => void recaptureInsertionTarget()}
+          type="button"
+          variant="secondary"
+        >
+          <RefreshCw aria-hidden="true" className="h-3 w-3" />
+          Recapture
+        </Button>
+      ) : null}
+    </div>
   );
 }
 

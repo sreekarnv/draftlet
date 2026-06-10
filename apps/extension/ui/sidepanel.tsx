@@ -13,6 +13,7 @@ import {
   GET_INSERTION_TARGET_STATUS,
   GET_RUNTIME_STATUS,
   INSERT_REPLY,
+  RECAPTURE_INSERTION_TARGET,
   RESTORE_DOMAIN_THREAD,
   SET_CURRENT_DRAFT_VARIANT,
   WORKSPACE_SESSION_UPDATED,
@@ -25,6 +26,7 @@ import {
   type DraftVariantStateResult,
   type InsertReplyResult,
   type InsertionTargetStatusResult,
+  type RecaptureInsertionTargetResult,
   type RestoreDomainThreadResult,
   type RuntimeStatusResult,
   type StartDraftGenerationResult,
@@ -86,6 +88,9 @@ const mountedPanel = mountDraftletPanel(root, {
   },
   onInsert(replyText, variantId) {
     return insertIntoActivePage(replyText, variantId);
+  },
+  onRecaptureInsertionTarget() {
+    return recaptureInsertionTarget();
   },
   onSelectVariant(variantId) {
     return setVariantCurrent(variantId);
@@ -498,6 +503,57 @@ async function insertIntoActivePage(replyText: string, variantId?: string): Prom
   }
 }
 
+async function recaptureInsertionTarget() {
+  if (!currentSession) {
+    panel.setInsertionTargetStatus({
+      status: 'unavailable',
+      message: 'No active Draftlet session.',
+    });
+    return { ok: false, message: 'No active Draftlet session.' };
+  }
+
+  panel.setInsertionTargetStatus({
+    status: 'needs_recapture',
+    message: 'Focus a compose field on the page, then recapture.',
+  });
+
+  try {
+    const response = await browser.runtime.sendMessage({
+      type: RECAPTURE_INSERTION_TARGET,
+      sessionId: currentSession.sessionId,
+    } satisfies DraftletMessage) as RecaptureInsertionTargetResult;
+
+    panel.setInsertionTargetStatus({
+      status: response.status,
+      message: response.message,
+    });
+
+    if (response.recaptured && response.target) {
+      currentSession = {
+        ...currentSession,
+        insertionTarget: response.target,
+        insertionTargetStatus: response.status,
+        latestContext: {
+          ...currentSession.latestContext,
+          composeTarget: response.target,
+        },
+      };
+    }
+
+    return {
+      ok: response.recaptured,
+      message: response.message,
+    };
+  } catch {
+    const message = 'Draftlet could not recapture the target. Copy still works.';
+    panel.setInsertionTargetStatus({
+      status: 'unavailable',
+      message,
+    });
+    return { ok: false, message };
+  }
+}
+
 function insertionTargetMessage(session: WorkspaceSession): string {
   const status = session.insertionTargetStatus ?? (session.insertionTarget ? 'stale' : 'needs_recapture');
 
@@ -513,7 +569,7 @@ function insertionTargetMessage(session: WorkspaceSession): string {
     return 'Target unavailable; Copy still works.';
   }
 
-  return 'Focus a compose field and reopen Draftlet to enable insertion.';
+  return 'Focus a compose field and recapture to enable insertion.';
 }
 
 async function closeSidePanel() {

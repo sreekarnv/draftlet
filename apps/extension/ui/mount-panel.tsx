@@ -62,6 +62,7 @@ export interface PanelCallbacks {
   onLoadHistory?: () => Promise<DomainHistoryItem[]>;
   onRestoreHistoryItem?: (item: DomainHistoryItem) => Promise<VariantActionResult>;
   onInsert: (replyText: string, variantId?: string) => Promise<InsertionResult>;
+  onRecaptureInsertionTarget?: () => Promise<VariantActionResult>;
   onSelectVariant?: (variantId: string) => Promise<VariantActionResult>;
   onAcceptVariant?: (variantId: string) => Promise<VariantActionResult>;
   onCloseRequest: () => void;

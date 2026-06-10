@@ -16,6 +16,7 @@ export const DRAFT_GENERATION_FAILED = 'draftlet:draft-generation-failed';
 export const INSERT_REPLY = 'draftlet:insert-reply';
 export const GET_INSERTION_TARGET_STATUS = 'draftlet:get-insertion-target-status';
 export const REVALIDATE_INSERTION_TARGET = 'draftlet:revalidate-insertion-target';
+export const RECAPTURE_INSERTION_TARGET = 'draftlet:recapture-insertion-target';
 export const SET_CURRENT_DRAFT_VARIANT = 'draftlet:set-current-draft-variant';
 export const ACCEPT_DRAFT_VARIANT = 'draftlet:accept-draft-variant';
 
@@ -153,6 +154,13 @@ export interface DraftletError {
   correlationId?: string;
 }
 
+export type RecaptureInsertionTargetFailureReason =
+  | 'session_not_found'
+  | 'tab_unavailable'
+  | 'content_script_unavailable'
+  | 'no_focused_compose_target'
+  | 'target_metadata_missing';
+
 export type DraftletMessage =
   | { type: typeof LAUNCH_SIDE_PANEL; context: DraftletSidePanelContext }
   | { type: typeof GET_CURRENT_WORKSPACE_SESSION; tabId?: number }
@@ -190,6 +198,7 @@ export type DraftletMessage =
   | { type: typeof INSERT_REPLY; sessionId?: string; replyText: string; variantId?: string; target?: ComposeTargetRef }
   | { type: typeof GET_INSERTION_TARGET_STATUS; sessionId?: string }
   | { type: typeof REVALIDATE_INSERTION_TARGET; sessionId: string; target?: ComposeTargetRef }
+  | { type: typeof RECAPTURE_INSERTION_TARGET; sessionId: string }
   | { type: typeof SET_CURRENT_DRAFT_VARIANT; sessionId: string; variantId: string }
   | { type: typeof ACCEPT_DRAFT_VARIANT; sessionId: string; variantId: string };
 
@@ -241,6 +250,14 @@ export interface InsertionTargetStatusResult {
   status: InsertionTargetStatus;
   target?: ComposeTargetRef;
   message?: string;
+}
+
+export interface RecaptureInsertionTargetResult {
+  recaptured: boolean;
+  status: InsertionTargetStatus;
+  target?: ComposeTargetRef;
+  reason?: RecaptureInsertionTargetFailureReason;
+  message: string;
 }
 
 export interface DraftVariantStateResult {
