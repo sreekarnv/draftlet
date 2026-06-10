@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { claimGenerationRun, reconcileGenerationRuns, streamReplies } from '../../core/api';
+import {
+  claimGenerationRun,
+  getGenerationRunExecutionState,
+  heartbeatGenerationRun,
+  reconcileGenerationRuns,
+  streamReplies,
+} from '../../core/api';
 import type { ReplyRequestPayload } from '../../core/types';
 
 afterEach(() => {
@@ -76,6 +82,45 @@ describe('generation run runtime API', () => {
       runId: 'generation-1',
       status: 'interrupted',
     });
+  });
+
+  it('heartbeats a runtime generation run lease', async () => {
+    const fetchMock = vi.fn(async () => Response.json(generationRunRead({ status: 'streaming' })));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const run = await heartbeatGenerationRun('generation-1', 'extension-background');
+
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/domain/generation-runs/generation-1/heartbeat'), expect.objectContaining({
+      method: 'PATCH',
+    }));
+    expect(run).toMatchObject({
+      runId: 'generation-1',
+      status: 'streaming',
+      leaseOwner: 'extension-background',
+    });
+  });
+
+  it('queries runtime generation execution state', async () => {
+    const fetchMock = vi.fn(async () => Response.json({
+      checked_at: '2026-06-09T00:00:02.000Z',
+      stale_after_seconds: 30,
+      active: [generationRunRead({ status: 'streaming' })],
+      live: [generationRunRead({ status: 'streaming' })],
+      stale: [],
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const state = await getGenerationRunExecutionState({
+      sessionId: 'session-1',
+      staleAfterSeconds: 30,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/domain/generation-runs/execution-state?'), expect.any(Object));
+    expect(state.live[0]).toMatchObject({
+      runId: 'generation-1',
+      status: 'streaming',
+    });
+    expect(state.stale).toEqual([]);
   });
 });
 

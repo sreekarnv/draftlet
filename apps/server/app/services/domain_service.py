@@ -11,6 +11,8 @@ from app.schemas.domain import (
     DraftVariantCreate,
     DraftVariantStateUpdate,
     GenerationRunClaim,
+    GenerationRunExecutionState,
+    GenerationRunHeartbeat,
     GenerationRunReconcileRequest,
     GenerationRunStatusUpdate,
     SourceSnapshot,
@@ -21,6 +23,15 @@ from app.schemas.domain import (
 )
 
 ACTIVE_GENERATION_RUN_STATUSES = {"active", "streaming"}
+TERMINAL_GENERATION_RUN_STATUSES = {"completed", "failed", "cancelled", "interrupted"}
+DEFAULT_GENERATION_RUN_STALE_AFTER_SECONDS = 30
+
+
+class GenerationRunConflictError(RuntimeError):
+    def __init__(self, code: str, message: str, run: GenerationRun) -> None:
+        super().__init__(message)
+        self.code = code
+        self.run = run
 
 
 def upsert_workspace_session(session: Session, payload: WorkspaceSessionUpsert) -> WorkspaceSession:
@@ -157,6 +168,35 @@ def claim_generation_run(session: Session, payload: GenerationRunClaim) -> Gener
 
     run = session.get(GenerationRun, payload.run_id)
     now = datetime.now(UTC)
+    reconcile_stale_generation_runs(
+        session,
+        GenerationRunReconcileRequest(
+            session_id=payload.session_id,
+            stale_after_seconds=payload.stale_after_seconds,
+            error_code="generation_run_stale",
+            error_message="A previous draft generation lease became stale before completion.",
+        ),
+    )
+    active_conflicts = [
+        active_run
+        for active_run in list_active_generation_runs(session, session_id=payload.session_id)
+        if active_run.run_id != payload.run_id
+    ]
+
+    if active_conflicts:
+        conflict = active_conflicts[0]
+        if conflict.turn_id == payload.turn_id:
+            raise GenerationRunConflictError(
+                "generation_run_turn_active",
+                "This turn already has an active draft generation run.",
+                conflict,
+            )
+
+        raise GenerationRunConflictError(
+            "generation_run_session_active",
+            "This session already has an active draft generation run.",
+            conflict,
+        )
 
     if run:
         run.session_id = payload.session_id
@@ -190,6 +230,27 @@ def claim_generation_run(session: Session, payload: GenerationRunClaim) -> Gener
     return run
 
 
+def heartbeat_generation_run(session: Session, run_id: str, payload: GenerationRunHeartbeat | None = None) -> GenerationRun | None:
+    run = session.get(GenerationRun, run_id)
+
+    if not run:
+        return None
+
+    session.refresh(run)
+
+    if run.status in TERMINAL_GENERATION_RUN_STATUSES:
+        return run
+
+    if payload and payload.lease_owner:
+        run.lease_owner = payload.lease_owner
+
+    run.heartbeat_at = datetime.now(UTC)
+    session.add(run)
+    session.commit()
+    session.refresh(run)
+    return run
+
+
 def list_active_generation_runs(
     session: Session,
     session_id: str | None = None,
@@ -210,11 +271,43 @@ def list_active_generation_runs(
     return list(session.scalars(statement.order_by(GenerationRun.claimed_at.desc())))
 
 
+def inspect_generation_run_execution_state(
+    session: Session,
+    session_id: str | None = None,
+    thread_id: str | None = None,
+    turn_id: str | None = None,
+    stale_after_seconds: int = DEFAULT_GENERATION_RUN_STALE_AFTER_SECONDS,
+) -> GenerationRunExecutionState:
+    now = datetime.now(UTC)
+    active_runs = list_active_generation_runs(session, session_id=session_id, thread_id=thread_id, turn_id=turn_id)
+    live: list[GenerationRun] = []
+    stale: list[GenerationRun] = []
+
+    for run in active_runs:
+        if is_generation_run_stale(run, now, stale_after_seconds):
+            stale.append(run)
+        else:
+            live.append(run)
+
+    return GenerationRunExecutionState(
+        checked_at=now,
+        stale_after_seconds=stale_after_seconds,
+        active=active_runs,
+        live=live,
+        stale=stale,
+    )
+
+
 def update_generation_run_status(session: Session, run_id: str, payload: GenerationRunStatusUpdate) -> GenerationRun | None:
     run = session.get(GenerationRun, run_id)
 
     if not run:
         return None
+
+    session.refresh(run)
+
+    if run.status in TERMINAL_GENERATION_RUN_STATUSES:
+        return run
 
     apply_generation_run_lifecycle(run, payload.status, payload.error_code, payload.error_message)
     reconcile_turn_for_generation_run(session, run, payload.status, payload.error_code, payload.error_message)
@@ -226,7 +319,6 @@ def update_generation_run_status(session: Session, run_id: str, payload: Generat
 
 def reconcile_stale_generation_runs(session: Session, payload: GenerationRunReconcileRequest) -> list[GenerationRun]:
     now = datetime.now(UTC)
-    cutoff = now - timedelta(seconds=payload.stale_after_seconds)
     runs = list_active_generation_runs(
         session,
         session_id=payload.session_id,
@@ -236,9 +328,7 @@ def reconcile_stale_generation_runs(session: Session, payload: GenerationRunReco
     reconciled: list[GenerationRun] = []
 
     for run in runs:
-        activity_at = as_utc(run.heartbeat_at or run.claimed_at or run.updated_at)
-
-        if activity_at and activity_at > cutoff:
+        if not is_generation_run_stale(run, now, payload.stale_after_seconds):
             continue
 
         apply_generation_run_lifecycle(run, "interrupted", payload.error_code, payload.error_message)
@@ -252,6 +342,23 @@ def reconcile_stale_generation_runs(session: Session, payload: GenerationRunReco
         session.refresh(run)
 
     return reconciled
+
+
+def is_generation_run_stale(run: GenerationRun, now: datetime | None = None, stale_after_seconds: int = DEFAULT_GENERATION_RUN_STALE_AFTER_SECONDS) -> bool:
+    checked_at = now or datetime.now(UTC)
+    cutoff = checked_at - timedelta(seconds=stale_after_seconds)
+    activity_at = as_utc(run.heartbeat_at or run.claimed_at or run.updated_at)
+    return activity_at is None or activity_at <= cutoff
+
+
+def is_generation_run_active(session: Session, run_id: str) -> bool:
+    run = session.get(GenerationRun, run_id)
+
+    if not run:
+        return False
+
+    session.refresh(run)
+    return run.status in ACTIVE_GENERATION_RUN_STATUSES
 
 
 def as_utc(value: datetime | None) -> datetime | None:

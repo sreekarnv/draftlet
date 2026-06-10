@@ -23,6 +23,8 @@ from app.services.domain_service import (
     create_or_update_variant,
     get_thread_snapshot,
     claim_generation_run,
+    heartbeat_generation_run,
+    is_generation_run_active,
     update_generation_run_status,
     update_turn_status,
     upsert_workspace_session,
@@ -57,6 +59,11 @@ async def stream_reply_events(request: ReplyRequest) -> AsyncIterator[ReplyEvent
                 model=model,
                 prompt=prompt,
             ):
+                if not should_continue_runtime_generation(session, request):
+                    return
+
+                heartbeat_runtime_generation(session, request)
+
                 for reply in parser.feed(chunk):
                     variant = persist_variant_for_reply(session, request, turn.turn_id if turn else None, reply_index, reply)
                     reply_index += 1
@@ -66,6 +73,9 @@ async def stream_reply_events(request: ReplyRequest) -> AsyncIterator[ReplyEvent
                         turn_id=turn.turn_id if turn else None,
                         thread_id=request.thread_id,
                     )
+
+            if not should_continue_runtime_generation(session, request):
+                return
 
             for reply in parser.finish():
                 variant = persist_variant_for_reply(session, request, turn.turn_id if turn else None, reply_index, reply)
@@ -165,6 +175,18 @@ def update_runtime_generation_status(
             return
 
     update_turn_status(session, turn_id, status, error_code, error_message)
+
+
+def heartbeat_runtime_generation(session: Session, request: ReplyRequest) -> None:
+    if request.run_id:
+        heartbeat_generation_run(session, request.run_id)
+
+
+def should_continue_runtime_generation(session: Session, request: ReplyRequest) -> bool:
+    if not request.run_id:
+        return True
+
+    return is_generation_run_active(session, request.run_id)
 
 
 def persist_variant_for_reply(

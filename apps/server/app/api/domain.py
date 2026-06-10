@@ -11,6 +11,8 @@ from app.schemas.domain import (
     DraftVariantRead,
     DraftVariantStateUpdate,
     GenerationRunClaim,
+    GenerationRunExecutionState,
+    GenerationRunHeartbeat,
     GenerationRunRead,
     GenerationRunReconcileRequest,
     GenerationRunStatusUpdate,
@@ -25,9 +27,12 @@ from app.services.domain_service import (
     create_or_update_thread,
     create_or_update_turn,
     create_or_update_variant,
+    GenerationRunConflictError,
     claim_generation_run,
     get_session_snapshot,
     get_thread_snapshot,
+    heartbeat_generation_run,
+    inspect_generation_run_execution_state,
     list_active_generation_runs,
     list_recent_domain_history,
     reconcile_stale_generation_runs,
@@ -140,7 +145,20 @@ def put_generation_run(
     if payload.run_id != run_id:
         raise HTTPException(status_code=400, detail="run_id does not match path")
 
-    run = claim_generation_run(session, payload)
+    try:
+        run = claim_generation_run(session, payload)
+    except GenerationRunConflictError as error:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": error.code,
+                "message": str(error),
+                "run_id": error.run.run_id,
+                "session_id": error.run.session_id,
+                "thread_id": error.run.thread_id,
+                "turn_id": error.run.turn_id,
+            },
+        ) from error
 
     if not run:
         raise HTTPException(status_code=404, detail="Generation run domain refs not found")
@@ -156,6 +174,37 @@ def get_active_generation_runs(
     session: Session = Depends(get_session),
 ) -> list[GenerationRunRead]:
     return list_active_generation_runs(session, session_id=session_id, thread_id=thread_id, turn_id=turn_id)
+
+
+@router.get("/generation-runs/execution-state", response_model=GenerationRunExecutionState)
+def get_generation_run_execution_state(
+    session_id: str | None = None,
+    thread_id: str | None = None,
+    turn_id: str | None = None,
+    stale_after_seconds: int = Query(default=30, ge=0),
+    session: Session = Depends(get_session),
+) -> GenerationRunExecutionState:
+    return inspect_generation_run_execution_state(
+        session,
+        session_id=session_id,
+        thread_id=thread_id,
+        turn_id=turn_id,
+        stale_after_seconds=stale_after_seconds,
+    )
+
+
+@router.patch("/generation-runs/{run_id}/heartbeat", response_model=GenerationRunRead)
+def patch_generation_run_heartbeat(
+    run_id: str,
+    payload: GenerationRunHeartbeat | None = None,
+    session: Session = Depends(get_session),
+) -> GenerationRunRead:
+    run = heartbeat_generation_run(session, run_id, payload)
+
+    if not run:
+        raise HTTPException(status_code=404, detail="Generation run not found")
+
+    return run
 
 
 @router.patch("/generation-runs/{run_id}/status", response_model=GenerationRunRead)

@@ -9,6 +9,7 @@ from app.schemas.domain import (
     DraftVariantCreate,
     DraftVariantStateUpdate,
     GenerationRunClaim,
+    GenerationRunHeartbeat,
     GenerationRunReconcileRequest,
     GenerationRunStatusUpdate,
     SourceSnapshot,
@@ -16,11 +17,14 @@ from app.schemas.domain import (
     WorkspaceSessionUpsert,
 )
 from app.services.domain_service import (
+    GenerationRunConflictError,
     claim_generation_run,
     create_or_update_thread,
     create_or_update_turn,
     create_or_update_variant,
     get_session_snapshot,
+    heartbeat_generation_run,
+    inspect_generation_run_execution_state,
     list_active_generation_runs,
     list_recent_domain_history,
     reconcile_stale_generation_runs,
@@ -248,6 +252,254 @@ class DomainServiceTest(unittest.TestCase):
             self.assertIsNotNone(reconciled[0].interrupted_at)
             self.assertEqual(snapshot.thread.turns[0].generation_status, "failed")
             self.assertEqual(snapshot.thread.turns[0].generation_error_code, "generation_interrupted")
+
+    def test_generation_run_claim_blocks_fresh_same_session_conflict(self) -> None:
+        with self.Session() as session:
+            source = SourceSnapshot(
+                selected_text="Can you send the report?",
+                source_url="https://example.com/thread",
+            )
+            workspace = upsert_workspace_session(
+                session,
+                WorkspaceSessionUpsert(
+                    session_id="session-1",
+                    page_url=source.source_url,
+                    selected_text=source.selected_text,
+                ),
+            )
+            thread = create_or_update_thread(
+                session,
+                ConversationThreadCreate(
+                    thread_id="thread-1",
+                    session_id=workspace.session_id,
+                    source=source,
+                ),
+            )
+            first_turn = create_or_update_turn(
+                session,
+                TurnCreate(
+                    turn_id="turn-1",
+                    thread_id=thread.thread_id,
+                    source=source,
+                    tone="friendly",
+                ),
+            )
+            second_turn = create_or_update_turn(
+                session,
+                TurnCreate(
+                    turn_id="turn-2",
+                    thread_id=thread.thread_id,
+                    source=source,
+                    tone="friendly",
+                ),
+            )
+            claim_generation_run(
+                session,
+                GenerationRunClaim(
+                    run_id="run-1",
+                    session_id=workspace.session_id,
+                    thread_id=thread.thread_id,
+                    turn_id=first_turn.turn_id,
+                    lease_owner="extension-background",
+                    stale_after_seconds=30,
+                ),
+            )
+
+            with self.assertRaises(GenerationRunConflictError) as raised:
+                claim_generation_run(
+                    session,
+                    GenerationRunClaim(
+                        run_id="run-2",
+                        session_id=workspace.session_id,
+                        thread_id=thread.thread_id,
+                        turn_id=second_turn.turn_id,
+                        lease_owner="extension-background",
+                        stale_after_seconds=30,
+                    ),
+                )
+
+            self.assertEqual(raised.exception.code, "generation_run_session_active")
+
+    def test_generation_run_claim_reconciles_stale_conflict_before_claiming(self) -> None:
+        with self.Session() as session:
+            source = SourceSnapshot(
+                selected_text="Can you send the report?",
+                source_url="https://example.com/thread",
+            )
+            workspace = upsert_workspace_session(
+                session,
+                WorkspaceSessionUpsert(
+                    session_id="session-1",
+                    page_url=source.source_url,
+                    selected_text=source.selected_text,
+                ),
+            )
+            thread = create_or_update_thread(
+                session,
+                ConversationThreadCreate(
+                    thread_id="thread-1",
+                    session_id=workspace.session_id,
+                    source=source,
+                ),
+            )
+            first_turn = create_or_update_turn(
+                session,
+                TurnCreate(
+                    turn_id="turn-1",
+                    thread_id=thread.thread_id,
+                    source=source,
+                    tone="friendly",
+                ),
+            )
+            second_turn = create_or_update_turn(
+                session,
+                TurnCreate(
+                    turn_id="turn-2",
+                    thread_id=thread.thread_id,
+                    source=source,
+                    tone="friendly",
+                ),
+            )
+            claim_generation_run(
+                session,
+                GenerationRunClaim(
+                    run_id="run-1",
+                    session_id=workspace.session_id,
+                    thread_id=thread.thread_id,
+                    turn_id=first_turn.turn_id,
+                    lease_owner="extension-background",
+                    stale_after_seconds=30,
+                ),
+            )
+
+            claimed = claim_generation_run(
+                session,
+                GenerationRunClaim(
+                    run_id="run-2",
+                    session_id=workspace.session_id,
+                    thread_id=thread.thread_id,
+                    turn_id=second_turn.turn_id,
+                    lease_owner="extension-background",
+                    stale_after_seconds=0,
+                ),
+            )
+            active_runs = list_active_generation_runs(session, session_id=workspace.session_id)
+            snapshot = get_session_snapshot(session, workspace.session_id)
+
+            self.assertEqual(claimed.run_id, "run-2")
+            self.assertEqual([run.run_id for run in active_runs], ["run-2"])
+            self.assertEqual(snapshot.thread.turns[0].generation_status, "failed")
+            self.assertEqual(snapshot.thread.turns[0].generation_error_code, "generation_run_stale")
+
+    def test_generation_run_heartbeat_and_execution_state_classify_live_and_stale(self) -> None:
+        with self.Session() as session:
+            source = SourceSnapshot(
+                selected_text="Can you send the report?",
+                source_url="https://example.com/thread",
+            )
+            workspace = upsert_workspace_session(
+                session,
+                WorkspaceSessionUpsert(
+                    session_id="session-1",
+                    page_url=source.source_url,
+                    selected_text=source.selected_text,
+                ),
+            )
+            thread = create_or_update_thread(
+                session,
+                ConversationThreadCreate(
+                    thread_id="thread-1",
+                    session_id=workspace.session_id,
+                    source=source,
+                ),
+            )
+            turn = create_or_update_turn(
+                session,
+                TurnCreate(
+                    turn_id="turn-1",
+                    thread_id=thread.thread_id,
+                    source=source,
+                    tone="friendly",
+                ),
+            )
+            claim_generation_run(
+                session,
+                GenerationRunClaim(
+                    run_id="run-1",
+                    session_id=workspace.session_id,
+                    thread_id=thread.thread_id,
+                    turn_id=turn.turn_id,
+                    lease_owner="extension-background",
+                    stale_after_seconds=30,
+                ),
+            )
+
+            heartbeat = heartbeat_generation_run(
+                session,
+                "run-1",
+                GenerationRunHeartbeat(lease_owner="extension-background"),
+            )
+            live_state = inspect_generation_run_execution_state(session, session_id=workspace.session_id, stale_after_seconds=30)
+            stale_state = inspect_generation_run_execution_state(session, session_id=workspace.session_id, stale_after_seconds=0)
+
+            self.assertIsNotNone(heartbeat.heartbeat_at)
+            self.assertEqual([run.run_id for run in live_state.live], ["run-1"])
+            self.assertEqual([run.run_id for run in stale_state.stale], ["run-1"])
+
+    def test_terminal_generation_run_status_is_not_overwritten_by_late_completion(self) -> None:
+        with self.Session() as session:
+            source = SourceSnapshot(
+                selected_text="Can you send the report?",
+                source_url="https://example.com/thread",
+            )
+            workspace = upsert_workspace_session(
+                session,
+                WorkspaceSessionUpsert(
+                    session_id="session-1",
+                    page_url=source.source_url,
+                    selected_text=source.selected_text,
+                ),
+            )
+            thread = create_or_update_thread(
+                session,
+                ConversationThreadCreate(
+                    thread_id="thread-1",
+                    session_id=workspace.session_id,
+                    source=source,
+                ),
+            )
+            turn = create_or_update_turn(
+                session,
+                TurnCreate(
+                    turn_id="turn-1",
+                    thread_id=thread.thread_id,
+                    source=source,
+                    tone="friendly",
+                ),
+            )
+            claim_generation_run(
+                session,
+                GenerationRunClaim(
+                    run_id="run-1",
+                    session_id=workspace.session_id,
+                    thread_id=thread.thread_id,
+                    turn_id=turn.turn_id,
+                    lease_owner="extension-background",
+                ),
+            )
+            cancelled = update_generation_run_status(
+                session,
+                "run-1",
+                GenerationRunStatusUpdate(
+                    status="cancelled",
+                    error_code="generation_cancelled",
+                    error_message="Draft generation was cancelled.",
+                ),
+            )
+            completed = update_generation_run_status(session, "run-1", GenerationRunStatusUpdate(status="completed"))
+
+            self.assertEqual(cancelled.status, "cancelled")
+            self.assertEqual(completed.status, "cancelled")
 
     def test_upsert_session_updates_active_thread(self) -> None:
         with self.Session() as session:
