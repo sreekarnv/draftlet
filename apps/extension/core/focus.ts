@@ -27,6 +27,7 @@ export function captureFocusedTarget(candidate: EventTarget | null = document.ac
     return {
       element: editable,
       range: getSelectionRangeInside(editable),
+      targetRef: createComposeTargetRef(editable),
     };
   }
 

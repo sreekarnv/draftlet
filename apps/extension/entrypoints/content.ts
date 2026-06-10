@@ -2,12 +2,14 @@ import { createFloatingButton } from '../components/floating-button';
 import {
   INSERT_REPLY,
   LAUNCH_SIDE_PANEL,
+  RECAPTURE_INSERTION_TARGET,
   REVALIDATE_INSERTION_TARGET,
   type DraftletMessage,
   type DraftletSidePanelContext,
   type InsertionTargetStatusResult,
   type InsertReplyResult,
   type LaunchSidePanelResult,
+  type RecaptureInsertionTargetResult,
 } from '../core/messages';
 import { captureFocusedTarget, isTargetRefLive, restoreTargetFromRef, type FocusSnapshot } from '../core/focus';
 import { insertReply } from '../core/insertion';
@@ -125,9 +127,45 @@ export default defineContentScript({
       return { status: 'live', target: target.targetRef, message: 'Compose target is available.' };
     };
 
-    const handleRuntimeMessage = (message: DraftletMessage): Promise<InsertReplyResult | InsertionTargetStatusResult> | undefined => {
+    const recaptureInsertionTarget = (): RecaptureInsertionTargetResult => {
+      const captured = captureFocusedTarget();
+      insertionTarget = captured ?? insertionTarget;
+
+      if (!captured) {
+        return {
+          recaptured: false,
+          status: 'needs_recapture',
+          reason: 'no_focused_compose_target',
+          message: 'Focus a compose field on the page, then try recapture again.',
+        };
+      }
+
+      if (!captured.targetRef) {
+        return {
+          recaptured: false,
+          status: 'needs_recapture',
+          reason: 'target_metadata_missing',
+          message: 'Draftlet could not capture a usable compose target here.',
+        };
+      }
+
+      return {
+        recaptured: true,
+        status: 'live',
+        target: captured.targetRef,
+        message: 'Target rebound successfully.',
+      };
+    };
+
+    const handleRuntimeMessage = (
+      message: DraftletMessage,
+    ): Promise<InsertReplyResult | InsertionTargetStatusResult | RecaptureInsertionTargetResult> | undefined => {
       if (message.type === REVALIDATE_INSERTION_TARGET) {
         return Promise.resolve(revalidateInsertionTarget(message.target));
+      }
+
+      if (message.type === RECAPTURE_INSERTION_TARGET) {
+        return Promise.resolve(recaptureInsertionTarget());
       }
 
       if (message.type === INSERT_REPLY) {

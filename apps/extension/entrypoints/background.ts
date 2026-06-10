@@ -29,6 +29,7 @@ import {
   GET_RUNTIME_STATUS,
   INSERT_REPLY,
   LAUNCH_SIDE_PANEL,
+  RECAPTURE_INSERTION_TARGET,
   REVALIDATE_INSERTION_TARGET,
   RESTORE_DOMAIN_THREAD,
   SET_CURRENT_DRAFT_VARIANT,
@@ -47,6 +48,7 @@ import {
   type InsertReplyResult,
   type InsertionTargetStatusResult,
   type LaunchSidePanelResult,
+  type RecaptureInsertionTargetResult,
   type RestoreDomainThreadResult,
   type RuntimeStatusResult,
   type StartDraftGenerationResult,
@@ -118,6 +120,10 @@ export default defineBackground(() => {
 
     if (message.type === GET_INSERTION_TARGET_STATUS) {
       return handleGetInsertionTargetStatus(message.sessionId);
+    }
+
+    if (message.type === RECAPTURE_INSERTION_TARGET) {
+      return handleRecaptureInsertionTarget(message.sessionId);
     }
 
     if (message.type === SET_CURRENT_DRAFT_VARIANT) {
@@ -716,6 +722,72 @@ async function handleGetInsertionTargetStatus(sessionId?: string): Promise<Inser
   return revalidateInsertionTarget(session);
 }
 
+async function handleRecaptureInsertionTarget(sessionId: string): Promise<RecaptureInsertionTargetResult> {
+  const session = sessions.getBySessionId(sessionId);
+
+  if (!session) {
+    return {
+      recaptured: false,
+      status: 'unavailable',
+      reason: 'session_not_found',
+      message: 'No active Draftlet session.',
+    };
+  }
+
+  const tab = await resolveRecaptureTab(session);
+
+  if (!tab?.id) {
+    const updated = sessions.updateInsertionTarget(session.sessionId, session.insertionTarget, 'unavailable');
+
+    if (updated) {
+      void emitWorkspaceSessionUpdated(updated);
+    }
+
+    return {
+      recaptured: false,
+      status: 'unavailable',
+      target: session.insertionTarget,
+      reason: 'tab_unavailable',
+      message: 'Open the page with the compose field, focus it, and try again.',
+    };
+  }
+
+  try {
+    const result = await browser.tabs.sendMessage(tab.id, {
+      type: RECAPTURE_INSERTION_TARGET,
+      sessionId,
+    } satisfies DraftletMessage) as RecaptureInsertionTargetResult;
+    const updated = sessions.updateInsertionTarget(
+      session.sessionId,
+      result.target ?? session.insertionTarget,
+      result.status,
+    );
+
+    if (updated) {
+      void emitWorkspaceSessionUpdated(updated);
+      if (result.recaptured) {
+        void persistWorkspaceSession(updated);
+      }
+    }
+
+    return result;
+  } catch {
+    const updated = sessions.updateInsertionTarget(session.sessionId, session.insertionTarget, 'unavailable');
+
+    if (updated) {
+      void emitWorkspaceSessionUpdated(updated);
+    }
+
+    return {
+      recaptured: false,
+      status: 'unavailable',
+      target: session.insertionTarget,
+      reason: 'content_script_unavailable',
+      message: 'Draftlet cannot reach the page. Reload the page, focus a compose field, and try again.',
+    };
+  }
+}
+
 async function revalidateInsertionTarget(session: WorkspaceSession): Promise<InsertionTargetStatusResult> {
   const tab = await resolveInsertionTab(session);
 
@@ -760,6 +832,22 @@ async function revalidateInsertionTarget(session: WorkspaceSession): Promise<Ins
 
     return { status: 'unavailable', target, message: 'Draftlet cannot reach the page for insertion.' };
   }
+}
+
+async function resolveRecaptureTab(session: WorkspaceSession): Promise<Browser.tabs.Tab | null> {
+  const activeTab = await getActiveTab().catch(() => null);
+
+  if (activeTab?.id && isPlausibleInsertionTab(activeTab, session)) {
+    const updated = sessions.hydrateSession({
+      ...session,
+      tabId: activeTab.id,
+      windowId: activeTab.windowId,
+    });
+    void emitWorkspaceSessionUpdated(updated);
+    return activeTab;
+  }
+
+  return resolveInsertionTab(session);
 }
 
 async function resolveInsertionTab(session: WorkspaceSession): Promise<Browser.tabs.Tab | null> {
@@ -1024,9 +1112,14 @@ async function openSidePanel(session: WorkspaceSession) {
 }
 
 async function getActiveTabId(): Promise<number | undefined> {
+  const tab = await getActiveTab();
+  return tab?.id;
+}
+
+async function getActiveTab(): Promise<Browser.tabs.Tab | undefined> {
   try {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-    return tab?.id;
+    return tab;
   } catch {
     return undefined;
   }
