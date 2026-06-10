@@ -867,7 +867,7 @@ async function restoreRuntimeSnapshot(session: WorkspaceSession): Promise<Worksp
       return { session };
     }
 
-    const restoredSession = {
+    const restoredSession: WorkspaceSession = {
       ...snapshot.session,
       tabId: session.tabId,
       windowId: session.windowId,
