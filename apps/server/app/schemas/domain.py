@@ -72,6 +72,7 @@ class GenerationRunClaim(BaseModel):
     turn_id: str = Field(min_length=1, max_length=120)
     lease_owner: str = Field(min_length=1, max_length=120)
     status: str = Field(default="active", min_length=1, max_length=40)
+    stale_after_seconds: int = Field(default=30, ge=0)
 
     @field_validator("run_id", "session_id", "thread_id", "turn_id", "lease_owner", "status", mode="before")
     @classmethod
@@ -103,6 +104,17 @@ class GenerationRunReconcileRequest(BaseModel):
     error_message: str = Field(default="Draft generation was interrupted before completion.", min_length=1, max_length=1000)
 
     @field_validator("session_id", "thread_id", "turn_id", "error_code", "error_message", mode="before")
+    @classmethod
+    def strip_text_fields(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip() or None
+
+
+class GenerationRunHeartbeat(BaseModel):
+    lease_owner: str | None = Field(default=None, max_length=120)
+
+    @field_validator("lease_owner", mode="before")
     @classmethod
     def strip_text_fields(cls, value: str | None) -> str | None:
         if value is None:
@@ -198,6 +210,14 @@ class GenerationRunRead(BaseModel):
     error_message: str | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class GenerationRunExecutionState(BaseModel):
+    checked_at: datetime
+    stale_after_seconds: int
+    active: list[GenerationRunRead]
+    live: list[GenerationRunRead]
+    stale: list[GenerationRunRead]
 
 
 class DraftVariantRead(BaseModel):

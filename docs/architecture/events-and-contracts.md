@@ -116,12 +116,12 @@ The current v2 extension generation flow is intentionally transitional but now s
 - service worker creates or reuses a session-backed `ConversationThread` when generation starts
 - each generation creates a `Turn` on that thread
 - turn lifecycle is durable on the `Turn` with explicit status, lifecycle timestamps, and bounded error metadata
-- each live execution also claims a runtime `GenerationRun` lease tied to the session, thread, and turn
+- each live execution also claims a runtime `GenerationRun` lease tied to the session, thread, and turn; runtime enforces one fresh active lease per session and reconciles stale conflicts before allowing a new claim
 - each streamed runtime reply is stored as a `DraftVariant` on the active turn
 - service worker broadcasts `draftlet:workspace-session-updated` for session metadata and `draftlet:conversation-thread-updated` for thread snapshots
 - service worker emits `draftlet:draft-generation-started`, `draftlet:draft-generation-completed`, and `draftlet:draft-generation-failed` for generation lifecycle, while streamed variants reach extension surfaces through `draftlet:conversation-thread-updated` snapshots
 - side panel renders thread snapshots as the primary thread workspace, grouped by `Turn` and `DraftVariant`
-- side panel can cancel with `draftlet:cancel-draft-generation` using `sessionId` and `generationId`; background reconciles the live browser abort and the runtime run state
+- side panel can cancel with `draftlet:cancel-draft-generation` using `sessionId` and `generationId`; background records runtime cancellation intent, aborts the browser-local fetch handle when present, and the runtime stream stops on the cancelled run state at the next bounded stream check
 - insertion remains explicit: side panel sends `draftlet:insert-reply` with `sessionId`, service worker forwards it to the session tab, and the content script performs best-effort DOM insertion
 
 This keeps the webpage out of runtime transport and generation workflow ownership while preserving side-panel ownership of the workflow. Runtime persistence is the durable source for workspace sessions, threads, turns, variants, and generation run state.
@@ -135,9 +135,10 @@ The current v2 generation flow is transitional but now uses durable runtime doma
 - initial generation creates or reuses a session-backed `ConversationThread`, creates a `Turn`, and streams replies through `/replies` with `generation_mode: initial`
 - follow-up refinement uses `draftlet:start-draft-refinement`, appends a new `Turn` to the active persisted thread, and streams `/replies` with `generation_mode: refinement` plus the user instruction
 - runtime-backed `Turn` lifecycle records queued, started, streaming, completed, failed, and cancelled states with timestamps and bounded error details
-- runtime-backed `GenerationRun` records make live execution explicit with `run_id`, `turn_id`, `session_id`, `thread_id`, status, lease owner, claim/heartbeat/release timestamps, and bounded error metadata
-- service worker claims a `GenerationRun` before opening the live stream; runtime stream handling updates that run while preserving `Turn` lifecycle state for side panel restore
-- restore/startup can query or reconcile active runtime runs and mark stale live execution as interrupted without pretending stream resume exists
+- runtime-backed `GenerationRun` records make live execution explicit with `run_id`, `turn_id`, `session_id`, `thread_id`, status, lease owner, claim/heartbeat/release timestamps, bounded error metadata, and terminal-state protection against late stream updates
+- service worker claims a `GenerationRun` before opening the live stream, sends bounded heartbeat updates while its browser-local stream handle is active, and treats runtime conflicts as authoritative
+- runtime stream handling updates and heartbeats the run while preserving `Turn` lifecycle state for side panel restore; cancellation is represented as runtime run state and checked by the active stream between upstream model chunks
+- restore/startup can query execution state, reconcile stale active runtime runs, and mark incomplete live execution as interrupted without pretending stream resume exists
 - runtime loads prior persisted thread context for refinement prompts, then persists each streamed reply as a `DraftVariant` for the turn
 - runtime emits `draft_variant` SSE events with variant/thread/turn metadata
 - service worker maps each streamed result into the active `ConversationThread` snapshot and broadcasts `draftlet:conversation-thread-updated`

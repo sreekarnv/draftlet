@@ -178,6 +178,7 @@ The system should move toward a domain model with concepts like:
 - ConversationThread
 - Turn
 - DraftVariant
+- GenerationRun for runtime-owned execution control, lease freshness, cancellation intent, and stale-run reconciliation
 - user actions/events
 
 When implementing features, prefer aligning with these concepts instead of inventing one-off structures.

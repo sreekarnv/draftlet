@@ -173,6 +173,7 @@ export async function claimGenerationRun(run: {
   threadId: string;
   turnId: string;
   leaseOwner: string;
+  staleAfterSeconds?: number;
 }): Promise<GenerationRun> {
   const response = await putJson<GenerationRunRead>(`${SERVER_BASE_URL}/domain/generation-runs/${encodeURIComponent(run.runId)}`, {
     run_id: run.runId,
@@ -181,6 +182,18 @@ export async function claimGenerationRun(run: {
     turn_id: run.turnId,
     lease_owner: run.leaseOwner,
     status: 'active',
+    stale_after_seconds: run.staleAfterSeconds,
+  });
+
+  return mapGenerationRun(response);
+}
+
+export async function heartbeatGenerationRun(
+  runId: string,
+  leaseOwner?: string,
+): Promise<GenerationRun> {
+  const response = await patchJson<GenerationRunRead>(`${SERVER_BASE_URL}/domain/generation-runs/${encodeURIComponent(runId)}/heartbeat`, {
+    lease_owner: leaseOwner,
   });
 
   return mapGenerationRun(response);
@@ -208,6 +221,42 @@ export async function getActiveGenerationRuns(filters: {
   const query = params.size > 0 ? `?${params.toString()}` : '';
   const response = await getJson<GenerationRunRead[]>(`${SERVER_BASE_URL}/domain/generation-runs/active${query}`);
   return response.map(mapGenerationRun);
+}
+
+export async function getGenerationRunExecutionState(filters: {
+  sessionId?: string;
+  threadId?: string;
+  turnId?: string;
+  staleAfterSeconds?: number;
+} = {}): Promise<GenerationRunExecutionState> {
+  const params = new URLSearchParams();
+
+  if (filters.sessionId) {
+    params.set('session_id', filters.sessionId);
+  }
+
+  if (filters.threadId) {
+    params.set('thread_id', filters.threadId);
+  }
+
+  if (filters.turnId) {
+    params.set('turn_id', filters.turnId);
+  }
+
+  if (filters.staleAfterSeconds !== undefined) {
+    params.set('stale_after_seconds', String(filters.staleAfterSeconds));
+  }
+
+  const query = params.size > 0 ? `?${params.toString()}` : '';
+  const response = await getJson<GenerationRunExecutionStateRead>(`${SERVER_BASE_URL}/domain/generation-runs/execution-state${query}`);
+
+  return {
+    checkedAt: response.checked_at,
+    staleAfterSeconds: response.stale_after_seconds,
+    active: response.active.map(mapGenerationRun),
+    live: response.live.map(mapGenerationRun),
+    stale: response.stale.map(mapGenerationRun),
+  };
 }
 
 export async function patchGenerationRunStatus(
@@ -609,6 +658,22 @@ interface GenerationRunRead {
   error_message: string | null;
   created_at: string;
   updated_at: string;
+}
+
+interface GenerationRunExecutionStateRead {
+  checked_at: string;
+  stale_after_seconds: number;
+  active: GenerationRunRead[];
+  live: GenerationRunRead[];
+  stale: GenerationRunRead[];
+}
+
+export interface GenerationRunExecutionState {
+  checkedAt: string;
+  staleAfterSeconds: number;
+  active: GenerationRun[];
+  live: GenerationRun[];
+  stale: GenerationRun[];
 }
 
 interface ConversationThreadSnapshotRead {
