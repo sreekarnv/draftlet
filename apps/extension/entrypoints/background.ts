@@ -24,10 +24,12 @@ import {
   DRAFT_GENERATION_FAILED,
   DRAFT_GENERATION_STARTED,
   GET_CURRENT_WORKSPACE_SESSION,
+  GET_INSERTION_TARGET_STATUS,
   GET_DOMAIN_HISTORY,
   GET_RUNTIME_STATUS,
   INSERT_REPLY,
   LAUNCH_SIDE_PANEL,
+  REVALIDATE_INSERTION_TARGET,
   RESTORE_DOMAIN_THREAD,
   SET_CURRENT_DRAFT_VARIANT,
   START_DRAFT_GENERATION,
@@ -43,6 +45,7 @@ import {
   type DraftletMessage,
   type DraftletSidePanelContext,
   type InsertReplyResult,
+  type InsertionTargetStatusResult,
   type LaunchSidePanelResult,
   type RestoreDomainThreadResult,
   type RuntimeStatusResult,
@@ -109,8 +112,12 @@ export default defineBackground(() => {
       return handleCancelDraftGeneration(message.sessionId, message.generationId);
     }
 
-    if (message.type === INSERT_REPLY) {
+  if (message.type === INSERT_REPLY) {
       return handleInsertReply(message.replyText, message.sessionId);
+    }
+
+    if (message.type === GET_INSERTION_TARGET_STATUS) {
+      return handleGetInsertionTargetStatus(message.sessionId);
     }
 
     if (message.type === SET_CURRENT_DRAFT_VARIANT) {
@@ -229,6 +236,7 @@ async function handleRestoreDomainThread(sessionId: string, threadId: string): P
       ...sessionSnapshot.session,
       tabId: previous?.tabId ?? sessionSnapshot.session.tabId,
       windowId: previous?.windowId ?? sessionSnapshot.session.windowId,
+      insertionTargetStatus: 'stale',
       activeThreadId: threadId,
       latestContext: {
         selectedText: threadSnapshot.thread.source.selectedText,
@@ -239,6 +247,7 @@ async function handleRestoreDomainThread(sessionId: string, threadId: string): P
         windowId: previous?.windowId ?? sessionSnapshot.session.windowId,
         tone: previous?.latestContext.tone ?? sessionSnapshot.session.latestContext.tone,
         activeView: 'replies',
+        composeTarget: previous?.insertionTarget ?? sessionSnapshot.session.insertionTarget,
       },
     };
     sessions.hydrateSession(restoredSession);
@@ -673,14 +682,130 @@ async function handleInsertReply(replyText: string, sessionId?: string): Promise
   const session = await resolveInsertionSession(sessionId);
 
   if (!session) {
-    return { result: { status: 'failed', message: 'No active Draftlet tab.' } };
+    return { result: { status: 'failed', message: 'No active Draftlet tab.', targetStatus: 'unavailable', errorCode: 'session_not_found' } };
+  }
+
+  const targetStatus = await revalidateInsertionTarget(session);
+
+  if (targetStatus.status !== 'live') {
+    return {
+      result: {
+        status: 'failed',
+        message: targetStatus.message ?? 'Insertion target is not available.',
+        targetStatus: targetStatus.status,
+        errorCode: `target_${targetStatus.status}`,
+      },
+    };
   }
 
   return browser.tabs.sendMessage(session.tabId, {
     type: INSERT_REPLY,
     sessionId: session.sessionId,
     replyText,
+    target: targetStatus.target,
   } satisfies DraftletMessage) as Promise<InsertReplyResult>;
+}
+
+async function handleGetInsertionTargetStatus(sessionId?: string): Promise<InsertionTargetStatusResult> {
+  const session = await resolveInsertionSession(sessionId);
+
+  if (!session) {
+    return { status: 'unavailable', message: 'No active Draftlet session.' };
+  }
+
+  return revalidateInsertionTarget(session);
+}
+
+async function revalidateInsertionTarget(session: WorkspaceSession): Promise<InsertionTargetStatusResult> {
+  const tab = await resolveInsertionTab(session);
+
+  if (!tab?.id) {
+    const updated = sessions.updateInsertionTarget(session.sessionId, session.insertionTarget, 'unavailable');
+
+    if (updated) {
+      void emitWorkspaceSessionUpdated(updated);
+    }
+
+    return { status: 'unavailable', target: session.insertionTarget, message: 'Original page is not open.' };
+  }
+
+  const target = session.insertionTarget ?? session.latestContext.composeTarget;
+
+  try {
+    const result = await browser.tabs.sendMessage(tab.id, {
+      type: REVALIDATE_INSERTION_TARGET,
+      sessionId: session.sessionId,
+      target,
+    } satisfies DraftletMessage) as InsertionTargetStatusResult;
+    const updated = sessions.updateInsertionTarget(
+      session.sessionId,
+      result.target ?? target,
+      result.status,
+    );
+
+    if (updated) {
+      void emitWorkspaceSessionUpdated(updated);
+      if (result.status === 'live') {
+        void persistWorkspaceSession(updated);
+      }
+    }
+
+    return result;
+  } catch {
+    const updated = sessions.updateInsertionTarget(session.sessionId, target, 'unavailable');
+
+    if (updated) {
+      void emitWorkspaceSessionUpdated(updated);
+    }
+
+    return { status: 'unavailable', target, message: 'Draftlet cannot reach the page for insertion.' };
+  }
+}
+
+async function resolveInsertionTab(session: WorkspaceSession): Promise<Browser.tabs.Tab | null> {
+  if (session.tabId >= 0) {
+    const tab = await browser.tabs.get(session.tabId).catch(() => null);
+
+    if (tab && isPlausibleInsertionTab(tab, session)) {
+      return tab;
+    }
+  }
+
+  const tabs = await browser.tabs.query({}).catch(() => []);
+  const target = session.insertionTarget ?? session.latestContext.composeTarget;
+  const exact = tabs.find((tab) => tab.id !== undefined && tab.url && target?.pageUrl && tab.url === target.pageUrl);
+  const originMatch = exact ?? tabs.find((tab) => tab.id !== undefined && tab.url && target?.origin && tab.url.startsWith(`${target.origin}/`));
+  const pageMatch = originMatch ?? tabs.find((tab) => tab.id !== undefined && tab.url === session.pageUrl);
+
+  if (!pageMatch?.id) {
+    return null;
+  }
+
+  const updated = sessions.hydrateSession({
+    ...session,
+    tabId: pageMatch.id,
+    windowId: pageMatch.windowId,
+  });
+  void emitWorkspaceSessionUpdated(updated);
+  return pageMatch;
+}
+
+function isPlausibleInsertionTab(tab: Browser.tabs.Tab, session: WorkspaceSession): boolean {
+  const target = session.insertionTarget ?? session.latestContext.composeTarget;
+
+  if (!tab.url) {
+    return false;
+  }
+
+  if (target?.pageUrl && tab.url === target.pageUrl) {
+    return true;
+  }
+
+  if (target?.origin && tab.url.startsWith(`${target.origin}/`)) {
+    return true;
+  }
+
+  return tab.url === session.pageUrl;
 }
 
 async function resolveInsertionSession(sessionId?: string): Promise<WorkspaceSession | null> {
@@ -746,12 +871,15 @@ async function restoreRuntimeSnapshot(session: WorkspaceSession): Promise<Worksp
       ...snapshot.session,
       tabId: session.tabId,
       windowId: session.windowId,
+      insertionTarget: snapshot.session.insertionTarget ?? session.insertionTarget,
+      insertionTargetStatus: 'stale',
       latestContext: {
         ...snapshot.session.latestContext,
         tabId: session.tabId,
         windowId: session.windowId,
         tone: session.latestContext.tone,
         activeView: session.latestContext.activeView,
+        composeTarget: snapshot.session.insertionTarget ?? session.insertionTarget,
       },
     };
     sessions.updateContext(restoredSession.sessionId, restoredSession.latestContext);

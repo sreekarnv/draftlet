@@ -3,6 +3,7 @@ import type {
   WorkspaceSession,
   WorkspaceSessionGeneration,
 } from './messages';
+import type { ComposeTargetRef, InsertionTargetStatus } from './types';
 
 interface WorkspaceSessionStoreOptions {
   createId?: () => string;
@@ -21,6 +22,7 @@ export interface WorkspaceSessionStore {
   getBySessionId(sessionId: string): WorkspaceSession | null;
   getByTabId(tabId: number): WorkspaceSession | null;
   updateContext(sessionId: string, context: DraftletSidePanelContext): WorkspaceSession | null;
+  updateInsertionTarget(sessionId: string, target: ComposeTargetRef | undefined, status: InsertionTargetStatus): WorkspaceSession | null;
   setActiveThread(sessionId: string, threadId: string): WorkspaceSession | null;
   setActiveGeneration(sessionId: string, generation: WorkspaceSessionGeneration): WorkspaceSession | null;
   updateActiveGenerationStatus(
@@ -65,6 +67,8 @@ export function createWorkspaceSessionStore({
           pageUrl,
           pageTitle: normalizedContext.pageTitle,
           latestContext: normalizedContext,
+          insertionTarget: normalizedContext.composeTarget ?? existing.insertionTarget,
+          insertionTargetStatus: normalizedContext.composeTarget ? 'live' : existing.insertionTargetStatus,
           status: 'active',
         });
       }
@@ -81,6 +85,8 @@ export function createWorkspaceSessionStore({
         pageUrl,
         pageTitle: normalizedContext.pageTitle,
         latestContext: normalizedContext,
+        insertionTarget: normalizedContext.composeTarget,
+        insertionTargetStatus: normalizedContext.composeTarget ? 'live' : 'needs_recapture',
         status: 'active',
         createdAt,
         updatedAt: createdAt,
@@ -119,6 +125,25 @@ export function createWorkspaceSessionStore({
         pageUrl: normalizedContext.sourceUrl,
         pageTitle: normalizedContext.pageTitle,
         latestContext: normalizedContext,
+        insertionTarget: normalizedContext.composeTarget ?? session.insertionTarget,
+        insertionTargetStatus: normalizedContext.composeTarget ? 'live' : session.insertionTargetStatus,
+      });
+    },
+
+    updateInsertionTarget(sessionId, target, status) {
+      const session = sessionsById.get(sessionId);
+
+      if (!session) {
+        return null;
+      }
+
+      return touch(session, {
+        insertionTarget: target ?? session.insertionTarget,
+        insertionTargetStatus: status,
+        latestContext: {
+          ...session.latestContext,
+          composeTarget: target ?? session.latestContext.composeTarget,
+        },
       });
     },
 
@@ -201,6 +226,7 @@ function normalizeContext(
     pageTitle: context.pageTitle || undefined,
     tabId,
     windowId,
+    composeTarget: context.composeTarget,
   };
 }
 

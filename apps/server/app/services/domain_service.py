@@ -46,6 +46,7 @@ def upsert_workspace_session(session: Session, payload: WorkspaceSessionUpsert) 
         existing.source_domain = payload.source_domain
         existing.status = payload.status
         existing.active_thread_id = payload.active_thread_id
+        apply_compose_target(existing, payload.compose_target)
         session.add(existing)
         session.commit()
         session.refresh(existing)
@@ -62,10 +63,26 @@ def upsert_workspace_session(session: Session, payload: WorkspaceSessionUpsert) 
         status=payload.status,
         active_thread_id=payload.active_thread_id,
     )
+    apply_compose_target(workspace, payload.compose_target)
     session.add(workspace)
     session.commit()
     session.refresh(workspace)
     return workspace
+
+
+def apply_compose_target(workspace: WorkspaceSession, target) -> None:
+    if not target:
+        return
+
+    workspace.compose_target_id = target.target_id
+    workspace.compose_target_kind = target.kind
+    workspace.compose_target_page_url = target.page_url
+    workspace.compose_target_origin = target.origin
+    workspace.compose_target_page_title = target.page_title
+    workspace.compose_target_selector = target.selector
+    workspace.compose_target_fingerprint = target.fingerprint
+    workspace.compose_target_label = target.label
+    workspace.compose_target_last_seen_at = target.last_seen_at
 
 
 def create_or_update_thread(session: Session, payload: ConversationThreadCreate) -> ConversationThread:

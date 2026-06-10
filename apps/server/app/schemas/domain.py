@@ -17,6 +17,35 @@ class SourceSnapshot(BaseModel):
         return value.strip() or None
 
 
+class ComposeTargetRef(BaseModel):
+    target_id: str = Field(min_length=1, max_length=160)
+    kind: str = Field(min_length=1, max_length=40)
+    page_url: str = Field(min_length=1, max_length=2048)
+    origin: str | None = Field(default=None, max_length=255)
+    page_title: str | None = Field(default=None, max_length=512)
+    selector: str | None = Field(default=None, max_length=500)
+    fingerprint: str = Field(min_length=1, max_length=1000)
+    label: str | None = Field(default=None, max_length=160)
+    last_seen_at: datetime
+
+    @field_validator(
+        "target_id",
+        "kind",
+        "page_url",
+        "origin",
+        "page_title",
+        "selector",
+        "fingerprint",
+        "label",
+        mode="before",
+    )
+    @classmethod
+    def strip_text_fields(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip() or None
+
+
 class WorkspaceSessionUpsert(BaseModel):
     session_id: str = Field(min_length=1, max_length=120)
     tab_id: int | None = None
@@ -27,6 +56,7 @@ class WorkspaceSessionUpsert(BaseModel):
     source_domain: str | None = Field(default=None, max_length=255)
     status: str = Field(default="active", min_length=1, max_length=40)
     active_thread_id: str | None = Field(default=None, max_length=120)
+    compose_target: ComposeTargetRef | None = None
 
     @field_validator("session_id", "page_url", "page_title", "selected_text", "source_domain", "status", "active_thread_id", mode="before")
     @classmethod
@@ -150,6 +180,7 @@ class WorkspaceSessionRead(BaseModel):
     source_domain: str | None
     status: str
     active_thread_id: str | None
+    compose_target: ComposeTargetRef | None = None
     created_at: datetime
     updated_at: datetime
 

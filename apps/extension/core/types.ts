@@ -4,6 +4,20 @@ export type PanelState = 'empty' | 'loading' | 'streaming' | 'success' | 'error'
 export type PanelView = 'replies' | 'history';
 
 export type GenerationMode = 'initial' | 'refinement';
+export type ComposeTargetKind = 'input' | 'textarea' | 'contenteditable';
+export type InsertionTargetStatus = 'live' | 'stale' | 'unavailable' | 'needs_recapture';
+
+export interface ComposeTargetRef {
+  targetId: string;
+  kind: ComposeTargetKind;
+  pageUrl: string;
+  origin?: string;
+  pageTitle?: string;
+  selector?: string;
+  fingerprint: string;
+  label?: string;
+  lastSeenAt: string;
+}
 
 export interface ReplyRequestPayload {
   selected_text: string;
@@ -40,4 +54,6 @@ export type InsertionStatus = 'inserted' | 'copied' | 'failed';
 export interface InsertionResult {
   status: InsertionStatus;
   message: string;
+  targetStatus?: InsertionTargetStatus;
+  errorCode?: string;
 }

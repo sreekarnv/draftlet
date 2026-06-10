@@ -4,14 +4,24 @@ import { isTextInput } from './focus';
 
 export async function insertReply(text: string, target: FocusSnapshot | null): Promise<InsertionResult> {
   if (target && tryInsert(text, target)) {
-    return { status: 'inserted', message: 'Inserted' };
+    return { status: 'inserted', message: 'Inserted', targetStatus: 'live' };
   }
 
   try {
     await navigator.clipboard.writeText(text);
-    return { status: 'copied', message: 'Copied instead' };
+    return {
+      status: 'copied',
+      message: target ? 'Target was stale; copied instead.' : 'No insertion target; copied instead.',
+      targetStatus: target ? 'stale' : 'needs_recapture',
+      errorCode: target ? 'target_stale' : 'target_missing',
+    };
   } catch {
-    return { status: 'failed', message: 'Insert failed' };
+    return {
+      status: 'failed',
+      message: 'Insert failed',
+      targetStatus: target ? 'stale' : 'unavailable',
+      errorCode: target ? 'target_stale_clipboard_failed' : 'target_missing_clipboard_failed',
+    };
   }
 }
 

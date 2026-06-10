@@ -1,4 +1,5 @@
 import unittest
+from datetime import UTC, datetime
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -6,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from app.db.base import Base
 from app.schemas.domain import (
     ConversationThreadCreate,
+    ComposeTargetRef,
     DraftVariantCreate,
     DraftVariantStateUpdate,
     GenerationRunClaim,
@@ -97,6 +99,40 @@ class DomainServiceTest(unittest.TestCase):
             self.assertEqual(snapshot.thread.thread.thread_id, "thread-1")
             self.assertEqual(snapshot.thread.turns[0].generation_status, "completed")
             self.assertEqual(snapshot.thread.variants[0].content, "Sure, I can send it today.")
+
+    def test_persists_compose_target_ref_on_workspace_session(self) -> None:
+        with self.Session() as session:
+            target = ComposeTargetRef(
+                target_id="textarea-1",
+                kind="textarea",
+                page_url="https://example.com/thread",
+                origin="https://example.com",
+                page_title="Inbox",
+                selector='textarea[name="reply"]',
+                fingerprint="textarea|reply",
+                label="Reply",
+                last_seen_at=datetime(2026, 1, 1, tzinfo=UTC),
+            )
+
+            workspace = upsert_workspace_session(
+                session,
+                WorkspaceSessionUpsert(
+                    session_id="session-1",
+                    tab_id=10,
+                    window_id=1,
+                    page_url="https://example.com/thread",
+                    page_title="Inbox",
+                    selected_text="Can you send the report?",
+                    source_domain="example.com",
+                    compose_target=target,
+                ),
+            )
+            snapshot = get_session_snapshot(session, workspace.session_id)
+
+            self.assertIsNotNone(snapshot)
+            self.assertIsNotNone(snapshot.session.compose_target)
+            self.assertEqual(snapshot.session.compose_target.target_id, "textarea-1")
+            self.assertEqual(snapshot.session.compose_target.kind, "textarea")
 
     def test_turn_lifecycle_status_records_timestamps_and_errors(self) -> None:
         with self.Session() as session:
