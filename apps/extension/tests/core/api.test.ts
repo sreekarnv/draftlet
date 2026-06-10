@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  cancelReplyGenerationRunExecution,
   claimGenerationRun,
   getGenerationRunExecutionState,
   heartbeatGenerationRun,
@@ -34,9 +35,37 @@ describe('streamReplies', () => {
       },
     ]);
   });
+
+  it('ignores runtime terminal control events', async () => {
+    const received: unknown[] = [];
+    vi.stubGlobal('fetch', vi.fn(async () => createStreamResponse([
+      'event: completed\n',
+      'data: completed\n\n',
+    ])));
+
+    await streamReplies(payload(), {
+      onReply(variant) {
+        received.push(variant);
+      },
+    });
+
+    expect(received).toEqual([]);
+  });
 });
 
 describe('generation run runtime API', () => {
+  it('cancels a runtime-owned reply execution by run id', async () => {
+    const fetchMock = vi.fn(async () => Response.json({ cancelled: true }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await cancelReplyGenerationRunExecution('generation-1');
+
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/replies/generation-1/cancel'), expect.objectContaining({
+      method: 'POST',
+    }));
+    expect(result).toEqual({ cancelled: true });
+  });
+
   it('claims and maps a runtime generation run', async () => {
     const fetchMock = vi.fn(async () => Response.json(generationRunRead({ status: 'active' })));
     vi.stubGlobal('fetch', fetchMock);

@@ -69,6 +69,11 @@ export async function streamReplies(
   });
 }
 
+export async function cancelReplyGenerationRunExecution(runId: string): Promise<{ cancelled: boolean }> {
+  const response = await postJson<{ cancelled: boolean }>(`${SERVER_BASE_URL}/replies/${encodeURIComponent(runId)}/cancel`, {});
+  return response;
+}
+
 export async function putWorkspaceSession(session: WorkspaceSession): Promise<WorkspaceSession> {
   const response = await putJson<WorkspaceSessionRead>(`${SERVER_BASE_URL}/domain/sessions/${encodeURIComponent(session.sessionId)}`, {
     session_id: session.sessionId,
@@ -416,6 +421,10 @@ function parseStreamedDraftVariant(message: SseMessage): StreamedDraftVariant | 
     } catch {
       return null;
     }
+  }
+
+  if (message.eventType) {
+    return null;
   }
 
   const reply = message.data.trim();

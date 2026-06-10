@@ -1,28 +1,66 @@
 from collections.abc import AsyncIterator
 import json
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from app.schemas.reply_event import ReplyEvent
 from app.schemas.reply_request import ReplyRequest
-from app.services.ollama_client import OllamaClientError
-from app.services.reply_service import stream_reply_events
+from app.services.execution_registry import ReplyExecutionRegistry, ReplyExecutionUpdate
+from app.services.reply_service import cancel_reply_execution_record, generate_reply_events
 
 
 router = APIRouter(tags=["replies"])
+
+
+async def cancel_missing_reply_execution(run_id: str) -> bool:
+    return cancel_reply_execution_record(run_id)
+
+
+reply_execution_registry = ReplyExecutionRegistry(
+    producer=generate_reply_events,
+    on_cancel_missing=cancel_missing_reply_execution,
+)
 
 
 @router.post("/replies")
 def create_replies(request: ReplyRequest) -> StreamingResponse:
     async def events() -> AsyncIterator[str]:
         try:
-            async for event in stream_reply_events(request):
-                yield format_sse_event(event)
-        except OllamaClientError as error:
+            async for update in reply_execution_registry.start_and_subscribe(request):
+                yield format_sse_update(update)
+        except ValueError as error:
             yield format_sse_error(str(error))
 
     return StreamingResponse(events(), media_type="text/event-stream")
+
+
+@router.post("/replies/{run_id}/cancel")
+async def cancel_reply_execution(run_id: str) -> dict[str, bool]:
+    cancelled = await reply_execution_registry.cancel(run_id)
+
+    if not cancelled:
+        raise HTTPException(status_code=404, detail="Generation run was not found.")
+
+    return {"cancelled": True}
+
+
+@router.get("/replies/{run_id}/execution")
+async def get_reply_execution(run_id: str) -> dict[str, bool | str]:
+    return {
+        "run_id": run_id,
+        "live": await reply_execution_registry.has_live_execution(run_id),
+    }
+
+
+def format_sse_update(update: ReplyExecutionUpdate) -> str:
+    if update.status == "event" and update.event:
+        return format_sse_event(update.event)
+
+    if update.status == "error":
+        return format_sse_error(update.message or "Could not stream replies.")
+
+    return f"event: {update.status}\ndata: {update.message or update.status}\n\n"
 
 
 def format_sse_event(event: ReplyEvent) -> str:
