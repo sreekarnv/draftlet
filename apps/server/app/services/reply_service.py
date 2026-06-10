@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncIterator
 from uuid import uuid4
 
@@ -39,7 +40,7 @@ from app.services.prompt_builder import build_reply_prompt
 from app.services.stream_parser import ReplyStreamParser
 
 
-async def stream_reply_events(request: ReplyRequest) -> AsyncIterator[ReplyEvent]:
+async def generate_reply_events(request: ReplyRequest) -> AsyncIterator[ReplyEvent]:
     settings = get_settings()
     parser = ReplyStreamParser()
 
@@ -89,6 +90,17 @@ async def stream_reply_events(request: ReplyRequest) -> AsyncIterator[ReplyEvent
 
             if turn:
                 update_runtime_generation_status(session, request, turn.turn_id, "completed")
+        except asyncio.CancelledError:
+            if turn:
+                update_runtime_generation_status(
+                    session,
+                    request,
+                    turn.turn_id,
+                    "cancelled",
+                    "generation_cancelled",
+                    "Draft generation was cancelled.",
+                )
+            raise
         except OllamaClientError as error:
             if turn:
                 update_runtime_generation_status(session, request, turn.turn_id, "failed", "ollama_stream_failed", str(error))
@@ -98,6 +110,20 @@ async def stream_reply_events(request: ReplyRequest) -> AsyncIterator[ReplyEvent
                 update_runtime_generation_status(session, request, turn.turn_id, "failed", "generation_failed", str(error))
             raise
 
+
+def cancel_reply_execution_record(run_id: str) -> bool:
+    with SessionLocal() as session:
+        run = update_generation_run_status(
+            session,
+            run_id,
+            GenerationRunStatusUpdate(
+                status="cancelled",
+                error_code="generation_cancelled",
+                error_message="Draft generation was cancelled.",
+            ),
+        )
+
+        return run is not None
 
 
 def ensure_domain_generation(session: Session, request: ReplyRequest):

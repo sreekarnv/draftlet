@@ -1,12 +1,11 @@
 import {
+  cancelReplyGenerationRunExecution,
   checkServerHealth,
-  claimGenerationRun,
   getConversationThreadSnapshot,
   getActiveGenerationRuns,
   getGenerationRunExecutionState,
   getDomainHistory,
   getWorkspaceSessionSnapshot,
-  heartbeatGenerationRun,
   patchDraftVariantState,
   patchGenerationRunStatus,
   patchTurnStatus,
@@ -61,16 +60,12 @@ interface ActiveGenerationController {
   threadId: string;
   turnId: string;
   variants: DraftVariant[];
-  controller: AbortController;
-  heartbeatTimer?: ReturnType<typeof setInterval>;
 }
 
 const sessions = createWorkspaceSessionStore();
 const threads = createConversationThreadStore();
 const activeGenerationsBySessionId = new Map<string, ActiveGenerationController>();
-const GENERATION_LEASE_OWNER = 'extension-background';
 const GENERATION_RUN_STALE_AFTER_SECONDS = 30;
-const GENERATION_RUN_HEARTBEAT_INTERVAL_MS = 5000;
 
 export default defineBackground(() => {
   browser.runtime.onMessage.addListener((message: DraftletMessage, sender) => {
@@ -359,7 +354,6 @@ async function handleStartDraftGeneration(
   }
 
   const generationId = createGenerationId();
-  const controller = new AbortController();
   const thread = turnResult.snapshot.thread;
   const turn = turnResult.turn;
 
@@ -391,40 +385,11 @@ async function handleStartDraftGeneration(
     // Runtime persistence already has the queued turn; a later stream transition will reconcile status.
   }
 
-  try {
-    await claimGenerationRun({
-      runId: generationId,
-      sessionId,
-      threadId: thread.threadId,
-      turnId: turn.turnId,
-      leaseOwner: GENERATION_LEASE_OWNER,
-      staleAfterSeconds: GENERATION_RUN_STALE_AFTER_SECONDS,
-    });
-  } catch (error) {
-    const failedError = {
-      code: 'generation_run_claim_failed',
-      message: error instanceof Error ? error.message : 'Could not claim a runtime generation run.',
-    };
-    const failedSnapshot = threads.updateTurnStatus(turn.turnId, 'failed', failedError) ?? startedSnapshot;
-    await patchTurnStatus(turn.turnId, 'failed', failedError).catch(() => null);
-    void emitConversationThreadUpdated(sessionId, failedSnapshot);
-
-    return {
-      started: false,
-      sessionId,
-      threadId: thread.threadId,
-      turnId: turn.turnId,
-      error: createDraftletError(failedError.code, failedError.message, true, generationId),
-    };
-  }
-
   activeGenerationsBySessionId.set(sessionId, {
     generationId,
     threadId: thread.threadId,
     turnId: turn.turnId,
     variants: [],
-    controller,
-    heartbeatTimer: startGenerationRunHeartbeat(sessionId, generationId),
   });
   const generatingSession = sessions.setActiveGeneration(sessionId, {
     generationId,
@@ -436,7 +401,7 @@ async function handleStartDraftGeneration(
 
   void emitWorkspaceSessionUpdated(generatingSession);
   void emitConversationThreadUpdated(sessionId, startedSnapshot);
-  void runDraftGeneration(generatingSession.sessionId, context, generationId, mode, thread, startedTurn, controller);
+  void runDraftGeneration(generatingSession.sessionId, context, generationId, mode, thread, startedTurn);
 
   return {
     started: true,
@@ -460,8 +425,8 @@ async function handleCancelDraftGeneration(sessionId?: string, generationId?: st
     const error = { code: 'generation_cancelled', message: 'Draft generation was cancelled.' };
     const snapshot = threads.updateTurnStatus(activeGeneration.turnId, 'cancelled', error);
 
-    await finalizeGenerationRunStatus(activeGeneration.generationId, activeGeneration.turnId, 'cancelled', error);
-    activeGeneration.controller.abort();
+    await cancelReplyGenerationRunExecution(activeGeneration.generationId)
+      .catch(() => finalizeGenerationRunStatus(activeGeneration.generationId, activeGeneration.turnId, 'cancelled', error));
     stopActiveGeneration(session.sessionId, activeGeneration.generationId);
     const updatedSession = sessions.clearActiveGeneration(session.sessionId, activeGeneration.generationId);
 
@@ -494,7 +459,12 @@ async function handleCancelDraftGeneration(sessionId?: string, generationId?: st
   const error = { code: 'generation_cancelled', message: 'Draft generation was cancelled.' };
   const turnId = activeRun?.turnId ?? latestTurn!.turnId;
   const hydratedSnapshot = threads.hydrateSnapshot(snapshot);
-  await finalizeGenerationRunStatus(activeRun?.runId, turnId, 'cancelled', error);
+  if (activeRun?.runId) {
+    await cancelReplyGenerationRunExecution(activeRun.runId)
+      .catch(() => finalizeGenerationRunStatus(activeRun.runId, turnId, 'cancelled', error));
+  } else {
+    await finalizeGenerationRunStatus(undefined, turnId, 'cancelled', error);
+  }
   const refreshedSnapshot = await getConversationThreadSnapshot(hydratedSnapshot.thread.threadId).catch(() => null);
   const cancelledSnapshot = refreshedSnapshot
     ? threads.hydrateSnapshot(refreshedSnapshot)
@@ -510,7 +480,6 @@ async function runDraftGeneration(
   mode: GenerationMode,
   thread: ConversationThread,
   turn: Turn,
-  controller: AbortController,
 ): Promise<void> {
   await Promise.resolve();
 
@@ -521,8 +490,6 @@ async function runDraftGeneration(
   const streamingSession = sessions.updateActiveGenerationStatus(sessionId, generationId, 'streaming');
   const streamingSnapshot = threads.updateTurnStatus(turn.turnId, 'streaming');
   const streamingTurn = streamingSnapshot ? findTurn(streamingSnapshot, turn.turnId) : null;
-
-  await finalizeGenerationRunStatus(generationId, turn.turnId, 'streaming');
 
   if (streamingSession) {
     void emitWorkspaceSessionUpdated(streamingSession);
@@ -541,7 +508,7 @@ async function runDraftGeneration(
   });
 
   try {
-    const connected = await checkServerHealth(controller.signal);
+    const connected = await checkServerHealth();
 
     if (!connected) {
       await emitGenerationFailed(
@@ -569,7 +536,6 @@ async function runDraftGeneration(
         generation_mode: mode,
       },
       {
-        signal: controller.signal,
         onReply(reply) {
           const active = activeGenerationsBySessionId.get(sessionId);
 
@@ -603,8 +569,6 @@ async function runDraftGeneration(
     const completedSnapshot = threads.updateTurnStatus(turn.turnId, 'completed');
     const completedTurn = completedSnapshot ? findTurn(completedSnapshot, turn.turnId) : null;
 
-    await finalizeGenerationRunStatus(generationId, turn.turnId, 'completed');
-
     if (completedSnapshot) {
       void emitConversationThreadUpdated(sessionId, completedSnapshot);
     }
@@ -619,10 +583,6 @@ async function runDraftGeneration(
     });
 
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
-      return;
-    }
-
     await emitGenerationFailed(
       sessionId,
       generationId,
@@ -892,35 +852,11 @@ async function getLiveRuntimeGenerationConflict(sessionId: string) {
   return executionState?.live[0] ?? null;
 }
 
-function startGenerationRunHeartbeat(
-  sessionId: string,
-  generationId: string,
-): ReturnType<typeof setInterval> {
-  return setInterval(() => {
-    if (!isActiveGeneration(sessionId, generationId)) {
-      stopActiveGeneration(sessionId, generationId);
-      return;
-    }
-
-    void heartbeatGenerationRun(generationId, GENERATION_LEASE_OWNER)
-      .then((run) => {
-        if (run.status !== 'active' && run.status !== 'streaming') {
-          stopActiveGeneration(sessionId, generationId);
-        }
-      })
-      .catch(() => {});
-  }, GENERATION_RUN_HEARTBEAT_INTERVAL_MS);
-}
-
 function stopActiveGeneration(sessionId: string, generationId: string): void {
   const active = activeGenerationsBySessionId.get(sessionId);
 
   if (!active || active.generationId !== generationId) {
     return;
-  }
-
-  if (active.heartbeatTimer) {
-    clearInterval(active.heartbeatTimer);
   }
 
   activeGenerationsBySessionId.delete(sessionId);
