@@ -5,7 +5,7 @@ export type PanelView = 'replies' | 'history';
 
 export type GenerationMode = 'initial' | 'refinement';
 export type ComposeTargetKind = 'input' | 'textarea' | 'contenteditable';
-export type InsertionTargetStatus = 'live' | 'stale' | 'unavailable' | 'needs_recapture';
+export type InsertionTargetStatus = 'live' | 'stale' | 'unavailable' | 'needs_recapture' | 'tab_disambiguation_required';
 
 export interface ComposeTargetRef {
   targetId: string;

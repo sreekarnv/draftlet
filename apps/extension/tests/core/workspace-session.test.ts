@@ -98,6 +98,31 @@ describe('workspace session store', () => {
     expect(stale?.latestContext.composeTarget).toEqual(composeTarget);
   });
 
+  it('stores tab ambiguity candidates and clears them after target status changes', () => {
+    const store = createTestStore();
+    const session = store.upsertFromPageContext({ context: context('First'), tabId: 10 });
+    const ambiguous = store.updatePlausibleTabs(session.sessionId, [
+      {
+        tabId: 10,
+        windowId: 1,
+        title: 'Thread',
+        url: 'https://example.com/thread',
+        origin: 'https://example.com',
+        active: true,
+        currentWindow: true,
+        matchReason: 'session_url',
+      },
+    ]);
+
+    expect(ambiguous?.insertionTargetStatus).toBe('tab_disambiguation_required');
+    expect(ambiguous?.plausibleTabs).toHaveLength(1);
+
+    const rebound = store.updateInsertionTarget(session.sessionId, undefined, 'needs_recapture');
+
+    expect(rebound?.insertionTargetStatus).toBe('needs_recapture');
+    expect(rebound?.plausibleTabs).toBeUndefined();
+  });
+
   it('tracks active generation metadata per session', () => {
     const store = createTestStore();
     const first = store.upsertFromPageContext({ context: context('First'), tabId: 10 });

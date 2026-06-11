@@ -57,6 +57,7 @@ import {
   type WorkspaceSessionResult,
 } from '../core/messages';
 import { createConversationThreadStore } from '../core/conversation-thread';
+import { findPlausibleTabCandidates, isPlausibleSessionTab, type PlausibleTabCandidate } from '../core/tab-disambiguation';
 import { createWorkspaceSessionStore } from '../core/workspace-session';
 import type { GenerationMode, Tone } from '../core/types';
 
@@ -66,6 +67,11 @@ interface ActiveGenerationController {
   turnId: string;
   variants: DraftVariant[];
 }
+
+type InsertionTabResolution =
+  | { status: 'resolved'; tab: Browser.tabs.Tab }
+  | { status: 'ambiguous'; candidates: PlausibleTabCandidate[] }
+  | { status: 'missing' };
 
 const sessions = createWorkspaceSessionStore();
 const threads = createConversationThreadStore();
@@ -123,7 +129,7 @@ export default defineBackground(() => {
     }
 
     if (message.type === RECAPTURE_INSERTION_TARGET) {
-      return handleRecaptureInsertionTarget(message.sessionId);
+      return handleRecaptureInsertionTarget(message.sessionId, message.tabId);
     }
 
     if (message.type === SET_CURRENT_DRAFT_VARIANT) {
@@ -722,7 +728,7 @@ async function handleGetInsertionTargetStatus(sessionId?: string): Promise<Inser
   return revalidateInsertionTarget(session);
 }
 
-async function handleRecaptureInsertionTarget(sessionId: string): Promise<RecaptureInsertionTargetResult> {
+async function handleRecaptureInsertionTarget(sessionId: string, tabId?: number): Promise<RecaptureInsertionTargetResult> {
   const session = sessions.getBySessionId(sessionId);
 
   if (!session) {
@@ -734,9 +740,28 @@ async function handleRecaptureInsertionTarget(sessionId: string): Promise<Recapt
     };
   }
 
-  const tab = await resolveRecaptureTab(session);
+  const tabResolution = await resolveRecaptureTab(session, tabId);
 
-  if (!tab?.id) {
+  if (tabResolution.status === 'ambiguous') {
+    const updated = sessions.updatePlausibleTabs(session.sessionId, tabResolution.candidates);
+
+    if (updated) {
+      void emitWorkspaceSessionUpdated(updated);
+    }
+
+    return {
+      recaptured: false,
+      status: 'tab_disambiguation_required',
+      target: session.insertionTarget,
+      candidates: tabResolution.candidates,
+      reason: 'tab_disambiguation_required',
+      message: 'Choose the tab with the compose field before recapturing.',
+    };
+  }
+
+  const recaptureTabId = tabResolution.status === 'resolved' ? tabResolution.tab.id : undefined;
+
+  if (tabResolution.status === 'missing' || typeof recaptureTabId !== 'number') {
     const updated = sessions.updateInsertionTarget(session.sessionId, session.insertionTarget, 'unavailable');
 
     if (updated) {
@@ -753,7 +778,7 @@ async function handleRecaptureInsertionTarget(sessionId: string): Promise<Recapt
   }
 
   try {
-    const result = await browser.tabs.sendMessage(tab.id, {
+    const result = await browser.tabs.sendMessage(recaptureTabId, {
       type: RECAPTURE_INSERTION_TARGET,
       sessionId,
     } satisfies DraftletMessage) as RecaptureInsertionTargetResult;
@@ -789,9 +814,26 @@ async function handleRecaptureInsertionTarget(sessionId: string): Promise<Recapt
 }
 
 async function revalidateInsertionTarget(session: WorkspaceSession): Promise<InsertionTargetStatusResult> {
-  const tab = await resolveInsertionTab(session);
+  const tabResolution = await resolveInsertionTab(session);
 
-  if (!tab?.id) {
+  if (tabResolution.status === 'ambiguous') {
+    const updated = sessions.updatePlausibleTabs(session.sessionId, tabResolution.candidates);
+
+    if (updated) {
+      void emitWorkspaceSessionUpdated(updated);
+    }
+
+    return {
+      status: 'tab_disambiguation_required',
+      target: session.insertionTarget,
+      candidates: tabResolution.candidates,
+      message: 'Choose the tab with the compose field before recapturing.',
+    };
+  }
+
+  const revalidationTabId = tabResolution.status === 'resolved' ? tabResolution.tab.id : undefined;
+
+  if (tabResolution.status === 'missing' || typeof revalidationTabId !== 'number') {
     const updated = sessions.updateInsertionTarget(session.sessionId, session.insertionTarget, 'unavailable');
 
     if (updated) {
@@ -804,7 +846,7 @@ async function revalidateInsertionTarget(session: WorkspaceSession): Promise<Ins
   const target = session.insertionTarget ?? session.latestContext.composeTarget;
 
   try {
-    const result = await browser.tabs.sendMessage(tab.id, {
+    const result = await browser.tabs.sendMessage(revalidationTabId, {
       type: REVALIDATE_INSERTION_TARGET,
       sessionId: session.sessionId,
       target,
@@ -834,66 +876,78 @@ async function revalidateInsertionTarget(session: WorkspaceSession): Promise<Ins
   }
 }
 
-async function resolveRecaptureTab(session: WorkspaceSession): Promise<Browser.tabs.Tab | null> {
+async function resolveRecaptureTab(session: WorkspaceSession, tabId?: number): Promise<InsertionTabResolution> {
+  if (typeof tabId === 'number') {
+    const tab = await browser.tabs.get(tabId).catch(() => null);
+
+    if (tab?.id && isPlausibleSessionTab(tab, session)) {
+      return { status: 'resolved', tab: bindSessionToTab(session, tab) };
+    }
+
+    return { status: 'missing' };
+  }
+
   const activeTab = await getActiveTab().catch(() => null);
 
-  if (activeTab?.id && isPlausibleInsertionTab(activeTab, session)) {
-    const updated = sessions.hydrateSession({
-      ...session,
-      tabId: activeTab.id,
-      windowId: activeTab.windowId,
-    });
-    void emitWorkspaceSessionUpdated(updated);
-    return activeTab;
+  if (activeTab?.id && isPlausibleSessionTab(activeTab, session)) {
+    return { status: 'resolved', tab: bindSessionToTab(session, activeTab) };
   }
 
   return resolveInsertionTab(session);
 }
 
-async function resolveInsertionTab(session: WorkspaceSession): Promise<Browser.tabs.Tab | null> {
-  if (session.tabId >= 0) {
+async function resolveInsertionTab(session: WorkspaceSession): Promise<InsertionTabResolution> {
+  const shouldDisambiguate = session.insertionTargetStatus === 'stale'
+    || session.insertionTargetStatus === 'tab_disambiguation_required';
+
+  if (!shouldDisambiguate && session.tabId >= 0) {
     const tab = await browser.tabs.get(session.tabId).catch(() => null);
 
-    if (tab && isPlausibleInsertionTab(tab, session)) {
-      return tab;
+    if (tab && isPlausibleSessionTab(tab, session)) {
+      return { status: 'resolved', tab };
     }
   }
 
   const tabs = await browser.tabs.query({}).catch(() => []);
-  const target = session.insertionTarget ?? session.latestContext.composeTarget;
-  const exact = tabs.find((tab) => tab.id !== undefined && tab.url && target?.pageUrl && tab.url === target.pageUrl);
-  const originMatch = exact ?? tabs.find((tab) => tab.id !== undefined && tab.url && target?.origin && tab.url.startsWith(`${target.origin}/`));
-  const pageMatch = originMatch ?? tabs.find((tab) => tab.id !== undefined && tab.url === session.pageUrl);
+  const candidates = findPlausibleTabCandidates(tabs, session);
 
-  if (!pageMatch?.id) {
-    return null;
+  if (candidates.length > 1) {
+    return { status: 'ambiguous', candidates };
+  }
+
+  const candidate = candidates[0];
+
+  if (!candidate) {
+    return { status: 'missing' };
+  }
+
+  const tab = tabs.find((item) => item.id === candidate.tabId);
+
+  if (!tab?.id) {
+    return { status: 'missing' };
+  }
+
+  return { status: 'resolved', tab: bindSessionToTab(session, tab) };
+}
+
+function bindSessionToTab(session: WorkspaceSession, tab: Browser.tabs.Tab): Browser.tabs.Tab {
+  if (!tab.id) {
+    return tab;
   }
 
   const updated = sessions.hydrateSession({
     ...session,
-    tabId: pageMatch.id,
-    windowId: pageMatch.windowId,
+    tabId: tab.id,
+    windowId: tab.windowId,
+    plausibleTabs: undefined,
+    latestContext: {
+      ...session.latestContext,
+      tabId: tab.id,
+      windowId: tab.windowId,
+    },
   });
   void emitWorkspaceSessionUpdated(updated);
-  return pageMatch;
-}
-
-function isPlausibleInsertionTab(tab: Browser.tabs.Tab, session: WorkspaceSession): boolean {
-  const target = session.insertionTarget ?? session.latestContext.composeTarget;
-
-  if (!tab.url) {
-    return false;
-  }
-
-  if (target?.pageUrl && tab.url === target.pageUrl) {
-    return true;
-  }
-
-  if (target?.origin && tab.url.startsWith(`${target.origin}/`)) {
-    return true;
-  }
-
-  return tab.url === session.pageUrl;
+  return tab;
 }
 
 async function resolveInsertionSession(sessionId?: string): Promise<WorkspaceSession | null> {

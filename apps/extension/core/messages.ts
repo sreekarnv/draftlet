@@ -1,4 +1,5 @@
 import type { ComposeTargetRef, ConnectionStatus, InsertionResult, InsertionTargetStatus, PanelView, Tone } from './types';
+import type { PlausibleTabCandidate } from './tab-disambiguation';
 
 export const LAUNCH_SIDE_PANEL = 'draftlet:launch-side-panel';
 export const GET_CURRENT_WORKSPACE_SESSION = 'draftlet:get-current-workspace-session';
@@ -58,6 +59,7 @@ export interface WorkspaceSession {
   activeGeneration?: WorkspaceSessionGeneration;
   insertionTarget?: ComposeTargetRef;
   insertionTargetStatus?: InsertionTargetStatus;
+  plausibleTabs?: PlausibleTabCandidate[];
 }
 
 export interface SourceSnapshot {
@@ -156,6 +158,7 @@ export interface DraftletError {
 
 export type RecaptureInsertionTargetFailureReason =
   | 'session_not_found'
+  | 'tab_disambiguation_required'
   | 'tab_unavailable'
   | 'content_script_unavailable'
   | 'no_focused_compose_target'
@@ -198,7 +201,7 @@ export type DraftletMessage =
   | { type: typeof INSERT_REPLY; sessionId?: string; replyText: string; variantId?: string; target?: ComposeTargetRef }
   | { type: typeof GET_INSERTION_TARGET_STATUS; sessionId?: string }
   | { type: typeof REVALIDATE_INSERTION_TARGET; sessionId: string; target?: ComposeTargetRef }
-  | { type: typeof RECAPTURE_INSERTION_TARGET; sessionId: string }
+  | { type: typeof RECAPTURE_INSERTION_TARGET; sessionId: string; tabId?: number }
   | { type: typeof SET_CURRENT_DRAFT_VARIANT; sessionId: string; variantId: string }
   | { type: typeof ACCEPT_DRAFT_VARIANT; sessionId: string; variantId: string };
 
@@ -249,6 +252,7 @@ export interface InsertReplyResult {
 export interface InsertionTargetStatusResult {
   status: InsertionTargetStatus;
   target?: ComposeTargetRef;
+  candidates?: PlausibleTabCandidate[];
   message?: string;
 }
 
@@ -256,6 +260,7 @@ export interface RecaptureInsertionTargetResult {
   recaptured: boolean;
   status: InsertionTargetStatus;
   target?: ComposeTargetRef;
+  candidates?: PlausibleTabCandidate[];
   reason?: RecaptureInsertionTargetFailureReason;
   message: string;
 }
