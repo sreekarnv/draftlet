@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 
 import { DEFAULT_PANEL_VIEW, DEFAULT_TONE } from '../core/constants';
 import type { ConversationThreadSnapshot, DomainHistoryItem } from '../core/messages';
+import type { PlausibleTabCandidate } from '../core/tab-disambiguation';
 import type {
   ConnectionStatus,
   InsertionResult,
@@ -28,6 +29,7 @@ export interface VariantActionResult {
 export interface InsertionTargetViewState {
   status: InsertionTargetStatus;
   message?: string;
+  candidates?: PlausibleTabCandidate[];
 }
 
 export type PanelAction =
@@ -62,7 +64,7 @@ export interface PanelCallbacks {
   onLoadHistory?: () => Promise<DomainHistoryItem[]>;
   onRestoreHistoryItem?: (item: DomainHistoryItem) => Promise<VariantActionResult>;
   onInsert: (replyText: string, variantId?: string) => Promise<InsertionResult>;
-  onRecaptureInsertionTarget?: () => Promise<VariantActionResult>;
+  onRecaptureInsertionTarget?: (tabId?: number) => Promise<VariantActionResult>;
   onSelectVariant?: (variantId: string) => Promise<VariantActionResult>;
   onAcceptVariant?: (variantId: string) => Promise<VariantActionResult>;
   onCloseRequest: () => void;

@@ -89,8 +89,8 @@ const mountedPanel = mountDraftletPanel(root, {
   onInsert(replyText, variantId) {
     return insertIntoActivePage(replyText, variantId);
   },
-  onRecaptureInsertionTarget() {
-    return recaptureInsertionTarget();
+  onRecaptureInsertionTarget(tabId) {
+    return recaptureInsertionTarget(tabId);
   },
   onSelectVariant(variantId) {
     return setVariantCurrent(variantId);
@@ -269,6 +269,7 @@ function applySession(session: WorkspaceSession) {
   panel.setInsertionTargetStatus({
     status: session.insertionTargetStatus ?? (session.insertionTarget ? 'stale' : 'needs_recapture'),
     message: insertionTargetMessage(session),
+    candidates: session.plausibleTabs,
   });
   void refreshHealth();
   void refreshInsertionTargetStatus();
@@ -306,6 +307,7 @@ async function refreshInsertionTargetStatus() {
     panel.setInsertionTargetStatus({
       status: response.status,
       message: response.message,
+      candidates: response.candidates,
     });
   } catch {
     panel.setInsertionTargetStatus({
@@ -503,7 +505,7 @@ async function insertIntoActivePage(replyText: string, variantId?: string): Prom
   }
 }
 
-async function recaptureInsertionTarget() {
+async function recaptureInsertionTarget(tabId?: number) {
   if (!currentSession) {
     panel.setInsertionTargetStatus({
       status: 'unavailable',
@@ -521,11 +523,13 @@ async function recaptureInsertionTarget() {
     const response = await browser.runtime.sendMessage({
       type: RECAPTURE_INSERTION_TARGET,
       sessionId: currentSession.sessionId,
+      tabId,
     } satisfies DraftletMessage) as RecaptureInsertionTargetResult;
 
     panel.setInsertionTargetStatus({
       status: response.status,
       message: response.message,
+      candidates: response.candidates,
     });
 
     if (response.recaptured && response.target) {
@@ -533,10 +537,18 @@ async function recaptureInsertionTarget() {
         ...currentSession,
         insertionTarget: response.target,
         insertionTargetStatus: response.status,
+        plausibleTabs: undefined,
         latestContext: {
           ...currentSession.latestContext,
+          tabId: tabId ?? currentSession.latestContext.tabId,
           composeTarget: response.target,
         },
+      };
+    } else if (response.candidates) {
+      currentSession = {
+        ...currentSession,
+        insertionTargetStatus: response.status,
+        plausibleTabs: response.candidates,
       };
     }
 
@@ -567,6 +579,10 @@ function insertionTargetMessage(session: WorkspaceSession): string {
 
   if (status === 'unavailable') {
     return 'Target unavailable; Copy still works.';
+  }
+
+  if (status === 'tab_disambiguation_required') {
+    return 'Choose the tab with the compose field, then recapture.';
   }
 
   return 'Focus a compose field and recapture to enable insertion.';

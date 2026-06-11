@@ -3,6 +3,7 @@ import type {
   WorkspaceSession,
   WorkspaceSessionGeneration,
 } from './messages';
+import type { PlausibleTabCandidate } from './tab-disambiguation';
 import type { ComposeTargetRef, InsertionTargetStatus } from './types';
 
 interface WorkspaceSessionStoreOptions {
@@ -23,6 +24,7 @@ export interface WorkspaceSessionStore {
   getByTabId(tabId: number): WorkspaceSession | null;
   updateContext(sessionId: string, context: DraftletSidePanelContext): WorkspaceSession | null;
   updateInsertionTarget(sessionId: string, target: ComposeTargetRef | undefined, status: InsertionTargetStatus): WorkspaceSession | null;
+  updatePlausibleTabs(sessionId: string, candidates: PlausibleTabCandidate[]): WorkspaceSession | null;
   setActiveThread(sessionId: string, threadId: string): WorkspaceSession | null;
   setActiveGeneration(sessionId: string, generation: WorkspaceSessionGeneration): WorkspaceSession | null;
   updateActiveGenerationStatus(
@@ -69,6 +71,7 @@ export function createWorkspaceSessionStore({
           latestContext: normalizedContext,
           insertionTarget: normalizedContext.composeTarget ?? existing.insertionTarget,
           insertionTargetStatus: normalizedContext.composeTarget ? 'live' : existing.insertionTargetStatus,
+          plausibleTabs: normalizedContext.composeTarget ? undefined : existing.plausibleTabs,
           status: 'active',
         });
       }
@@ -87,6 +90,7 @@ export function createWorkspaceSessionStore({
         latestContext: normalizedContext,
         insertionTarget: normalizedContext.composeTarget,
         insertionTargetStatus: normalizedContext.composeTarget ? 'live' : 'needs_recapture',
+        plausibleTabs: undefined,
         status: 'active',
         createdAt,
         updatedAt: createdAt,
@@ -127,6 +131,7 @@ export function createWorkspaceSessionStore({
         latestContext: normalizedContext,
         insertionTarget: normalizedContext.composeTarget ?? session.insertionTarget,
         insertionTargetStatus: normalizedContext.composeTarget ? 'live' : session.insertionTargetStatus,
+        plausibleTabs: normalizedContext.composeTarget ? undefined : session.plausibleTabs,
       });
     },
 
@@ -140,10 +145,24 @@ export function createWorkspaceSessionStore({
       return touch(session, {
         insertionTarget: target ?? session.insertionTarget,
         insertionTargetStatus: status,
+        plausibleTabs: status === 'tab_disambiguation_required' ? session.plausibleTabs : undefined,
         latestContext: {
           ...session.latestContext,
           composeTarget: target ?? session.latestContext.composeTarget,
         },
+      });
+    },
+
+    updatePlausibleTabs(sessionId, candidates) {
+      const session = sessionsById.get(sessionId);
+
+      if (!session) {
+        return null;
+      }
+
+      return touch(session, {
+        insertionTargetStatus: candidates.length > 0 ? 'tab_disambiguation_required' : session.insertionTargetStatus,
+        plausibleTabs: candidates,
       });
     },
 

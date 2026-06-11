@@ -106,14 +106,14 @@ export function DraftletPanel({ callbacks, controller }: DraftletPanelProps) {
     callbacks.onViewChange?.(activeView);
   };
 
-  const recaptureInsertionTarget = async () => {
+  const recaptureInsertionTarget = async (tabId?: number) => {
     if (!callbacks.onRecaptureInsertionTarget) {
       setView((current) => ({ ...current, persistenceMessage: 'Target recapture is unavailable here.' }));
       return;
     }
 
     setView((current) => ({ ...current, persistenceMessage: 'Recapturing target...' }));
-    const result = await callbacks.onRecaptureInsertionTarget();
+    const result = await callbacks.onRecaptureInsertionTarget(tabId);
     setView((current) => ({ ...current, persistenceMessage: result.message }));
   };
 
@@ -155,7 +155,7 @@ function renderComposerWorkspace(
   view: PanelViewState,
   callbacks: PanelCallbacks,
   selectTone: (tone: Tone) => void,
-  recaptureInsertionTarget: () => Promise<void>,
+  recaptureInsertionTarget: (tabId?: number) => Promise<void>,
   refinementInstruction: string,
   setRefinementInstruction: (instruction: string) => void,
 ) {
@@ -216,29 +216,60 @@ function renderComposerWorkspace(
   );
 }
 
-function renderTargetStatus(view: PanelViewState, recaptureInsertionTarget: () => Promise<void>) {
+function renderTargetStatus(view: PanelViewState, recaptureInsertionTarget: (tabId?: number) => Promise<void>) {
   const canRecapture = view.insertionTarget.status !== 'live';
+  const needsTabChoice = view.insertionTarget.status === 'tab_disambiguation_required'
+    && (view.insertionTarget.candidates?.length ?? 0) > 0;
 
   return (
-    <div className="flex flex-wrap items-center justify-end gap-1.5">
-      <div
-        className={cn('text-[11px] font-medium leading-4', targetToneClass(view.insertionTarget.status))}
-        title={view.insertionTarget.message}
-      >
-        {targetStatusLabel(view.insertionTarget)}
-      </div>
-      {canRecapture ? (
-        <Button
-          aria-label="Recapture insertion target"
-          className="h-6 px-2 text-[11px] leading-4"
-          onClick={() => void recaptureInsertionTarget()}
-          type="button"
-          variant="secondary"
+    <div className="grid justify-items-end gap-1.5">
+      <div className="flex flex-wrap items-center justify-end gap-1.5">
+        <div
+          className={cn('text-[11px] font-medium leading-4', targetToneClass(view.insertionTarget.status))}
+          title={view.insertionTarget.message}
         >
-          <RefreshCw aria-hidden="true" className="h-3 w-3" />
-          Recapture
-        </Button>
-      ) : null}
+          {targetStatusLabel(view.insertionTarget)}
+        </div>
+        {canRecapture && !needsTabChoice ? (
+          <Button
+            aria-label="Recapture insertion target"
+            className="h-6 px-2 text-[11px] leading-4"
+            onClick={() => void recaptureInsertionTarget()}
+            type="button"
+            variant="secondary"
+          >
+            <RefreshCw aria-hidden="true" className="h-3 w-3" />
+            Recapture
+          </Button>
+        ) : null}
+      </div>
+      {needsTabChoice ? renderTabCandidates(view.insertionTarget.candidates!, recaptureInsertionTarget) : null}
+    </div>
+  );
+}
+
+function renderTabCandidates(
+  candidates: NonNullable<InsertionTargetViewState['candidates']>,
+  recaptureInsertionTarget: (tabId?: number) => Promise<void>,
+) {
+  return (
+    <div className="grid max-w-full justify-items-end gap-1 rounded-md bg-white/80 p-1.5 text-right ring-1 ring-slate-200/80">
+      <div className="text-[11px] font-medium leading-4 text-slate-500">Choose tab</div>
+      <div className="grid max-w-[17rem] gap-1">
+        {candidates.slice(0, 4).map((candidate) => (
+          <Button
+            aria-label={`Use ${candidate.title || candidate.origin || 'matching tab'} for recapture`}
+            className="h-auto justify-start px-2 py-1 text-left text-[11px] leading-4"
+            key={candidate.tabId}
+            onClick={() => void recaptureInsertionTarget(candidate.tabId)}
+            title={candidate.url}
+            type="button"
+            variant="secondary"
+          >
+            <span className="min-w-0 truncate">{tabCandidateLabel(candidate)}</span>
+          </Button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -542,6 +573,10 @@ function targetStatusLabel(target: InsertionTargetViewState) {
     return 'Target unavailable';
   }
 
+  if (target.status === 'tab_disambiguation_required') {
+    return 'Choose tab';
+  }
+
   return 'Needs recapture';
 }
 
@@ -550,11 +585,17 @@ function targetToneClass(status: InsertionTargetViewState['status']) {
     return 'text-emerald-700';
   }
 
-  if (status === 'stale') {
+  if (status === 'stale' || status === 'tab_disambiguation_required') {
     return 'text-amber-700';
   }
 
   return 'text-slate-500';
+}
+
+function tabCandidateLabel(candidate: NonNullable<InsertionTargetViewState['candidates']>[number]) {
+  const title = candidate.title || candidate.origin || candidate.url || `Tab ${candidate.tabId}`;
+  const hint = candidate.active ? 'active' : candidate.currentWindow ? 'current window' : candidate.matchReason.replace('_', ' ');
+  return `${title} · ${hint}`;
 }
 
 function draftCount(view: PanelViewState) {

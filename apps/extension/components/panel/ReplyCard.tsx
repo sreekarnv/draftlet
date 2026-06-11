@@ -153,6 +153,10 @@ function feedbackMessageFor(result: InsertionResult, previousTargetStatus: Inser
     return 'Target unavailable. Copy this reply to use it manually.';
   }
 
+  if (result.targetStatus === 'tab_disambiguation_required' || previousTargetStatus === 'tab_disambiguation_required') {
+    return 'Choose the matching tab, recapture, then try inserting again.';
+  }
+
   return 'Could not insert or copy this reply.';
 }
 
