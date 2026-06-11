@@ -759,7 +759,9 @@ async function handleRecaptureInsertionTarget(sessionId: string, tabId?: number)
     };
   }
 
-  if (tabResolution.status === 'missing' || !tabResolution.tab.id) {
+  const recaptureTabId = tabResolution.status === 'resolved' ? tabResolution.tab.id : undefined;
+
+  if (tabResolution.status === 'missing' || typeof recaptureTabId !== 'number') {
     const updated = sessions.updateInsertionTarget(session.sessionId, session.insertionTarget, 'unavailable');
 
     if (updated) {
@@ -775,10 +777,8 @@ async function handleRecaptureInsertionTarget(sessionId: string, tabId?: number)
     };
   }
 
-  const tab = tabResolution.tab;
-
   try {
-    const result = await browser.tabs.sendMessage(tab.id, {
+    const result = await browser.tabs.sendMessage(recaptureTabId, {
       type: RECAPTURE_INSERTION_TARGET,
       sessionId,
     } satisfies DraftletMessage) as RecaptureInsertionTargetResult;
@@ -831,7 +831,9 @@ async function revalidateInsertionTarget(session: WorkspaceSession): Promise<Ins
     };
   }
 
-  if (tabResolution.status === 'missing' || !tabResolution.tab.id) {
+  const revalidationTabId = tabResolution.status === 'resolved' ? tabResolution.tab.id : undefined;
+
+  if (tabResolution.status === 'missing' || typeof revalidationTabId !== 'number') {
     const updated = sessions.updateInsertionTarget(session.sessionId, session.insertionTarget, 'unavailable');
 
     if (updated) {
@@ -841,11 +843,10 @@ async function revalidateInsertionTarget(session: WorkspaceSession): Promise<Ins
     return { status: 'unavailable', target: session.insertionTarget, message: 'Original page is not open.' };
   }
 
-  const tab = tabResolution.tab;
   const target = session.insertionTarget ?? session.latestContext.composeTarget;
 
   try {
-    const result = await browser.tabs.sendMessage(tab.id, {
+    const result = await browser.tabs.sendMessage(revalidationTabId, {
       type: REVALIDATE_INSERTION_TARGET,
       sessionId: session.sessionId,
       target,
