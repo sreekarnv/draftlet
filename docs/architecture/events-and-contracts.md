@@ -115,6 +115,7 @@ The current v2 extension generation flow is intentionally transitional but now s
 - side panel restores the active tab session with `draftlet:get-current-workspace-session`
 - service worker creates or reuses a session-backed `ConversationThread` when generation starts
 - each generation creates a `Turn` on that thread
+- runtime `WorkspaceSession` persistence carries the active routing ids for restore/reopen: `active_thread_id`, `active_turn_id`, and the currently live `active_run_id` when a runtime run is active
 - turn lifecycle is durable on the `Turn` with explicit status, lifecycle timestamps, and bounded error metadata
 - each live execution also claims a runtime `GenerationRun` lease tied to the session, thread, and turn; runtime enforces one fresh active lease per session and reconciles stale conflicts before allowing a new claim
 - each streamed runtime reply is stored as a `DraftVariant` on the active turn
@@ -135,8 +136,9 @@ The current v2 generation flow is transitional but now uses durable runtime doma
 - initial generation creates or reuses a session-backed `ConversationThread`, creates a `Turn`, and streams replies through `/replies` with `generation_mode: initial`
 - follow-up refinement uses `draftlet:start-draft-refinement`, appends a new `Turn` to the active persisted thread, and streams `/replies` with `generation_mode: refinement` plus the user instruction
 - runtime-backed `Turn` lifecycle records queued, started, streaming, completed, failed, and cancelled states with timestamps and bounded error details
+- runtime-backed `WorkspaceSession` records carry active routing metadata with `active_thread_id`, `active_turn_id`, and `active_run_id`; terminal or reconciled run state clears only the active run id while preserving the selected thread/turn context
 - runtime-backed `GenerationRun` records make live execution explicit with `run_id`, `turn_id`, `session_id`, `thread_id`, status, lease owner, claim/heartbeat/release timestamps, bounded error metadata, and terminal-state protection against late stream updates
-- service worker claims a `GenerationRun` before opening the live stream, sends bounded heartbeat updates while its browser-local stream handle is active, and treats runtime conflicts as authoritative
+- runtime `/replies` setup claims a `GenerationRun` for the browser-provided run id, sends bounded heartbeat updates while the stream is active, and treats runtime conflicts as authoritative
 - runtime stream handling updates and heartbeats the run while preserving `Turn` lifecycle state for side panel restore; cancellation is represented as runtime run state and checked by the active stream between upstream model chunks
 - restore/startup can query execution state, reconcile stale active runtime runs, and mark incomplete live execution as interrupted without pretending stream resume exists
 - runtime loads prior persisted thread context for refinement prompts, then persists each streamed reply as a `DraftVariant` for the turn

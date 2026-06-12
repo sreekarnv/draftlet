@@ -268,6 +268,13 @@ function applySession(session: WorkspaceSession) {
   currentTone = tone;
   currentPanelView = activeView;
 
+  if (session.activeRunId) {
+    activeGenerationId = session.activeRunId;
+    activeGenerationSessionId = session.sessionId;
+  } else if (activeGenerationSessionId === session.sessionId) {
+    clearActiveGeneration();
+  }
+
   if (previousSession?.sessionId !== session.sessionId) {
     recaptureTrail = [];
   }
@@ -760,12 +767,13 @@ async function closeSidePanel() {
 }
 
 async function cancelActiveGeneration() {
-  if (!activeGenerationId || !activeGenerationSessionId) {
+  const generationId = activeGenerationId ?? currentSession?.activeRunId;
+  const sessionId = activeGenerationSessionId ?? currentSession?.sessionId;
+
+  if (!generationId || !sessionId) {
     return;
   }
 
-  const generationId = activeGenerationId;
-  const sessionId = activeGenerationSessionId;
   clearActiveGeneration();
 
   await browser.runtime.sendMessage({

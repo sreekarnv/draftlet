@@ -38,14 +38,16 @@ def upsert_workspace_session(session: Session, payload: WorkspaceSessionUpsert) 
     existing = session.get(WorkspaceSession, payload.session_id)
 
     if existing:
-        existing.tab_id = payload.tab_id
-        existing.window_id = payload.window_id
+        existing.tab_id = payload.tab_id if payload.tab_id is not None else existing.tab_id
+        existing.window_id = payload.window_id if payload.window_id is not None else existing.window_id
         existing.page_url = payload.page_url
         existing.page_title = payload.page_title
         existing.selected_text = payload.selected_text
         existing.source_domain = payload.source_domain
         existing.status = payload.status
         existing.active_thread_id = payload.active_thread_id
+        existing.active_turn_id = payload.active_turn_id
+        existing.active_run_id = payload.active_run_id
         apply_compose_target(existing, payload.compose_target)
         session.add(existing)
         session.commit()
@@ -62,6 +64,8 @@ def upsert_workspace_session(session: Session, payload: WorkspaceSessionUpsert) 
         source_domain=payload.source_domain,
         status=payload.status,
         active_thread_id=payload.active_thread_id,
+        active_turn_id=payload.active_turn_id,
+        active_run_id=payload.active_run_id,
     )
     apply_compose_target(workspace, payload.compose_target)
     session.add(workspace)
@@ -146,6 +150,14 @@ def create_or_update_turn(session: Session, payload: TurnCreate) -> Turn:
         )
 
     session.add(turn)
+    thread = session.get(ConversationThread, payload.thread_id)
+    if thread:
+        workspace = session.get(WorkspaceSession, thread.session_id)
+        if workspace:
+            workspace.active_thread_id = payload.thread_id
+            workspace.active_turn_id = payload.turn_id
+            session.add(workspace)
+
     session.commit()
     session.refresh(turn)
     return turn
@@ -242,6 +254,13 @@ def claim_generation_run(session: Session, payload: GenerationRunClaim) -> Gener
         )
 
     session.add(run)
+    workspace = session.get(WorkspaceSession, payload.session_id)
+    if workspace:
+        workspace.active_thread_id = payload.thread_id
+        workspace.active_turn_id = payload.turn_id
+        workspace.active_run_id = payload.run_id
+        session.add(workspace)
+
     session.commit()
     session.refresh(run)
     return run
@@ -328,6 +347,7 @@ def update_generation_run_status(session: Session, run_id: str, payload: Generat
 
     apply_generation_run_lifecycle(run, payload.status, payload.error_code, payload.error_message)
     reconcile_turn_for_generation_run(session, run, payload.status, payload.error_code, payload.error_message)
+    reconcile_workspace_routing_for_generation_run(session, run)
     session.add(run)
     session.commit()
     session.refresh(run)
@@ -350,6 +370,7 @@ def reconcile_stale_generation_runs(session: Session, payload: GenerationRunReco
 
         apply_generation_run_lifecycle(run, "interrupted", payload.error_code, payload.error_message)
         reconcile_turn_for_generation_run(session, run, "interrupted", payload.error_code, payload.error_message)
+        reconcile_workspace_routing_for_generation_run(session, run)
         session.add(run)
         reconciled.append(run)
 
@@ -447,6 +468,23 @@ def reconcile_turn_for_generation_run(
     if turn:
         apply_turn_lifecycle(turn, turn_status, error_code, error_message)
         session.add(turn)
+
+
+def reconcile_workspace_routing_for_generation_run(session: Session, run: GenerationRun) -> None:
+    workspace = session.get(WorkspaceSession, run.session_id)
+
+    if not workspace:
+        return
+
+    workspace.active_thread_id = run.thread_id
+    workspace.active_turn_id = run.turn_id
+
+    if run.status in ACTIVE_GENERATION_RUN_STATUSES:
+        workspace.active_run_id = run.run_id
+    elif workspace.active_run_id == run.run_id:
+        workspace.active_run_id = None
+
+    session.add(workspace)
 
 
 def apply_turn_lifecycle(turn: Turn, status: str, error_code: str | None = None, error_message: str | None = None) -> None:

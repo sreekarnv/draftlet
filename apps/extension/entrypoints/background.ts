@@ -191,8 +191,9 @@ async function handleLaunchSidePanel(
     windowId: sender.tab?.windowId ?? context.windowId,
   });
 
-  if (previousSession?.activeGeneration) {
-    void handleCancelDraftGeneration(previousSession.sessionId, previousSession.activeGeneration.generationId);
+  const previousGenerationId = previousSession?.activeRunId ?? previousSession?.activeGeneration?.generationId;
+  if (previousSession && previousGenerationId) {
+    void handleCancelDraftGeneration(previousSession.sessionId, previousGenerationId);
     session = sessions.getBySessionId(session.sessionId) ?? session;
   }
 
@@ -299,12 +300,15 @@ async function handleRestoreDomainThread(sessionId: string, threadId: string): P
     }
 
     const previous = sessions.getBySessionId(sessionId);
+    const activeTurn = latestGenerationTurn(threadSnapshot);
     const restoredSession: WorkspaceSession = {
       ...sessionSnapshot.session,
       tabId: previous?.tabId ?? sessionSnapshot.session.tabId,
       windowId: previous?.windowId ?? sessionSnapshot.session.windowId,
       insertionTargetStatus: 'stale',
       activeThreadId: threadId,
+      activeTurnId: activeTurn?.turnId ?? sessionSnapshot.session.activeTurnId,
+      activeRunId: undefined,
       latestContext: {
         selectedText: threadSnapshot.thread.source.selectedText,
         sourceUrl: threadSnapshot.thread.source.sourceUrl,
@@ -319,6 +323,7 @@ async function handleRestoreDomainThread(sessionId: string, threadId: string): P
     };
     sessions.hydrateSession(restoredSession);
     threads.hydrateSnapshot(threadSnapshot);
+    void persistWorkspaceSession(restoredSession);
     void emitWorkspaceSessionUpdated(restoredSession);
     void emitConversationThreadUpdated(restoredSession.sessionId, threadSnapshot);
 
@@ -373,7 +378,7 @@ async function handleStartDraftGeneration(
       threadId: conflict.threadId,
       turnId: conflict.turnId,
       error: createDraftletError(
-        conflict.turnId === sessions.getBySessionId(sessionId)?.activeGeneration?.turnId
+        conflict.turnId === sessions.getBySessionId(sessionId)?.activeTurnId
           ? 'generation_run_turn_active'
           : 'generation_run_session_active',
         'A draft generation is already active for this session.',
@@ -476,6 +481,7 @@ async function handleStartDraftGeneration(
   }) ?? updatedSession;
 
   void emitWorkspaceSessionUpdated(generatingSession);
+  void persistWorkspaceSession(generatingSession);
   void emitConversationThreadUpdated(sessionId, startedSnapshot);
   void runDraftGeneration(generatingSession.sessionId, context, generationId, mode, thread, startedTurn);
 
@@ -542,9 +548,25 @@ async function handleCancelDraftGeneration(sessionId?: string, generationId?: st
     await finalizeGenerationRunStatus(undefined, turnId, 'cancelled', error);
   }
   const refreshedSnapshot = await getConversationThreadSnapshot(hydratedSnapshot.thread.threadId).catch(() => null);
+  const refreshedSession = await getWorkspaceSessionSnapshot(session.sessionId).catch(() => null);
   const cancelledSnapshot = refreshedSnapshot
     ? threads.hydrateSnapshot(refreshedSnapshot)
     : threads.updateTurnStatus(turnId, 'cancelled', error) ?? hydratedSnapshot;
+  if (refreshedSession?.session) {
+    const hydratedSession = sessions.hydrateSession({
+      ...refreshedSession.session,
+      tabId: session.tabId,
+      windowId: session.windowId,
+      latestContext: {
+        ...refreshedSession.session.latestContext,
+        tabId: session.tabId,
+        windowId: session.windowId,
+        tone: session.latestContext.tone,
+        activeView: session.latestContext.activeView,
+      },
+    });
+    void emitWorkspaceSessionUpdated(hydratedSession);
+  }
   void emitConversationThreadUpdated(session.sessionId, cancelledSnapshot);
   return { canceled: true };
 }
@@ -1255,7 +1277,7 @@ async function restoreRuntimeSnapshot(session: WorkspaceSession): Promise<Worksp
       return { session };
     }
 
-    const restoredSession: WorkspaceSession = {
+    let restoredSession: WorkspaceSession = {
       ...snapshot.session,
       tabId: session.tabId,
       windowId: session.windowId,
@@ -1270,15 +1292,34 @@ async function restoreRuntimeSnapshot(session: WorkspaceSession): Promise<Worksp
         composeTarget: snapshot.session.insertionTarget ?? session.insertionTarget,
       },
     };
-    sessions.updateContext(restoredSession.sessionId, restoredSession.latestContext);
-
-    if (restoredSession.activeThreadId) {
-      sessions.setActiveThread(restoredSession.sessionId, restoredSession.activeThreadId);
-    }
 
     const restoredThread = snapshot.thread
       ? await reconcileInterruptedGeneration(restoredSession.sessionId, snapshot.thread)
       : null;
+
+    if (snapshot.thread) {
+      const refreshedSnapshot = await getWorkspaceSessionSnapshot(restoredSession.sessionId).catch(() => null);
+
+      if (refreshedSnapshot?.session) {
+        restoredSession = {
+          ...refreshedSnapshot.session,
+          tabId: session.tabId,
+          windowId: session.windowId,
+          insertionTarget: refreshedSnapshot.session.insertionTarget ?? session.insertionTarget,
+          insertionTargetStatus: 'stale',
+          latestContext: {
+            ...refreshedSnapshot.session.latestContext,
+            tabId: session.tabId,
+            windowId: session.windowId,
+            tone: session.latestContext.tone,
+            activeView: session.latestContext.activeView,
+            composeTarget: refreshedSnapshot.session.insertionTarget ?? session.insertionTarget,
+          },
+        };
+      }
+    }
+
+    sessions.hydrateSession(restoredSession);
 
     if (restoredThread) {
       threads.hydrateSnapshot(restoredThread);

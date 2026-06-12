@@ -217,6 +217,7 @@ class DomainServiceTest(unittest.TestCase):
                 ),
             )
             active_runs = list_active_generation_runs(session, session_id=workspace.session_id)
+            claimed_snapshot = get_session_snapshot(session, workspace.session_id)
             cancelled = update_generation_run_status(
                 session,
                 "run-1",
@@ -229,9 +230,13 @@ class DomainServiceTest(unittest.TestCase):
             snapshot = get_session_snapshot(session, workspace.session_id)
 
             self.assertIsNotNone(run)
+            self.assertEqual(claimed_snapshot.session.active_run_id, run.run_id)
+            self.assertEqual(claimed_snapshot.session.active_turn_id, turn.turn_id)
             self.assertEqual(active_runs[0].run_id, "run-1")
             self.assertEqual(cancelled.status, "cancelled")
             self.assertIsNotNone(cancelled.cancelled_at)
+            self.assertIsNone(snapshot.session.active_run_id)
+            self.assertEqual(snapshot.session.active_turn_id, turn.turn_id)
             self.assertEqual(snapshot.thread.turns[0].generation_status, "cancelled")
             self.assertEqual(snapshot.thread.turns[0].generation_error_code, "generation_cancelled")
 
@@ -286,6 +291,8 @@ class DomainServiceTest(unittest.TestCase):
             self.assertEqual([run.run_id for run in reconciled], ["run-1"])
             self.assertEqual(reconciled[0].status, "interrupted")
             self.assertIsNotNone(reconciled[0].interrupted_at)
+            self.assertIsNone(snapshot.session.active_run_id)
+            self.assertEqual(snapshot.session.active_turn_id, turn.turn_id)
             self.assertEqual(snapshot.thread.turns[0].generation_status, "failed")
             self.assertEqual(snapshot.thread.turns[0].generation_error_code, "generation_interrupted")
 
@@ -424,6 +431,8 @@ class DomainServiceTest(unittest.TestCase):
 
             self.assertEqual(claimed.run_id, "run-2")
             self.assertEqual([run.run_id for run in active_runs], ["run-2"])
+            self.assertEqual(snapshot.session.active_run_id, "run-2")
+            self.assertEqual(snapshot.session.active_turn_id, second_turn.turn_id)
             self.assertEqual(snapshot.thread.turns[0].generation_status, "failed")
             self.assertEqual(snapshot.thread.turns[0].generation_error_code, "generation_run_stale")
 
@@ -537,12 +546,14 @@ class DomainServiceTest(unittest.TestCase):
             self.assertEqual(cancelled.status, "cancelled")
             self.assertEqual(completed.status, "cancelled")
 
-    def test_upsert_session_updates_active_thread(self) -> None:
+    def test_upsert_session_updates_active_routing_metadata(self) -> None:
         with self.Session() as session:
             first = upsert_workspace_session(
                 session,
                 WorkspaceSessionUpsert(
                     session_id="session-1",
+                    tab_id=10,
+                    window_id=1,
                     page_url="https://example.com/one",
                     selected_text="First",
                 ),
@@ -554,12 +565,18 @@ class DomainServiceTest(unittest.TestCase):
                     page_url="https://example.com/two",
                     selected_text="Second",
                     active_thread_id="thread-2",
+                    active_turn_id="turn-2",
+                    active_run_id="run-2",
                 ),
             )
 
             self.assertEqual(first.session_id, second.session_id)
+            self.assertEqual(second.tab_id, 10)
+            self.assertEqual(second.window_id, 1)
             self.assertEqual(second.page_url, "https://example.com/two")
             self.assertEqual(second.active_thread_id, "thread-2")
+            self.assertEqual(second.active_turn_id, "turn-2")
+            self.assertEqual(second.active_run_id, "run-2")
 
     def test_variant_state_is_bounded_to_one_current_and_one_accepted_per_thread(self) -> None:
         with self.Session() as session:

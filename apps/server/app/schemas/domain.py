@@ -56,9 +56,22 @@ class WorkspaceSessionUpsert(BaseModel):
     source_domain: str | None = Field(default=None, max_length=255)
     status: str = Field(default="active", min_length=1, max_length=40)
     active_thread_id: str | None = Field(default=None, max_length=120)
+    active_turn_id: str | None = Field(default=None, max_length=120)
+    active_run_id: str | None = Field(default=None, max_length=120)
     compose_target: ComposeTargetRef | None = None
 
-    @field_validator("session_id", "page_url", "page_title", "selected_text", "source_domain", "status", "active_thread_id", mode="before")
+    @field_validator(
+        "session_id",
+        "page_url",
+        "page_title",
+        "selected_text",
+        "source_domain",
+        "status",
+        "active_thread_id",
+        "active_turn_id",
+        "active_run_id",
+        mode="before",
+    )
     @classmethod
     def strip_text_fields(cls, value: str | None) -> str | None:
         if value is None:
@@ -180,6 +193,8 @@ class WorkspaceSessionRead(BaseModel):
     source_domain: str | None
     status: str
     active_thread_id: str | None
+    active_turn_id: str | None
+    active_run_id: str | None
     compose_target: ComposeTargetRef | None = None
     created_at: datetime
     updated_at: datetime

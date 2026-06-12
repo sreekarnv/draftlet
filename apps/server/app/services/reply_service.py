@@ -145,6 +145,8 @@ def ensure_domain_generation(session: Session, request: ReplyRequest):
             selected_text=request.selected_text,
             source_domain=request.source_domain,
             active_thread_id=request.thread_id,
+            active_turn_id=request.turn_id,
+            active_run_id=request.run_id,
         ),
     )
     create_or_update_thread(

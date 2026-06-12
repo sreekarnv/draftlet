@@ -63,9 +63,10 @@ describe('workspace session store', () => {
     const store = createTestStore();
     const session = store.upsertFromPageContext({ context: context('First'), tabId: 10 });
 
-    const updated = store.setActiveThread(session.sessionId, 'thread-1');
+    const updated = store.setActiveThread(session.sessionId, 'thread-1', 'turn-1');
 
     expect(updated?.activeThreadId).toBe('thread-1');
+    expect(updated?.activeTurnId).toBe('turn-1');
     expect(store.getBySessionId(session.sessionId)?.activeThreadId).toBe('thread-1');
   });
 
@@ -179,6 +180,7 @@ describe('workspace session store', () => {
       generationId: 'generation-a',
       status: 'streaming',
     });
+    expect(store.getBySessionId(first.sessionId)?.activeRunId).toBe('generation-a');
     expect(store.getBySessionId(second.sessionId)?.activeGeneration).toMatchObject({
       generationId: 'generation-b',
       status: 'starting',
@@ -188,6 +190,7 @@ describe('workspace session store', () => {
     store.clearActiveGeneration(first.sessionId, 'generation-a');
 
     expect(store.getBySessionId(first.sessionId)?.activeGeneration).toBeUndefined();
+    expect(store.getBySessionId(first.sessionId)?.activeRunId).toBeUndefined();
     expect(store.getBySessionId(second.sessionId)?.activeGeneration?.generationId).toBe('generation-b');
   });
   it('hydrates a persisted session for workspace restore', () => {
@@ -201,11 +204,15 @@ describe('workspace session store', () => {
       latestContext: context('Historical message', 'https://example.com/history'),
       status: 'active',
       activeThreadId: 'thread-history',
+      activeTurnId: 'turn-history',
+      activeRunId: 'run-history',
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:01.000Z',
     });
 
     expect(restored.activeThreadId).toBe('thread-history');
+    expect(restored.activeTurnId).toBe('turn-history');
+    expect(restored.activeRunId).toBe('run-history');
     expect(store.getBySessionId('session-history')?.latestContext.selectedText).toBe('Historical message');
     expect(store.getByTabId(-1)?.sessionId).toBe('session-history');
   });

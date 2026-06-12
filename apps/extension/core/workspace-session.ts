@@ -25,7 +25,7 @@ export interface WorkspaceSessionStore {
   updateContext(sessionId: string, context: DraftletSidePanelContext): WorkspaceSession | null;
   updateInsertionTarget(sessionId: string, target: ComposeTargetRef | undefined, status: InsertionTargetStatus): WorkspaceSession | null;
   updatePlausibleTabs(sessionId: string, candidates: PlausibleTabCandidate[]): WorkspaceSession | null;
-  setActiveThread(sessionId: string, threadId: string): WorkspaceSession | null;
+  setActiveThread(sessionId: string, threadId: string, turnId?: string): WorkspaceSession | null;
   setActiveGeneration(sessionId: string, generation: WorkspaceSessionGeneration): WorkspaceSession | null;
   updateActiveGenerationStatus(
     sessionId: string,
@@ -184,14 +184,17 @@ export function createWorkspaceSessionStore({
       });
     },
 
-    setActiveThread(sessionId, threadId) {
+    setActiveThread(sessionId, threadId, turnId) {
       const session = sessionsById.get(sessionId);
 
       if (!session) {
         return null;
       }
 
-      return touch(session, { activeThreadId: threadId });
+      return touch(session, {
+        activeThreadId: threadId,
+        activeTurnId: turnId ?? session.activeTurnId,
+      });
     },
 
     setActiveGeneration(sessionId, generation) {
@@ -201,7 +204,12 @@ export function createWorkspaceSessionStore({
         return null;
       }
 
-      return touch(session, { activeGeneration: generation });
+      return touch(session, {
+        activeThreadId: generation.threadId ?? session.activeThreadId,
+        activeTurnId: generation.turnId ?? session.activeTurnId,
+        activeRunId: generation.generationId,
+        activeGeneration: generation,
+      });
     },
 
     updateActiveGenerationStatus(sessionId, generationId, status) {
@@ -212,6 +220,7 @@ export function createWorkspaceSessionStore({
       }
 
       return touch(session, {
+        activeRunId: generationId,
         activeGeneration: {
           ...session.activeGeneration,
           status,
@@ -229,13 +238,14 @@ export function createWorkspaceSessionStore({
       const { activeGeneration: _activeGeneration, ...rest } = session;
       return save({
         ...rest,
+        activeRunId: session.activeRunId === generationId || !generationId ? undefined : session.activeRunId,
         updatedAt: timestamp(),
       });
     },
 
     findByGenerationId(generationId) {
       for (const session of sessionsById.values()) {
-        if (session.activeGeneration?.generationId === generationId) {
+        if (session.activeRunId === generationId || session.activeGeneration?.generationId === generationId) {
           return session;
         }
       }

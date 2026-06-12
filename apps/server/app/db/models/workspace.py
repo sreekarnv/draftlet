@@ -22,6 +22,8 @@ class WorkspaceSession(Base):
     source_domain: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(40), default="active")
     active_thread_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    active_turn_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    active_run_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
     compose_target_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
     compose_target_kind: Mapped[str | None] = mapped_column(String(40), nullable=True)
     compose_target_page_url: Mapped[str | None] = mapped_column(Text, nullable=True)
