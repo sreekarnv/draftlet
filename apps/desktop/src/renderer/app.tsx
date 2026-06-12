@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 
-import { HelpPage } from './routes/HelpPage';
-import { DiagnosticsPage } from './routes/DiagnosticsPage';
-import { RuntimePage } from './routes/RuntimePage';
-import { SetupPage } from './routes/SetupPage';
+import { HelpPage } from './routes/help-page';
+import { DiagnosticsPage } from './routes/diagnostics-page';
+import { RuntimePage } from './routes/runtime-page';
+import { SetupPage } from './routes/setup-page';
 import { desktopApi } from './lib/api';
 import { RECOMMENDED_MODEL } from './lib/constants';
 import type { BrowserDiagnosticsBridgeResult, CommandStatus, InstalledModel, RuntimeState } from './lib/types';

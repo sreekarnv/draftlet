@@ -5,9 +5,9 @@ import { DEFAULT_PANEL_VIEW, DEFAULT_TONE } from '../../core/constants';
 import type { ConversationThreadSnapshot, DomainHistoryItem } from '../../core/messages';
 import type { ConnectionStatus, PanelState, PanelView, Tone } from '../../core/types';
 import type { InsertionTargetViewState, PanelAction, PanelCallbacks, PanelController } from '../../ui/mount-panel';
-import { ReplyCard } from './ReplyCard';
-import { StatusBadge } from './StatusBadge';
-import { ToneTabs } from './ToneTabs';
+import { ReplyCard } from './reply-card';
+import { StatusBadge } from './status-badge';
+import { ToneTabs } from './tone-tabs';
 import { buildThreadWorkspace, type ThreadTurnGroup } from './thread-workspace';
 import { Button, Card, cn } from './ui';
 

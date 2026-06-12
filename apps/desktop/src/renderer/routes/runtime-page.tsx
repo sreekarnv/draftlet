@@ -1,4 +1,4 @@
-import { ServerControlCard } from '../components/ServerControlCard';
+import { ServerControlCard } from '../components/server-control-card';
 import type { RuntimeState } from '../lib/types';
 
 interface RuntimePageProps {

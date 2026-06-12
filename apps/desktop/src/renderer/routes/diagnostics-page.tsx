@@ -1,4 +1,4 @@
-import { BrowserDiagnosticsCard } from '../components/BrowserDiagnosticsCard';
+import { BrowserDiagnosticsCard } from '../components/browser-diagnostics-card';
 import type { BrowserDiagnosticsBridgeResult, RuntimeState } from '../lib/types';
 
 interface DiagnosticsPageProps {

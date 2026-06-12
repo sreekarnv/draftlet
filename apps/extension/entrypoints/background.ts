@@ -1025,7 +1025,7 @@ async function handleActivateRecaptureTab(sessionId: string, tabId: number): Pro
     }
 
     const activatedTab = await browser.tabs.update(tab.id, { active: true });
-    const reboundTab = bindSessionToTab(session, activatedTab.id ? activatedTab : tab);
+    const reboundTab = bindSessionToTab(session, activatedTab?.id ? activatedTab : tab);
     const candidate = findPlausibleTabCandidates([reboundTab], session)[0];
 
     recordRecaptureDiagnostic({

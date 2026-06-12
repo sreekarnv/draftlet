@@ -17,7 +17,7 @@ import type {
   PanelView,
   Tone,
 } from '../core/types';
-import { DraftletPanel } from '../components/panel/DraftletPanel';
+import { DraftletPanel } from '../components/panel/draftlet-panel';
 
 
 export interface PanelOpenOptions {

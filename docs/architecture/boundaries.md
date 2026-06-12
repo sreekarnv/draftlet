@@ -157,6 +157,8 @@ Avoid mirrored mutable state across content script, popup, side panel, desktop, 
 
 Cross-surface communication must use typed contracts.
 
+New manually created TypeScript and TSX source/test files should use `kebab-case` filenames. This keeps import paths predictable across extension, desktop, and shared contract code while allowing exported symbols to keep idiomatic TypeScript naming.
+
 Use shared schemas for messages between:
 - content script and service worker
 - side panel and service worker

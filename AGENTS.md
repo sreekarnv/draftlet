@@ -166,6 +166,7 @@ If the task is implementation-heavy:
 - Do not add dependency injection frameworks.
 - Do not add generic pipeline abstractions.
 - Do not add dependencies unless clearly justified.
+- New manually created TypeScript and TSX source/test files must use `kebab-case` filenames. Keep exported React components and types in normal PascalCase where appropriate, but the file path itself should be lowercase with hyphens.
 - Do not move many unrelated files just to appear “clean”.
 - Do not rewrite working code without a clear migration reason.
 - Do not duplicate message contracts in multiple places.
