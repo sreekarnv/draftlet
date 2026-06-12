@@ -164,6 +164,8 @@ Use shared schemas for messages between:
 - extension and runtime
 - desktop and runtime
 
+Desktop-extension diagnostics messages must be explicit and diagnostics-only. Browser recapture state remains extension-owned; desktop may display the latest bounded, privacy-safe diagnostics report published by the extension through the runtime relay, but it must not activate tabs, retry recapture, or infer live DOM state.
+
 The service worker should coordinate extension message routing. The runtime should expose stable request/response and streaming interfaces. No surface should invent ad hoc payloads for the same concept.
 
 ## Persistence Ownership

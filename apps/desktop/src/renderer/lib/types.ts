@@ -1,3 +1,5 @@
+import type { DesktopExtensionDiagnosticsBridgeResult } from '../../../../../shared/recapture-diagnostics-contract';
+
 export type CommandStatusCode =
   | 'ready'
   | 'missing'
@@ -39,9 +41,12 @@ export interface DraftletDesktopApi {
   checkServerHealth: () => Promise<CommandStatus>;
   startDraftletServer: () => Promise<CommandStatus>;
   stopDraftletServer: () => Promise<CommandStatus>;
+  getBrowserRecaptureDiagnosticsReport: () => Promise<DesktopExtensionDiagnosticsBridgeResult>;
   openOllamaInstallPage: () => Promise<CommandStatus>;
   openExtensionHelp: () => Promise<CommandStatus>;
 }
+
+export type BrowserDiagnosticsBridgeResult = DesktopExtensionDiagnosticsBridgeResult;
 
 declare global {
   interface Window {

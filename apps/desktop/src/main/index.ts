@@ -2,6 +2,7 @@ import path from 'node:path';
 import { app, BrowserWindow, Menu, nativeImage, Tray } from 'electron';
 import started from 'electron-squirrel-startup';
 
+import { registerDiagnosticsIpc } from './ipc/diagnostics.js';
 import { registerHealthIpc } from './ipc/health.js';
 import { registerOllamaIpc } from './ipc/ollama.js';
 import { registerServerIpc, startDraftletServer, stopDraftletServer, stopOwnedDraftletServer } from './ipc/server.js';
@@ -125,6 +126,7 @@ function destroyTray() {
 }
 
 app.whenReady().then(() => {
+  registerDiagnosticsIpc();
   registerHealthIpc();
   registerOllamaIpc();
   registerServerIpc();

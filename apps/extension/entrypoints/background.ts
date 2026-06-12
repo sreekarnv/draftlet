@@ -9,6 +9,7 @@ import {
   patchDraftVariantState,
   patchGenerationRunStatus,
   patchTurnStatus,
+  publishBrowserRecaptureDiagnosticsReport,
   putConversationThread,
   putTurn,
   putWorkspaceSession,
@@ -18,6 +19,7 @@ import {
 import { DEFAULT_TONE } from '../core/constants';
 import {
   ACCEPT_DRAFT_VARIANT,
+  ACTIVATE_RECAPTURE_TAB,
   CANCEL_DRAFT_GENERATION,
   CONVERSATION_THREAD_UPDATED,
   DRAFT_GENERATION_COMPLETED,
@@ -26,9 +28,11 @@ import {
   GET_CURRENT_WORKSPACE_SESSION,
   GET_INSERTION_TARGET_STATUS,
   GET_DOMAIN_HISTORY,
+  GET_RECAPTURE_DIAGNOSTICS,
   GET_RUNTIME_STATUS,
   INSERT_REPLY,
   LAUNCH_SIDE_PANEL,
+  PUBLISH_RECAPTURE_DIAGNOSTICS_REPORT,
   RECAPTURE_INSERTION_TARGET,
   REVALIDATE_INSERTION_TARGET,
   RESTORE_DOMAIN_THREAD,
@@ -36,6 +40,7 @@ import {
   START_DRAFT_GENERATION,
   START_DRAFT_REFINEMENT,
   WORKSPACE_SESSION_UPDATED,
+  type ActivateRecaptureTabResult,
   type CancelDraftGenerationResult,
   type ConversationThreadSnapshot,
   type ConversationThread,
@@ -48,6 +53,9 @@ import {
   type InsertReplyResult,
   type InsertionTargetStatusResult,
   type LaunchSidePanelResult,
+  type PublishRecaptureDiagnosticsReportResult,
+  type RecaptureDiagnosticsResult,
+  type RecaptureDiagnosticEntry,
   type RecaptureInsertionTargetResult,
   type RestoreDomainThreadResult,
   type RuntimeStatusResult,
@@ -57,9 +65,15 @@ import {
   type WorkspaceSessionResult,
 } from '../core/messages';
 import { createConversationThreadStore } from '../core/conversation-thread';
+import { createRecaptureDiagnosticsLog } from '../core/recapture-diagnostics';
+import { createRecaptureDiagnosticsReport } from '../core/recapture-diagnostics-view';
 import { findPlausibleTabCandidates, isPlausibleSessionTab, type PlausibleTabCandidate } from '../core/tab-disambiguation';
 import { createWorkspaceSessionStore } from '../core/workspace-session';
 import type { GenerationMode, Tone } from '../core/types';
+import {
+  DESKTOP_EXTENSION_DIAGNOSTICS_BRIDGE_PROTOCOL,
+  createRecaptureDiagnosticsBridgeFailure,
+} from '../../../shared/recapture-diagnostics-contract';
 
 interface ActiveGenerationController {
   generationId: string;
@@ -75,6 +89,7 @@ type InsertionTabResolution =
 
 const sessions = createWorkspaceSessionStore();
 const threads = createConversationThreadStore();
+const recaptureDiagnostics = createRecaptureDiagnosticsLog();
 const activeGenerationsBySessionId = new Map<string, ActiveGenerationController>();
 const GENERATION_RUN_STALE_AFTER_SECONDS = 30;
 
@@ -94,6 +109,14 @@ export default defineBackground(() => {
 
     if (message.type === GET_DOMAIN_HISTORY) {
       return handleGetDomainHistory(message.limit);
+    }
+
+    if (message.type === GET_RECAPTURE_DIAGNOSTICS) {
+      return handleGetRecaptureDiagnostics(message.sessionId, message.limit);
+    }
+
+    if (message.type === PUBLISH_RECAPTURE_DIAGNOSTICS_REPORT) {
+      return handlePublishRecaptureDiagnosticsReport(message.sessionId, message.limit);
     }
 
     if (message.type === RESTORE_DOMAIN_THREAD) {
@@ -130,6 +153,10 @@ export default defineBackground(() => {
 
     if (message.type === RECAPTURE_INSERTION_TARGET) {
       return handleRecaptureInsertionTarget(message.sessionId, message.tabId);
+    }
+
+    if (message.type === ACTIVATE_RECAPTURE_TAB) {
+      return handleActivateRecaptureTab(message.sessionId, message.tabId);
     }
 
     if (message.type === SET_CURRENT_DRAFT_VARIANT) {
@@ -226,6 +253,34 @@ async function handleGetDomainHistory(limit = 20): Promise<DomainHistoryResult> 
         true,
       ),
     };
+  }
+}
+
+function handleGetRecaptureDiagnostics(sessionId?: string, limit = 50): RecaptureDiagnosticsResult {
+  return {
+    entries: recaptureDiagnostics.list({ sessionId, limit }),
+  };
+}
+
+async function handlePublishRecaptureDiagnosticsReport(
+  sessionId?: string,
+  limit = 50,
+): Promise<PublishRecaptureDiagnosticsReportResult> {
+  try {
+    const report = createRecaptureDiagnosticsReport(recaptureDiagnostics.list({ sessionId, limit }));
+    const published = await publishBrowserRecaptureDiagnosticsReport(report);
+
+    return {
+      ok: true,
+      protocol: DESKTOP_EXTENSION_DIAGNOSTICS_BRIDGE_PROTOCOL,
+      report: published,
+    };
+  } catch (error) {
+    return createRecaptureDiagnosticsBridgeFailure(
+      'diagnostics_unavailable',
+      error instanceof Error ? error.message : 'Could not publish browser recapture diagnostics.',
+      true,
+    );
   }
 }
 
@@ -735,10 +790,19 @@ async function handleRecaptureInsertionTarget(sessionId: string, tabId?: number)
     return {
       recaptured: false,
       status: 'unavailable',
+      outcome: 'recapture_failed',
       reason: 'session_not_found',
       message: 'No active Draftlet session.',
     };
   }
+
+  recordRecaptureDiagnostic({
+    event: 'recapture_requested',
+    level: 'info',
+    sessionId,
+    tabId,
+    message: tabId ? 'Recapture requested for selected tab.' : 'Recapture requested.',
+  });
 
   const tabResolution = await resolveRecaptureTab(session, tabId);
 
@@ -749,9 +813,19 @@ async function handleRecaptureInsertionTarget(sessionId: string, tabId?: number)
       void emitWorkspaceSessionUpdated(updated);
     }
 
+    recordRecaptureDiagnostic({
+      event: 'tab_resolution_ambiguous',
+      level: 'warning',
+      sessionId,
+      status: 'tab_disambiguation_required',
+      reason: 'tab_disambiguation_required',
+      message: `Recapture found ${tabResolution.candidates.length} plausible tabs.`,
+    });
+
     return {
       recaptured: false,
       status: 'tab_disambiguation_required',
+      outcome: 'recapture_failed',
       target: session.insertionTarget,
       candidates: tabResolution.candidates,
       reason: 'tab_disambiguation_required',
@@ -760,6 +834,9 @@ async function handleRecaptureInsertionTarget(sessionId: string, tabId?: number)
   }
 
   const recaptureTabId = tabResolution.status === 'resolved' ? tabResolution.tab.id : undefined;
+  const selectedTab = tabResolution.status === 'resolved'
+    ? findPlausibleTabCandidates([tabResolution.tab], session)[0]
+    : undefined;
 
   if (tabResolution.status === 'missing' || typeof recaptureTabId !== 'number') {
     const updated = sessions.updateInsertionTarget(session.sessionId, session.insertionTarget, 'unavailable');
@@ -768,34 +845,68 @@ async function handleRecaptureInsertionTarget(sessionId: string, tabId?: number)
       void emitWorkspaceSessionUpdated(updated);
     }
 
+    recordRecaptureDiagnostic({
+      event: 'tab_resolution_missing',
+      level: 'warning',
+      sessionId,
+      tabId,
+      status: 'unavailable',
+      reason: 'tab_unavailable',
+      message: tabId ? 'Selected recapture tab is unavailable.' : 'No plausible recapture tab is available.',
+    });
+
     return {
       recaptured: false,
       status: 'unavailable',
+      outcome: 'chosen_tab_unavailable',
       target: session.insertionTarget,
       reason: 'tab_unavailable',
-      message: 'Open the page with the compose field, focus it, and try again.',
+      message: tabId
+        ? 'That tab is no longer available. Choose another tab or use Copy.'
+        : 'Open the page with the compose field, focus it, and try again.',
     };
   }
 
+  const target = session.insertionTarget ?? session.latestContext.composeTarget;
+
   try {
+    recordRecaptureDiagnostic({
+      event: 'content_recapture_requested',
+      level: 'debug',
+      sessionId,
+      tabId: recaptureTabId,
+      message: 'Sent recapture request to content script.',
+    });
     const result = await browser.tabs.sendMessage(recaptureTabId, {
       type: RECAPTURE_INSERTION_TARGET,
       sessionId,
+      target,
     } satisfies DraftletMessage) as RecaptureInsertionTargetResult;
+    const normalizedResult = normalizeRecaptureResult(result, selectedTab, Boolean(tabId));
+    recordRecaptureDiagnostic({
+      event: 'content_recapture_completed',
+      level: normalizedResult.recaptured ? 'info' : normalizedResult.status === 'needs_focus' ? 'warning' : 'error',
+      sessionId,
+      tabId: recaptureTabId,
+      status: normalizedResult.status,
+      outcome: normalizedResult.outcome,
+      reason: normalizedResult.reason,
+      message: normalizedResult.message,
+    });
     const updated = sessions.updateInsertionTarget(
       session.sessionId,
-      result.target ?? session.insertionTarget,
-      result.status,
+      normalizedResult.target ?? target,
+      normalizedResult.status,
     );
 
     if (updated) {
       void emitWorkspaceSessionUpdated(updated);
-      if (result.recaptured) {
+      if (normalizedResult.recaptured) {
         void persistWorkspaceSession(updated);
       }
     }
 
-    return result;
+    return normalizedResult;
   } catch {
     const updated = sessions.updateInsertionTarget(session.sessionId, session.insertionTarget, 'unavailable');
 
@@ -803,12 +914,147 @@ async function handleRecaptureInsertionTarget(sessionId: string, tabId?: number)
       void emitWorkspaceSessionUpdated(updated);
     }
 
+    recordRecaptureDiagnostic({
+      event: 'content_recapture_failed',
+      level: 'error',
+      sessionId,
+      tabId: recaptureTabId,
+      status: 'unavailable',
+      outcome: 'recapture_failed',
+      reason: 'content_script_unavailable',
+      message: 'Content script was unavailable during recapture.',
+    });
+
     return {
       recaptured: false,
       status: 'unavailable',
+      outcome: 'recapture_failed',
       target: session.insertionTarget,
+      selectedTab,
       reason: 'content_script_unavailable',
       message: 'Draftlet cannot reach the page. Reload the page, focus a compose field, and try again.',
+    };
+  }
+}
+
+function normalizeRecaptureResult(
+  result: RecaptureInsertionTargetResult,
+  selectedTab: PlausibleTabCandidate | undefined,
+  fromTabChoice: boolean,
+): RecaptureInsertionTargetResult {
+  if (result.recaptured) {
+    return {
+      ...result,
+      outcome: 'recapture_succeeded',
+      selectedTab,
+      message: 'Recaptured the compose field. Insertion is available again.',
+    };
+  }
+
+  if (result.reason === 'no_focused_compose_target' || result.status === 'needs_focus') {
+    return {
+      ...result,
+      status: 'needs_focus',
+      outcome: 'needs_focused_compose_target',
+      selectedTab,
+      message: fromTabChoice
+        ? 'Tab selected. Focus the compose field in that tab, then retry recapture.'
+        : 'Focus a compose field on the page, then retry recapture.',
+    };
+  }
+
+  if (result.status === 'stale') {
+    return {
+      ...result,
+      outcome: fromTabChoice ? 'tab_choice_acknowledged' : 'recapture_failed',
+      selectedTab,
+      message: fromTabChoice
+        ? 'Tab selected, but the saved compose field is stale. Focus the compose field, then retry recapture.'
+        : result.message,
+    };
+  }
+
+  return {
+    ...result,
+    outcome: result.outcome ?? 'recapture_failed',
+    selectedTab,
+  };
+}
+
+async function handleActivateRecaptureTab(sessionId: string, tabId: number): Promise<ActivateRecaptureTabResult> {
+  const session = sessions.getBySessionId(sessionId);
+
+  if (!session) {
+    return {
+      activated: false,
+      error: createDraftletError('session_not_found', 'No active Draftlet session.', true, sessionId),
+      message: 'No active Draftlet session.',
+    };
+  }
+
+  recordRecaptureDiagnostic({
+    event: 'tab_activation_requested',
+    level: 'info',
+    sessionId,
+    tabId,
+    message: 'Tab activation requested for recapture.',
+  });
+
+  const tab = await browser.tabs.get(tabId).catch(() => null);
+
+  if (!tab?.id || !isPlausibleSessionTab(tab, session)) {
+    recordRecaptureDiagnostic({
+      event: 'tab_activation_failed',
+      level: 'warning',
+      sessionId,
+      tabId,
+      reason: 'tab_unavailable',
+      message: 'Selected tab is unavailable or no longer plausible for recapture.',
+    });
+
+    return {
+      activated: false,
+      error: createDraftletError('tab_unavailable', 'That tab is no longer available for recapture.', true, sessionId),
+      message: 'That tab is no longer available. Choose another tab or use Copy.',
+    };
+  }
+
+  try {
+    if (typeof tab.windowId === 'number') {
+      await browser.windows.update(tab.windowId, { focused: true }).catch(() => undefined);
+    }
+
+    const activatedTab = await browser.tabs.update(tab.id, { active: true });
+    const reboundTab = bindSessionToTab(session, activatedTab.id ? activatedTab : tab);
+    const candidate = findPlausibleTabCandidates([reboundTab], session)[0];
+
+    recordRecaptureDiagnostic({
+      event: 'tab_activation_completed',
+      level: 'info',
+      sessionId,
+      tabId: tab.id,
+      message: 'Selected tab activated for recapture.',
+    });
+
+    return {
+      activated: true,
+      tab: candidate,
+      message: 'Selected tab opened. Focus the compose field there, then retry recapture.',
+    };
+  } catch {
+    recordRecaptureDiagnostic({
+      event: 'tab_activation_failed',
+      level: 'error',
+      sessionId,
+      tabId,
+      reason: 'tab_activation_failed',
+      message: 'Browser rejected selected tab activation.',
+    });
+
+    return {
+      activated: false,
+      error: createDraftletError('tab_activation_failed', 'Draftlet could not open the selected tab.', true, sessionId),
+      message: 'Draftlet could not open the selected tab. Switch to it manually, focus the compose field, then retry.',
     };
   }
 }
@@ -1200,6 +1446,23 @@ function emitConversationThreadUpdated(sessionId: string, snapshot: Conversation
 
 function emitDraftletMessage(message: DraftletMessage): Promise<unknown> {
   return browser.runtime.sendMessage(message).catch(() => {});
+}
+
+function recordRecaptureDiagnostic(input: Omit<RecaptureDiagnosticEntry, 'id' | 'at'>): RecaptureDiagnosticEntry {
+  const entry = recaptureDiagnostics.append(input);
+  console.debug('[Draftlet recapture]', {
+    id: entry.id,
+    event: entry.event,
+    level: entry.level,
+    sessionId: entry.sessionId,
+    tabId: entry.tabId,
+    status: entry.status,
+    outcome: entry.outcome,
+    reason: entry.reason,
+    message: entry.message,
+    at: entry.at,
+  });
+  return entry;
 }
 
 function findTurn(snapshot: ConversationThreadSnapshot, turnId: string): Turn | null {

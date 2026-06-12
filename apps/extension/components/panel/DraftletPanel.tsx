@@ -1,4 +1,4 @@
-import { FileText, History, RefreshCw, Sparkles, Wand2, X } from 'lucide-react';
+import { ExternalLink, FileText, History, RefreshCw, Sparkles, Wand2, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 
 import { DEFAULT_PANEL_VIEW, DEFAULT_TONE } from '../../core/constants';
@@ -117,6 +117,17 @@ export function DraftletPanel({ callbacks, controller }: DraftletPanelProps) {
     setView((current) => ({ ...current, persistenceMessage: result.message }));
   };
 
+  const activateRecaptureTab = async (tabId: number) => {
+    if (!callbacks.onActivateRecaptureTab) {
+      setView((current) => ({ ...current, persistenceMessage: 'Opening the selected tab is unavailable here.' }));
+      return;
+    }
+
+    setView((current) => ({ ...current, persistenceMessage: 'Opening selected tab...' }));
+    const result = await callbacks.onActivateRecaptureTab(tabId);
+    setView((current) => ({ ...current, persistenceMessage: result.message }));
+  };
+
   const [refinementInstruction, setRefinementInstruction] = useState('');
   return (
     <section
@@ -136,7 +147,7 @@ export function DraftletPanel({ callbacks, controller }: DraftletPanelProps) {
           </Button>
         </div>
         {view.activeView === 'replies'
-          ? renderComposerWorkspace(view, callbacks, selectTone, recaptureInsertionTarget, refinementInstruction, setRefinementInstruction)
+          ? renderComposerWorkspace(view, callbacks, selectTone, recaptureInsertionTarget, activateRecaptureTab, refinementInstruction, setRefinementInstruction)
           : null}
         <div className="mt-3">
           {renderViewNavigation(view, selectView)}
@@ -156,6 +167,7 @@ function renderComposerWorkspace(
   callbacks: PanelCallbacks,
   selectTone: (tone: Tone) => void,
   recaptureInsertionTarget: (tabId?: number) => Promise<void>,
+  activateRecaptureTab: (tabId: number) => Promise<void>,
   refinementInstruction: string,
   setRefinementInstruction: (instruction: string) => void,
 ) {
@@ -172,7 +184,7 @@ function renderComposerWorkspace(
           </div>
           <div className="grid justify-items-end gap-1 text-right">
             <div className={cn('text-xs font-semibold leading-5 text-slate-500', stateToneClass(view.state))}>{getStateText(view)}</div>
-            {renderTargetStatus(view, recaptureInsertionTarget)}
+            {renderTargetStatus(view, recaptureInsertionTarget, activateRecaptureTab)}
           </div>
         </div>
         <p className="m-0 max-h-[4.75rem] overflow-hidden text-[13.5px] leading-6 text-slate-800">{view.selectedText}</p>
@@ -216,10 +228,19 @@ function renderComposerWorkspace(
   );
 }
 
-function renderTargetStatus(view: PanelViewState, recaptureInsertionTarget: (tabId?: number) => Promise<void>) {
+function renderTargetStatus(
+  view: PanelViewState,
+  recaptureInsertionTarget: (tabId?: number) => Promise<void>,
+  activateRecaptureTab: (tabId: number) => Promise<void>,
+) {
   const canRecapture = view.insertionTarget.status !== 'live';
   const needsTabChoice = view.insertionTarget.status === 'tab_disambiguation_required'
     && (view.insertionTarget.candidates?.length ?? 0) > 0;
+  const needsFocusedRetry = view.insertionTarget.status === 'needs_focus';
+  const selectedTabLabel = view.insertionTarget.selectedTab
+    ? tabCandidateLabel(view.insertionTarget.selectedTab)
+    : '';
+  const actionLabel = needsFocusedRetry ? 'Retry recapture' : 'Recapture';
 
   return (
     <div className="grid justify-items-end gap-1.5">
@@ -234,16 +255,56 @@ function renderTargetStatus(view: PanelViewState, recaptureInsertionTarget: (tab
           <Button
             aria-label="Recapture insertion target"
             className="h-6 px-2 text-[11px] leading-4"
-            onClick={() => void recaptureInsertionTarget()}
+            onClick={() => void recaptureInsertionTarget(view.insertionTarget.selectedTab?.tabId)}
             type="button"
             variant="secondary"
           >
             <RefreshCw aria-hidden="true" className="h-3 w-3" />
-            Recapture
+            {actionLabel}
           </Button>
         ) : null}
       </div>
+      {selectedTabLabel ? (
+        <div className="flex max-w-[17rem] flex-wrap items-center justify-end gap-1.5 text-right">
+          <div className="min-w-0 truncate text-[11px] leading-4 text-slate-500" title={view.insertionTarget.selectedTab?.url}>
+            Selected: {selectedTabLabel}
+          </div>
+          <Button
+            aria-label="Open selected tab for recapture"
+            className="h-6 px-2 text-[11px] leading-4"
+            onClick={() => void activateRecaptureTab(view.insertionTarget.selectedTab!.tabId)}
+            type="button"
+            variant="secondary"
+          >
+            <ExternalLink aria-hidden="true" className="h-3 w-3" />
+            Open tab
+          </Button>
+        </div>
+      ) : null}
+      {view.insertionTarget.message && view.insertionTarget.status !== 'live' ? (
+        <p className="m-0 max-w-[17rem] text-right text-[11px] leading-4 text-slate-500">
+          {view.insertionTarget.message}
+        </p>
+      ) : null}
+      {view.insertionTarget.trail?.length ? renderRecaptureTrail(view.insertionTarget.trail) : null}
       {needsTabChoice ? renderTabCandidates(view.insertionTarget.candidates!, recaptureInsertionTarget) : null}
+    </div>
+  );
+}
+
+function renderRecaptureTrail(trail: NonNullable<InsertionTargetViewState['trail']>) {
+  const visibleTrail = trail.slice(-3);
+
+  return (
+    <div className="grid max-w-[17rem] justify-items-end gap-0.5 text-right" aria-label="Recapture status">
+      {visibleTrail.map((item) => (
+        <div className="flex max-w-full items-center justify-end gap-1.5" key={`${item.at}-${item.event}`}>
+          <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', recaptureTrailToneClass(item.level))} aria-hidden="true" />
+          <span className="min-w-0 truncate text-[11px] leading-4 text-slate-500" title={item.message}>
+            {item.message}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -573,6 +634,10 @@ function targetStatusLabel(target: InsertionTargetViewState) {
     return 'Target unavailable';
   }
 
+  if (target.status === 'needs_focus') {
+    return 'Focus compose field';
+  }
+
   if (target.status === 'tab_disambiguation_required') {
     return 'Choose tab';
   }
@@ -585,11 +650,27 @@ function targetToneClass(status: InsertionTargetViewState['status']) {
     return 'text-emerald-700';
   }
 
-  if (status === 'stale' || status === 'tab_disambiguation_required') {
+  if (status === 'stale' || status === 'tab_disambiguation_required' || status === 'needs_focus') {
     return 'text-amber-700';
   }
 
   return 'text-slate-500';
+}
+
+function recaptureTrailToneClass(level: NonNullable<InsertionTargetViewState['trail']>[number]['level']) {
+  if (level === 'success') {
+    return 'bg-emerald-500';
+  }
+
+  if (level === 'warning') {
+    return 'bg-amber-500';
+  }
+
+  if (level === 'failed') {
+    return 'bg-rose-500';
+  }
+
+  return 'bg-slate-400';
 }
 
 function tabCandidateLabel(candidate: NonNullable<InsertionTargetViewState['candidates']>[number]) {

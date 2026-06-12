@@ -3,6 +3,7 @@ import '../components/panel/panel.css';
 import { DEFAULT_PANEL_VIEW, DEFAULT_TONE } from '../core/constants';
 import {
   ACCEPT_DRAFT_VARIANT,
+  ACTIVATE_RECAPTURE_TAB,
   CANCEL_DRAFT_GENERATION,
   CONVERSATION_THREAD_UPDATED,
   DRAFT_GENERATION_COMPLETED,
@@ -20,6 +21,7 @@ import {
   START_DRAFT_GENERATION,
   START_DRAFT_REFINEMENT,
   type ConversationThreadSnapshot,
+  type ActivateRecaptureTabResult,
   type DomainHistoryItem,
   type DomainHistoryResult,
   type DraftletMessage,
@@ -27,6 +29,9 @@ import {
   type InsertReplyResult,
   type InsertionTargetStatusResult,
   type RecaptureInsertionTargetResult,
+  type RecaptureStatusTrailEvent,
+  type RecaptureStatusTrailItem,
+  type RecaptureStatusTrailLevel,
   type RestoreDomainThreadResult,
   type RuntimeStatusResult,
   type StartDraftGenerationResult,
@@ -42,6 +47,8 @@ let currentTone: Tone = DEFAULT_TONE;
 let currentPanelView: PanelView = DEFAULT_PANEL_VIEW;
 let activeGenerationId: string | null = null;
 let activeGenerationSessionId: string | null = null;
+let recaptureTrail: RecaptureStatusTrailItem[] = [];
+const MAX_RECAPTURE_TRAIL_ITEMS = 4;
 
 const root = document.getElementById('root');
 
@@ -91,6 +98,9 @@ const mountedPanel = mountDraftletPanel(root, {
   },
   onRecaptureInsertionTarget(tabId) {
     return recaptureInsertionTarget(tabId);
+  },
+  onActivateRecaptureTab(tabId) {
+    return activateRecaptureTab(tabId);
   },
   onSelectVariant(variantId) {
     return setVariantCurrent(variantId);
@@ -258,6 +268,10 @@ function applySession(session: WorkspaceSession) {
   currentTone = tone;
   currentPanelView = activeView;
 
+  if (previousSession?.sessionId !== session.sessionId) {
+    recaptureTrail = [];
+  }
+
   if (shouldOpenSession) {
     panel.open({
       selectedText: session.latestContext.selectedText,
@@ -270,9 +284,12 @@ function applySession(session: WorkspaceSession) {
     status: session.insertionTargetStatus ?? (session.insertionTarget ? 'stale' : 'needs_recapture'),
     message: insertionTargetMessage(session),
     candidates: session.plausibleTabs,
+    trail: recaptureTrail,
   });
-  void refreshHealth();
-  void refreshInsertionTargetStatus();
+
+  if (shouldOpenSession) {
+    void refreshInsertionTargetStatus();
+  }
 }
 
 async function refreshHealth() {
@@ -294,6 +311,7 @@ async function refreshInsertionTargetStatus() {
     panel.setInsertionTargetStatus({
       status: 'needs_recapture',
       message: 'Open Draftlet from a compose field to enable insertion.',
+      trail: recaptureTrail,
     });
     return;
   }
@@ -308,11 +326,13 @@ async function refreshInsertionTargetStatus() {
       status: response.status,
       message: response.message,
       candidates: response.candidates,
+      trail: recaptureTrail,
     });
   } catch {
     panel.setInsertionTargetStatus({
       status: 'unavailable',
       message: 'Insertion target is unavailable.',
+      trail: recaptureTrail,
     });
   }
 }
@@ -487,6 +507,7 @@ async function insertIntoActivePage(replyText: string, variantId?: string): Prom
       panel.setInsertionTargetStatus({
         status: response.result.targetStatus,
         message: response.result.message,
+        trail: recaptureTrail,
       });
     }
 
@@ -507,16 +528,27 @@ async function insertIntoActivePage(replyText: string, variantId?: string): Prom
 
 async function recaptureInsertionTarget(tabId?: number) {
   if (!currentSession) {
+    const trail = appendRecaptureTrail('recapture_failed', 'failed', 'Recapture failed: no active session.');
     panel.setInsertionTargetStatus({
       status: 'unavailable',
       message: 'No active Draftlet session.',
+      trail,
     });
     return { ok: false, message: 'No active Draftlet session.' };
   }
 
+  const requestedTrail = appendRecaptureTrail(
+    'recapture_requested',
+    'pending',
+    tabId ? 'Retrying recapture in the selected tab.' : 'Recapture requested.',
+    tabId,
+  );
   panel.setInsertionTargetStatus({
-    status: 'needs_recapture',
-    message: 'Focus a compose field on the page, then recapture.',
+    status: tabId ? 'needs_focus' : 'needs_recapture',
+    message: tabId
+      ? 'Checking the selected tab for a compose field...'
+      : 'Focus a compose field on the page, then recapture.',
+    trail: requestedTrail,
   });
 
   try {
@@ -526,10 +558,19 @@ async function recaptureInsertionTarget(tabId?: number) {
       tabId,
     } satisfies DraftletMessage) as RecaptureInsertionTargetResult;
 
+    const responseTrail = appendRecaptureTrail(
+      trailEventForRecapture(response),
+      trailLevelForRecapture(response),
+      response.message,
+      response.selectedTab?.tabId ?? tabId,
+    );
     panel.setInsertionTargetStatus({
       status: response.status,
       message: response.message,
+      outcome: response.outcome,
+      selectedTab: response.selectedTab,
       candidates: response.candidates,
+      trail: responseTrail,
     });
 
     if (response.recaptured && response.target) {
@@ -550,6 +591,12 @@ async function recaptureInsertionTarget(tabId?: number) {
         insertionTargetStatus: response.status,
         plausibleTabs: response.candidates,
       };
+    } else {
+      currentSession = {
+        ...currentSession,
+        insertionTargetStatus: response.status,
+        plausibleTabs: undefined,
+      };
     }
 
     return {
@@ -558,12 +605,113 @@ async function recaptureInsertionTarget(tabId?: number) {
     };
   } catch {
     const message = 'Draftlet could not recapture the target. Copy still works.';
+    const trail = appendRecaptureTrail('recapture_failed', 'failed', message, tabId);
     panel.setInsertionTargetStatus({
       status: 'unavailable',
       message,
+      trail,
     });
     return { ok: false, message };
   }
+}
+
+async function activateRecaptureTab(tabId: number) {
+  if (!currentSession) {
+    appendRecaptureTrail('tab_activation_failed', 'failed', 'Could not open tab: no active session.', tabId);
+    return { ok: false, message: 'No active Draftlet session.' };
+  }
+
+  appendRecaptureTrail('tab_activation_requested', 'pending', 'Opening selected tab for recapture.', tabId);
+
+  try {
+    const response = await browser.runtime.sendMessage({
+      type: ACTIVATE_RECAPTURE_TAB,
+      sessionId: currentSession.sessionId,
+      tabId,
+    } satisfies DraftletMessage) as ActivateRecaptureTabResult;
+
+    if (response.activated) {
+      const trail = appendRecaptureTrail('tab_activated', 'success', response.message, response.tab?.tabId ?? tabId);
+      panel.setInsertionTargetStatus({
+        status: 'needs_focus',
+        outcome: 'needs_focused_compose_target',
+        selectedTab: response.tab,
+        message: response.message,
+        trail,
+      });
+      currentSession = {
+        ...currentSession,
+        tabId,
+        latestContext: {
+          ...currentSession.latestContext,
+          tabId,
+        },
+        insertionTargetStatus: 'needs_focus',
+        plausibleTabs: undefined,
+      };
+      return { ok: true, message: response.message };
+    }
+
+    const trail = appendRecaptureTrail('tab_activation_failed', 'failed', response.message, tabId);
+    panel.setInsertionTargetStatus({
+      status: 'unavailable',
+      message: response.message,
+      trail,
+    });
+    return { ok: false, message: response.message };
+  } catch {
+    const message = 'Draftlet could not open the selected tab. Switch to it manually, focus the compose field, then retry.';
+    const trail = appendRecaptureTrail('tab_activation_failed', 'failed', message, tabId);
+    panel.setInsertionTargetStatus({
+      status: 'unavailable',
+      message,
+      trail,
+    });
+    return { ok: false, message };
+  }
+}
+
+function appendRecaptureTrail(
+  event: RecaptureStatusTrailEvent,
+  level: RecaptureStatusTrailLevel,
+  message: string,
+  tabId?: number,
+): RecaptureStatusTrailItem[] {
+  recaptureTrail = [
+    ...recaptureTrail,
+    {
+      event,
+      level,
+      message,
+      tabId,
+      at: new Date().toISOString(),
+    },
+  ].slice(-MAX_RECAPTURE_TRAIL_ITEMS);
+  return recaptureTrail;
+}
+
+function trailEventForRecapture(response: RecaptureInsertionTargetResult): RecaptureStatusTrailEvent {
+  if (response.outcome === 'recapture_succeeded') {
+    return 'recapture_succeeded';
+  }
+
+  if (response.outcome === 'needs_focused_compose_target' || response.outcome === 'tab_choice_acknowledged') {
+    return 'focus_required';
+  }
+
+  return 'recapture_failed';
+}
+
+function trailLevelForRecapture(response: RecaptureInsertionTargetResult): RecaptureStatusTrailLevel {
+  if (response.outcome === 'recapture_succeeded') {
+    return 'success';
+  }
+
+  if (response.outcome === 'needs_focused_compose_target' || response.outcome === 'tab_choice_acknowledged') {
+    return 'warning';
+  }
+
+  return 'failed';
 }
 
 function insertionTargetMessage(session: WorkspaceSession): string {
@@ -579,6 +727,10 @@ function insertionTargetMessage(session: WorkspaceSession): string {
 
   if (status === 'unavailable') {
     return 'Target unavailable; Copy still works.';
+  }
+
+  if (status === 'needs_focus') {
+    return 'Focus a compose field in the selected tab, then retry recapture.';
   }
 
   if (status === 'tab_disambiguation_required') {

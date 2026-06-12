@@ -1,0 +1,59 @@
+import { ipcMain } from 'electron';
+
+import {
+  DESKTOP_EXTENSION_DIAGNOSTICS_BRIDGE_PROTOCOL,
+  createRecaptureDiagnosticsBridgeFailure,
+  type DesktopExtensionDiagnosticsBridgeResult,
+  type BrowserRecaptureDiagnosticsRelayState,
+} from '../../../../../shared/recapture-diagnostics-contract';
+import { SERVER_BASE_URL } from './settings.js';
+
+export function registerDiagnosticsIpc() {
+  ipcMain.handle('draftlet:get-browser-recapture-diagnostics-report', () => getBrowserRecaptureDiagnosticsReport());
+}
+
+export async function getBrowserRecaptureDiagnosticsReport(): Promise<DesktopExtensionDiagnosticsBridgeResult> {
+  try {
+    const response = await fetch(`${SERVER_BASE_URL}/diagnostics/browser-recapture`, { cache: 'no-store' });
+
+    if (!response.ok) {
+      return createRecaptureDiagnosticsBridgeFailure(
+        'diagnostics_unavailable',
+        `Draftlet server responded with HTTP ${response.status}.`,
+        true,
+      );
+    }
+
+    const data = await response.json() as BrowserRecaptureDiagnosticsRelayState;
+
+    if (!data.report) {
+      return createRecaptureDiagnosticsBridgeFailure(
+        'diagnostics_unavailable',
+        data.stale
+          ? 'The last browser recapture diagnostics report expired. Send a fresh report from the extension popup.'
+          : 'No browser recapture diagnostics have been sent from the extension yet.',
+        true,
+        {
+          receivedAt: data.receivedAt,
+          stale: data.stale,
+          staleAfterSeconds: data.staleAfterSeconds,
+        },
+      );
+    }
+
+    return {
+      ok: true,
+      protocol: DESKTOP_EXTENSION_DIAGNOSTICS_BRIDGE_PROTOCOL,
+      report: data.report,
+      receivedAt: data.receivedAt,
+      stale: data.stale,
+      staleAfterSeconds: data.staleAfterSeconds,
+    };
+  } catch (error) {
+    return createRecaptureDiagnosticsBridgeFailure(
+      'transport_unavailable',
+      `Draftlet server is not reachable: ${error instanceof Error ? error.message : String(error)}`,
+      true,
+    );
+  }
+}

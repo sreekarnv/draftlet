@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.domain import router as domain_router
+from app.api.diagnostics import router as diagnostics_router
 from app.api.health import router as health_router
 from app.api.preferences import router as preferences_router
 from app.api.replies import router as replies_router
@@ -49,3 +50,4 @@ app.include_router(health_router)
 app.include_router(replies_router)
 app.include_router(domain_router)
 app.include_router(preferences_router)
+app.include_router(diagnostics_router)

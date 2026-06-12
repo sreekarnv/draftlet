@@ -11,6 +11,7 @@ const api = {
   checkServerHealth: () => ipcRenderer.invoke('draftlet:check-server-health'),
   startDraftletServer: () => ipcRenderer.invoke('draftlet:start-server'),
   stopDraftletServer: () => ipcRenderer.invoke('draftlet:stop-server'),
+  getBrowserRecaptureDiagnosticsReport: () => ipcRenderer.invoke('draftlet:get-browser-recapture-diagnostics-report'),
   openOllamaInstallPage: () => ipcRenderer.invoke('draftlet:open-ollama-install-page'),
   openExtensionHelp: () => ipcRenderer.invoke('draftlet:open-extension-help'),
 };

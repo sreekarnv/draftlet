@@ -1,5 +1,6 @@
 import { SERVER_BASE_URL } from './constants';
 import { streamSse, type SseMessage } from './sse-client';
+import type { RecaptureDiagnosticsReport } from '../../../shared/recapture-diagnostics-contract';
 import type {
   ConversationThread,
   ConversationThreadSnapshot,
@@ -110,6 +111,10 @@ export async function getDomainHistory(limit = 20, signal?: AbortSignal): Promis
   const query = `?limit=${encodeURIComponent(String(limit))}`;
   const response = await getJson<DomainHistoryItemRead[]>(`${SERVER_BASE_URL}/domain/history${query}`, signal);
   return response.map(mapDomainHistoryItem);
+}
+
+export async function publishBrowserRecaptureDiagnosticsReport(report: RecaptureDiagnosticsReport): Promise<RecaptureDiagnosticsReport> {
+  return putJson<RecaptureDiagnosticsReport>(`${SERVER_BASE_URL}/diagnostics/browser-recapture`, report);
 }
 
 export async function getConversationThreadSnapshot(threadId: string, signal?: AbortSignal): Promise<ConversationThreadSnapshot | null> {

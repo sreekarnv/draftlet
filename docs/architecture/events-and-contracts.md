@@ -149,8 +149,49 @@ The current v2 generation flow is transitional but now uses durable runtime doma
 - side panel can request `draftlet:set-current-draft-variant` or `draftlet:accept-draft-variant`; background patches runtime state and emits an updated thread snapshot
 - refinement prompts prefer the accepted variant, then the current variant, then the latest prior turn variants as a compatibility fallback
 - insertion remains explicit: side panel sends `draftlet:insert-reply` with `sessionId` and `variantId` when available; service worker checks `ComposeTargetRef` metadata, asks the content script to revalidate the target with `draftlet:revalidate-insertion-target`, and reports live/stale/unavailable status for fallback copy/manual use
+- recapture after stale restore is explicit: side panel can send `draftlet:activate-recapture-tab` to bring a validated chosen tab forward, then sends `draftlet:recapture-insertion-target` with an optional chosen `tabId`; background binds reachable selected tabs, asks the content script to recapture or restore the focused compose target, and returns typed outcomes for tab acknowledgement, focus-required retry, unavailable tabs, stale targets, and successful recapture
+- the side panel may keep a bounded, local recapture status trail for recent activation/recapture attempts; this is UI recovery context, not durable runtime history
+- background keeps a bounded in-memory recapture diagnostics log for extension debugging; debug surfaces can query it with `draftlet:get-recapture-diagnostics`, and it must not include selected text or full page content
+- the popup may display compact runtime status and recent recapture diagnostics, and may copy a bounded diagnostics report for debugging, but it must remain a quick status/debug surface and not duplicate side-panel drafting workflow
+- desktop diagnostics may point users to extension-owned recapture diagnostics, but browser tab/content-script state stays in the extension until an explicit desktop-extension diagnostics bridge exists
 
 Legacy runtime `Generation`/`Reply` persistence and `/history` are retired. Side-panel history and streaming now use domain-backed `WorkspaceSession` / `ConversationThread` / `Turn` / `DraftVariant` data end to end, with `GenerationRun` as the bounded durable execution lease for active/recoverable generation work. Current and accepted variant state is bounded to one variant per thread in this phase.
+
+## Future Desktop-Extension Diagnostics Bridge
+
+The first desktop-extension diagnostics transport is a bounded runtime relay:
+- extension background owns the recapture diagnostics log
+- extension popup can ask background to publish a privacy-bounded report to `/diagnostics/browser-recapture`
+- runtime stores only the latest report in memory, records when it was received, and clears it after the bounded freshness window
+- desktop reads the latest report through its normal main-process IPC and the runtime endpoint
+- desktop can display the report or an expired-report state, but cannot mutate browser recapture state
+
+The transitional shared contract lives in `shared/recapture-diagnostics-contract.ts`. Extension popup export and desktop diagnostics guidance must use that shared contract instead of defining parallel report shapes.
+
+The bridge contract stays narrow and diagnostics-only:
+- desktop requests the latest bounded recapture diagnostics report from the runtime relay
+- extension remains the owner of browser tab, content-script, and focused compose target state
+- extension returns serialized diagnostic entries using the same privacy-bounded report shape as popup copy
+- desktop may display, export, or attach the report to operational diagnostics
+- desktop must not mutate recapture state, activate tabs, retry recapture, or infer live DOM state
+
+The bridge response should include only fields already safe for the popup diagnostics export:
+- `id`
+- `event`
+- `level`
+- `sessionId`
+- `tabId`
+- `status`
+- `outcome`
+- `reason`
+- `message`
+- `at`
+
+Relay freshness metadata may include `receivedAt`, `stale`, and `staleAfterSeconds`. These fields describe the runtime-held report envelope, not live browser state.
+
+The bridge response must not include selected text, generated draft text, full page content, DOM selectors, cookies, tokens, local runtime secrets, or raw exception objects.
+
+The relay is intentionally non-durable. A future implementation can replace it with native messaging or another explicit channel, but it must keep the same privacy-bounded request/response contract or version it deliberately.
 
 ## Error Shape
 

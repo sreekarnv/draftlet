@@ -127,14 +127,38 @@ export default defineContentScript({
       return { status: 'live', target: target.targetRef, message: 'Compose target is available.' };
     };
 
-    const recaptureInsertionTarget = (): RecaptureInsertionTargetResult => {
+    const recaptureInsertionTarget = (targetRef = insertionTarget?.targetRef): RecaptureInsertionTargetResult => {
       const captured = captureFocusedTarget();
       insertionTarget = captured ?? insertionTarget;
 
       if (!captured) {
+        if (targetRef) {
+          const restored = resolveInsertionTarget(targetRef);
+
+          if (restored?.targetRef) {
+            return {
+              recaptured: true,
+              status: 'live',
+              outcome: 'recapture_succeeded',
+              target: restored.targetRef,
+              message: 'Target rebound successfully.',
+            };
+          }
+
+          return {
+            recaptured: false,
+            status: 'stale',
+            outcome: 'recapture_failed',
+            reason: 'target_stale',
+            target: targetRef,
+            message: 'The saved compose target is no longer available on this page.',
+          };
+        }
+
         return {
           recaptured: false,
-          status: 'needs_recapture',
+          status: 'needs_focus',
+          outcome: 'needs_focused_compose_target',
           reason: 'no_focused_compose_target',
           message: 'Focus a compose field on the page, then try recapture again.',
         };
@@ -143,7 +167,8 @@ export default defineContentScript({
       if (!captured.targetRef) {
         return {
           recaptured: false,
-          status: 'needs_recapture',
+          status: 'needs_focus',
+          outcome: 'recapture_failed',
           reason: 'target_metadata_missing',
           message: 'Draftlet could not capture a usable compose target here.',
         };
@@ -152,6 +177,7 @@ export default defineContentScript({
       return {
         recaptured: true,
         status: 'live',
+        outcome: 'recapture_succeeded',
         target: captured.targetRef,
         message: 'Target rebound successfully.',
       };
@@ -165,7 +191,7 @@ export default defineContentScript({
       }
 
       if (message.type === RECAPTURE_INSERTION_TARGET) {
-        return Promise.resolve(recaptureInsertionTarget());
+        return Promise.resolve(recaptureInsertionTarget(message.target));
       }
 
       if (message.type === INSERT_REPLY) {
