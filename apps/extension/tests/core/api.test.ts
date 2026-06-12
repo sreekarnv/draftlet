@@ -5,6 +5,7 @@ import {
   claimGenerationRun,
   getGenerationRunExecutionState,
   heartbeatGenerationRun,
+  putWorkspaceSession,
   reconcileGenerationRuns,
   streamReplies,
 } from '../../core/api';
@@ -50,6 +51,43 @@ describe('streamReplies', () => {
     });
 
     expect(received).toEqual([]);
+  });
+});
+
+describe('workspace session runtime API', () => {
+  it('persists and maps active routing metadata', async () => {
+    const fetchMock = vi.fn(async () => Response.json(workspaceSessionRead()));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const session = await putWorkspaceSession({
+      sessionId: 'session-1',
+      tabId: 10,
+      windowId: 1,
+      pageUrl: 'https://example.com/thread',
+      pageTitle: 'Inbox',
+      latestContext: {
+        selectedText: 'Please reply to this.',
+        sourceUrl: 'https://example.com/thread',
+        sourceDomain: 'example.com',
+        pageTitle: 'Inbox',
+      },
+      status: 'active',
+      activeThreadId: 'thread-1',
+      activeTurnId: 'turn-1',
+      activeRunId: 'generation-1',
+      createdAt: '2026-06-09T00:00:00.000Z',
+      updatedAt: '2026-06-09T00:00:01.000Z',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/domain/sessions/session-1'), expect.objectContaining({
+      method: 'PUT',
+      body: expect.stringContaining('"active_run_id":"generation-1"'),
+    }));
+    expect(session).toMatchObject({
+      activeThreadId: 'thread-1',
+      activeTurnId: 'turn-1',
+      activeRunId: 'generation-1',
+    });
   });
 });
 
@@ -178,6 +216,25 @@ function createStreamResponse(chunks: string[]): Response {
       controller.close();
     },
   }), { status: 200 });
+}
+
+function workspaceSessionRead() {
+  return {
+    session_id: 'session-1',
+    tab_id: 10,
+    window_id: 1,
+    page_url: 'https://example.com/thread',
+    page_title: 'Inbox',
+    selected_text: 'Please reply to this.',
+    source_domain: 'example.com',
+    status: 'active',
+    active_thread_id: 'thread-1',
+    active_turn_id: 'turn-1',
+    active_run_id: 'generation-1',
+    compose_target: null,
+    created_at: '2026-06-09T00:00:00.000Z',
+    updated_at: '2026-06-09T00:00:01.000Z',
+  };
 }
 
 function generationRunRead({ status }: { status: string }) {

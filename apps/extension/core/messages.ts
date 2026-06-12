@@ -60,6 +60,8 @@ export interface WorkspaceSession {
   createdAt: string;
   updatedAt: string;
   activeThreadId?: string;
+  activeTurnId?: string;
+  activeRunId?: string;
   activeGeneration?: WorkspaceSessionGeneration;
   insertionTarget?: ComposeTargetRef;
   insertionTargetStatus?: InsertionTargetStatus;

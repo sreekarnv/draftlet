@@ -87,6 +87,8 @@ export async function putWorkspaceSession(session: WorkspaceSession): Promise<Wo
     source_domain: session.latestContext.sourceDomain,
     status: session.status,
     active_thread_id: session.activeThreadId,
+    active_turn_id: session.activeTurnId,
+    active_run_id: session.activeRunId,
     compose_target: mapComposeTargetWrite(session.insertionTarget ?? session.latestContext.composeTarget),
   });
 
@@ -501,6 +503,8 @@ function mapWorkspaceSession(
     },
     status: session.status === 'stale' ? 'stale' : 'active',
     activeThreadId: session.active_thread_id ?? undefined,
+    activeTurnId: session.active_turn_id ?? undefined,
+    activeRunId: session.active_run_id ?? undefined,
     insertionTarget: mapComposeTarget(session.compose_target),
     insertionTargetStatus: insertionTargetStatus ?? (session.compose_target ? 'stale' : 'needs_recapture'),
     createdAt: session.created_at,
@@ -651,6 +655,8 @@ interface WorkspaceSessionRead {
   source_domain: string | null;
   status: string;
   active_thread_id: string | null;
+  active_turn_id: string | null;
+  active_run_id: string | null;
   compose_target?: ComposeTargetRead | null;
   created_at: string;
   updated_at: string;
