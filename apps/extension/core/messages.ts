@@ -38,16 +38,7 @@ export interface DraftletSidePanelContext {
 }
 
 export type WorkspaceSessionStatus = 'active' | 'stale';
-export type WorkspaceGenerationStatus = 'starting' | 'streaming';
 export type GenerationRunStatus = 'active' | 'streaming' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
-
-export interface WorkspaceSessionGeneration {
-  generationId: string;
-  threadId?: string;
-  turnId?: string;
-  status: WorkspaceGenerationStatus;
-  startedAt: string;
-}
 
 export interface WorkspaceSession {
   sessionId: string;
@@ -62,7 +53,6 @@ export interface WorkspaceSession {
   activeThreadId?: string;
   activeTurnId?: string;
   activeRunId?: string;
-  activeGeneration?: WorkspaceSessionGeneration;
   insertionTarget?: ComposeTargetRef;
   insertionTargetStatus?: InsertionTargetStatus;
   plausibleTabs?: PlausibleTabCandidate[];

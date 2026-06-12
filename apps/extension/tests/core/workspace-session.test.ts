@@ -159,39 +159,33 @@ describe('workspace session store', () => {
     expect(focusRequired?.plausibleTabs).toBeUndefined();
   });
 
-  it('tracks active generation metadata per session', () => {
+  it('tracks active run routing metadata per session', () => {
     const store = createTestStore();
     const first = store.upsertFromPageContext({ context: context('First'), tabId: 10 });
     const second = store.upsertFromPageContext({ context: context('Second'), tabId: 11 });
 
-    store.setActiveGeneration(first.sessionId, {
-      generationId: 'generation-a',
-      status: 'starting',
-      startedAt: '2026-01-01T00:00:03.000Z',
+    store.setActiveRun(first.sessionId, {
+      runId: 'generation-a',
+      threadId: 'thread-a',
+      turnId: 'turn-a',
     });
-    store.setActiveGeneration(second.sessionId, {
-      generationId: 'generation-b',
-      status: 'starting',
-      startedAt: '2026-01-01T00:00:04.000Z',
+    store.setActiveRun(second.sessionId, {
+      runId: 'generation-b',
+      threadId: 'thread-b',
+      turnId: 'turn-b',
     });
-    store.updateActiveGenerationStatus(first.sessionId, 'generation-a', 'streaming');
 
-    expect(store.getBySessionId(first.sessionId)?.activeGeneration).toMatchObject({
-      generationId: 'generation-a',
-      status: 'streaming',
-    });
     expect(store.getBySessionId(first.sessionId)?.activeRunId).toBe('generation-a');
-    expect(store.getBySessionId(second.sessionId)?.activeGeneration).toMatchObject({
-      generationId: 'generation-b',
-      status: 'starting',
-    });
-    expect(store.findByGenerationId('generation-b')?.sessionId).toBe(second.sessionId);
+    expect(store.getBySessionId(first.sessionId)?.activeThreadId).toBe('thread-a');
+    expect(store.getBySessionId(first.sessionId)?.activeTurnId).toBe('turn-a');
+    expect(store.getBySessionId(second.sessionId)?.activeRunId).toBe('generation-b');
+    expect(store.findByActiveRunId('generation-b')?.sessionId).toBe(second.sessionId);
 
-    store.clearActiveGeneration(first.sessionId, 'generation-a');
+    store.clearActiveRun(first.sessionId, 'generation-a');
 
-    expect(store.getBySessionId(first.sessionId)?.activeGeneration).toBeUndefined();
     expect(store.getBySessionId(first.sessionId)?.activeRunId).toBeUndefined();
-    expect(store.getBySessionId(second.sessionId)?.activeGeneration?.generationId).toBe('generation-b');
+    expect(store.getBySessionId(first.sessionId)?.activeThreadId).toBe('thread-a');
+    expect(store.getBySessionId(second.sessionId)?.activeRunId).toBe('generation-b');
   });
   it('hydrates a persisted session for workspace restore', () => {
     const store = createTestStore();
