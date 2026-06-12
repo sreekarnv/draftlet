@@ -1,6 +1,6 @@
-import { ModelCard } from '../components/ModelCard';
-import { SetupChecklist } from '../components/SetupChecklist';
-import { StatusCard } from '../components/StatusCard';
+import { ModelCard } from '../components/model-card';
+import { SetupChecklist } from '../components/setup-checklist';
+import { StatusCard } from '../components/status-card';
 import { Button } from '../components/ui';
 import type { RuntimeState } from '../lib/types';
 

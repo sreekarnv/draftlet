@@ -157,12 +157,16 @@ Avoid mirrored mutable state across content script, popup, side panel, desktop, 
 
 Cross-surface communication must use typed contracts.
 
+New manually created TypeScript and TSX source/test files should use `kebab-case` filenames. This keeps import paths predictable across extension, desktop, and shared contract code while allowing exported symbols to keep idiomatic TypeScript naming.
+
 Use shared schemas for messages between:
 - content script and service worker
 - side panel and service worker
 - popup and service worker
 - extension and runtime
 - desktop and runtime
+
+Desktop-extension diagnostics messages must be explicit and diagnostics-only. Browser recapture state remains extension-owned; desktop may display the latest bounded, privacy-safe diagnostics report published by the extension through the runtime relay, but it must not activate tabs, retry recapture, or infer live DOM state.
 
 The service worker should coordinate extension message routing. The runtime should expose stable request/response and streaming interfaces. No surface should invent ad hoc payloads for the same concept.
 

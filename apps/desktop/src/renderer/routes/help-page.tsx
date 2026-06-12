@@ -1,5 +1,5 @@
 import React from 'react';
-import { HelpCard } from '../components/HelpCard';
+import { HelpCard } from '../components/help-card';
 import type { RuntimeState } from '../lib/types';
 
 interface HelpPageProps {

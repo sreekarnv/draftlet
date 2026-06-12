@@ -142,8 +142,19 @@ export function createWorkspaceSessionStore({
         return null;
       }
 
+      const nextTarget = target ?? session.insertionTarget;
+
+      if (
+        session.insertionTargetStatus === status
+        && sameComposeTargetRef(session.insertionTarget, nextTarget)
+        && sameComposeTargetRef(session.latestContext.composeTarget, target ?? session.latestContext.composeTarget)
+        && (status !== 'tab_disambiguation_required' || !session.plausibleTabs)
+      ) {
+        return null;
+      }
+
       return touch(session, {
-        insertionTarget: target ?? session.insertionTarget,
+        insertionTarget: nextTarget,
         insertionTargetStatus: status,
         plausibleTabs: status === 'tab_disambiguation_required' ? session.plausibleTabs : undefined,
         latestContext: {
@@ -157,6 +168,13 @@ export function createWorkspaceSessionStore({
       const session = sessionsById.get(sessionId);
 
       if (!session) {
+        return null;
+      }
+
+      if (
+        session.insertionTargetStatus === 'tab_disambiguation_required'
+        && samePlausibleTabCandidates(session.plausibleTabs, candidates)
+      ) {
         return null;
       }
 
@@ -230,6 +248,36 @@ export function createWorkspaceSessionStore({
     const sessionId = sessionIdByTabId.get(tabId);
     return sessionId ? sessionsById.get(sessionId) ?? null : null;
   }
+}
+
+function sameComposeTargetRef(left?: ComposeTargetRef, right?: ComposeTargetRef): boolean {
+  if (!left || !right) {
+    return left === right;
+  }
+
+  return left.targetId === right.targetId
+    && left.kind === right.kind
+    && left.pageUrl === right.pageUrl
+    && left.origin === right.origin
+    && left.pageTitle === right.pageTitle
+    && left.selector === right.selector
+    && left.fingerprint === right.fingerprint
+    && left.label === right.label;
+}
+
+function samePlausibleTabCandidates(left: PlausibleTabCandidate[] | undefined, right: PlausibleTabCandidate[]): boolean {
+  if (!left || left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((candidate, index) => {
+    const other = right[index];
+    return candidate.tabId === other.tabId
+      && candidate.windowId === other.windowId
+      && candidate.url === other.url
+      && candidate.title === other.title
+      && candidate.matchReason === other.matchReason;
+  });
 }
 
 function normalizeContext(

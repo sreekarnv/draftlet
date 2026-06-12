@@ -98,10 +98,38 @@ describe('workspace session store', () => {
     expect(stale?.latestContext.composeTarget).toEqual(composeTarget);
   });
 
+  it('does not touch a session when insertion target status is unchanged', () => {
+    const store = createTestStore();
+    const composeTarget = {
+      targetId: 'input-a',
+      kind: 'textarea' as const,
+      pageUrl: 'https://example.com/thread',
+      origin: 'https://example.com',
+      selector: 'textarea[name="reply"]',
+      fingerprint: 'textarea|reply',
+      lastSeenAt: '2026-01-01T00:00:00.000Z',
+    };
+    const session = store.upsertFromPageContext({
+      context: {
+        ...context('First'),
+        composeTarget,
+      },
+      tabId: 10,
+    });
+
+    const unchanged = store.updateInsertionTarget(session.sessionId, {
+      ...composeTarget,
+      lastSeenAt: '2026-01-01T00:00:30.000Z',
+    }, 'live');
+
+    expect(unchanged).toBeNull();
+    expect(store.getBySessionId(session.sessionId)?.updatedAt).toBe(session.updatedAt);
+  });
+
   it('stores tab ambiguity candidates and clears them after target status changes', () => {
     const store = createTestStore();
     const session = store.upsertFromPageContext({ context: context('First'), tabId: 10 });
-    const ambiguous = store.updatePlausibleTabs(session.sessionId, [
+    const candidates = [
       {
         tabId: 10,
         windowId: 1,
@@ -112,15 +140,22 @@ describe('workspace session store', () => {
         currentWindow: true,
         matchReason: 'session_url',
       },
-    ]);
+    ] as const;
+    const ambiguous = store.updatePlausibleTabs(session.sessionId, [...candidates]);
 
     expect(ambiguous?.insertionTargetStatus).toBe('tab_disambiguation_required');
     expect(ambiguous?.plausibleTabs).toHaveLength(1);
+    expect(store.updatePlausibleTabs(session.sessionId, [...candidates])).toBeNull();
 
     const rebound = store.updateInsertionTarget(session.sessionId, undefined, 'needs_recapture');
 
     expect(rebound?.insertionTargetStatus).toBe('needs_recapture');
     expect(rebound?.plausibleTabs).toBeUndefined();
+
+    const focusRequired = store.updateInsertionTarget(session.sessionId, undefined, 'needs_focus');
+
+    expect(focusRequired?.insertionTargetStatus).toBe('needs_focus');
+    expect(focusRequired?.plausibleTabs).toBeUndefined();
   });
 
   it('tracks active generation metadata per session', () => {

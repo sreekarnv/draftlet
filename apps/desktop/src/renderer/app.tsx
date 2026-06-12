@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 
-import { HelpPage } from './routes/HelpPage';
-import { RuntimePage } from './routes/RuntimePage';
-import { SetupPage } from './routes/SetupPage';
+import { HelpPage } from './routes/help-page';
+import { DiagnosticsPage } from './routes/diagnostics-page';
+import { RuntimePage } from './routes/runtime-page';
+import { SetupPage } from './routes/setup-page';
 import { desktopApi } from './lib/api';
 import { RECOMMENDED_MODEL } from './lib/constants';
-import type { CommandStatus, InstalledModel, RuntimeState } from './lib/types';
+import type { BrowserDiagnosticsBridgeResult, CommandStatus, InstalledModel, RuntimeState } from './lib/types';
 import { Button } from './components/ui';
+import { serializeRecaptureDiagnosticsReport } from '../../../../shared/recapture-diagnostics-contract';
 
 const UNKNOWN: CommandStatus = { ok: false, message: 'Not checked yet.', code: 'unknown' };
 
@@ -21,6 +23,7 @@ export default function App() {
   });
   const [busy, setBusy] = useState(false);
   const [actionMessage, setActionMessage] = useState('');
+  const [browserDiagnostics, setBrowserDiagnostics] = useState<BrowserDiagnosticsBridgeResult | null>(null);
 
   const refreshStatus = async () => {
     setBusy(true);
@@ -60,6 +63,28 @@ export default function App() {
     const result = await desktopApi.openExtensionHelp();
     setActionMessage(result.message);
     setBusy(false);
+  };
+
+  const loadBrowserDiagnostics = async () => {
+    setBusy(true);
+    const result = await desktopApi.getBrowserRecaptureDiagnosticsReport();
+    setBrowserDiagnostics(result);
+    setActionMessage(result.ok ? 'Loaded browser recapture diagnostics.' : result.error.message);
+    setBusy(false);
+  };
+
+  const copyBrowserDiagnostics = async () => {
+    if (!browserDiagnostics?.ok) {
+      setActionMessage('Load a browser diagnostics report before copying.');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(serializeRecaptureDiagnosticsReport(browserDiagnostics.report));
+      setActionMessage('Copied browser recapture diagnostics.');
+    } catch {
+      setActionMessage('Could not copy browser recapture diagnostics.');
+    }
   };
 
   const selectModel = async (model: string) => {
@@ -129,6 +154,14 @@ export default function App() {
         onRestartServer={restartServer}
         onStartServer={startServer}
         onStopServer={stopServer}
+        runtime={runtime}
+      />
+      <DiagnosticsPage
+        browserDiagnostics={browserDiagnostics}
+        busy={busy}
+        onCopyBrowserDiagnostics={copyBrowserDiagnostics}
+        onLoadBrowserDiagnostics={loadBrowserDiagnostics}
+        onOpenExtensionHelp={openExtensionHelp}
         runtime={runtime}
       />
       <HelpPage busy={busy} onOpenExtensionHelp={openExtensionHelp} runtime={runtime} />
