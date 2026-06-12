@@ -6,9 +6,6 @@ import {
   ACTIVATE_RECAPTURE_TAB,
   CANCEL_DRAFT_GENERATION,
   CONVERSATION_THREAD_UPDATED,
-  DRAFT_GENERATION_COMPLETED,
-  DRAFT_GENERATION_FAILED,
-  DRAFT_GENERATION_STARTED,
   GET_CURRENT_WORKSPACE_SESSION,
   GET_DOMAIN_HISTORY,
   GET_INSERTION_TARGET_STATUS,
@@ -45,8 +42,6 @@ import { mountDraftletPanel } from '../ui/mount-panel';
 let currentSession: WorkspaceSession | null = null;
 let currentTone: Tone = DEFAULT_TONE;
 let currentPanelView: PanelView = DEFAULT_PANEL_VIEW;
-let activeGenerationId: string | null = null;
-let activeGenerationSessionId: string | null = null;
 let recaptureTrail: RecaptureStatusTrailItem[] = [];
 const MAX_RECAPTURE_TRAIL_ITEMS = 4;
 
@@ -172,36 +167,6 @@ function handleDraftletMessage(message: DraftletMessage) {
     return;
   }
 
-  if (
-    message.type === DRAFT_GENERATION_STARTED
-    && message.sessionId === activeGenerationSessionId
-    && message.generationId === activeGenerationId
-  ) {
-    panel.setConnectionStatus('connected');
-    panel.setState('streaming');
-    return;
-  }
-
-
-  if (
-    message.type === DRAFT_GENERATION_COMPLETED
-    && message.sessionId === activeGenerationSessionId
-    && message.generationId === activeGenerationId
-  ) {
-    clearActiveGeneration();
-    panel.setState(message.variants.length > 0 ? 'success' : 'error', 'No replies returned.');
-    return;
-  }
-
-  if (
-    message.type === DRAFT_GENERATION_FAILED
-    && message.sessionId === activeGenerationSessionId
-    && message.generationId === activeGenerationId
-  ) {
-    clearActiveGeneration();
-    panel.setConnectionStatus('disconnected');
-    panel.setState('error', message.error.message);
-  }
 }
 
 function applyThreadSnapshot(snapshot: ConversationThreadSnapshot) {
@@ -210,9 +175,16 @@ function applyThreadSnapshot(snapshot: ConversationThreadSnapshot) {
 }
 
 function applyPanelStateFromThread(snapshot: ConversationThreadSnapshot) {
-  const latestTurn = [...snapshot.turns].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).at(0);
+  const activeTurn = currentSession?.activeTurnId
+    ? snapshot.turns.find((turn) => turn.turnId === currentSession?.activeTurnId)
+    : undefined;
+  const latestTurn = activeTurn ?? [...snapshot.turns].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).at(0);
 
   if (!latestTurn) {
+    if (currentSession?.activeRunId) {
+      panel.setState('loading');
+    }
+
     return;
   }
 
@@ -267,13 +239,6 @@ function applySession(session: WorkspaceSession) {
   };
   currentTone = tone;
   currentPanelView = activeView;
-
-  if (session.activeRunId) {
-    activeGenerationId = session.activeRunId;
-    activeGenerationSessionId = session.sessionId;
-  } else if (activeGenerationSessionId === session.sessionId) {
-    clearActiveGeneration();
-  }
 
   if (previousSession?.sessionId !== session.sessionId) {
     recaptureTrail = [];
@@ -408,8 +373,12 @@ async function generateReplies() {
       return;
     }
 
-    activeGenerationId = response.generationId;
-    activeGenerationSessionId = response.sessionId;
+    currentSession = currentSession ? {
+      ...currentSession,
+      activeThreadId: response.threadId ?? currentSession.activeThreadId,
+      activeTurnId: response.turnId ?? currentSession.activeTurnId,
+      activeRunId: response.generationId,
+    } : currentSession;
   } catch (error) {
     panel.setConnectionStatus('disconnected');
     panel.setState(
@@ -450,8 +419,12 @@ async function refineReplies(instruction: string) {
       return;
     }
 
-    activeGenerationId = response.generationId;
-    activeGenerationSessionId = response.sessionId;
+    currentSession = currentSession ? {
+      ...currentSession,
+      activeThreadId: response.threadId ?? currentSession.activeThreadId,
+      activeTurnId: response.turnId ?? currentSession.activeTurnId,
+      activeRunId: response.generationId,
+    } : currentSession;
   } catch (error) {
     panel.setConnectionStatus('disconnected');
     panel.setState(
@@ -767,23 +740,21 @@ async function closeSidePanel() {
 }
 
 async function cancelActiveGeneration() {
-  const generationId = activeGenerationId ?? currentSession?.activeRunId;
-  const sessionId = activeGenerationSessionId ?? currentSession?.sessionId;
+  const session = currentSession;
+  const generationId = session?.activeRunId;
 
-  if (!generationId || !sessionId) {
+  if (!session || !generationId) {
     return;
   }
 
-  clearActiveGeneration();
+  currentSession = {
+    ...session,
+    activeRunId: undefined,
+  };
 
   await browser.runtime.sendMessage({
     type: CANCEL_DRAFT_GENERATION,
-    sessionId,
+    sessionId: session.sessionId,
     generationId,
   } satisfies DraftletMessage).catch(() => {});
-}
-
-function clearActiveGeneration() {
-  activeGenerationId = null;
-  activeGenerationSessionId = null;
 }

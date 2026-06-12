@@ -1,6 +1,7 @@
 import {
   cancelReplyGenerationRunExecution,
   checkServerHealth,
+  claimGenerationRun,
   getConversationThreadSnapshot,
   getActiveGenerationRuns,
   getGenerationRunExecutionState,
@@ -75,11 +76,9 @@ import {
   createRecaptureDiagnosticsBridgeFailure,
 } from '../../../shared/recapture-diagnostics-contract';
 
-interface ActiveGenerationController {
-  generationId: string;
-  threadId: string;
-  turnId: string;
-  variants: DraftVariant[];
+interface LiveGenerationStreamHandle {
+  sessionId: string;
+  abortController: AbortController;
 }
 
 type InsertionTabResolution =
@@ -90,7 +89,7 @@ type InsertionTabResolution =
 const sessions = createWorkspaceSessionStore();
 const threads = createConversationThreadStore();
 const recaptureDiagnostics = createRecaptureDiagnosticsLog();
-const activeGenerationsBySessionId = new Map<string, ActiveGenerationController>();
+const liveGenerationStreamsByRunId = new Map<string, LiveGenerationStreamHandle>();
 const GENERATION_RUN_STALE_AFTER_SECONDS = 30;
 
 export default defineBackground(() => {
@@ -191,7 +190,7 @@ async function handleLaunchSidePanel(
     windowId: sender.tab?.windowId ?? context.windowId,
   });
 
-  const previousGenerationId = previousSession?.activeRunId ?? previousSession?.activeGeneration?.generationId;
+  const previousGenerationId = previousSession?.activeRunId;
   if (previousSession && previousGenerationId) {
     void handleCancelDraftGeneration(previousSession.sessionId, previousGenerationId);
     session = sessions.getBySessionId(session.sessionId) ?? session;
@@ -466,24 +465,43 @@ async function handleStartDraftGeneration(
     // Runtime persistence already has the queued turn; a later stream transition will reconcile status.
   }
 
-  activeGenerationsBySessionId.set(sessionId, {
-    generationId,
-    threadId: thread.threadId,
-    turnId: turn.turnId,
-    variants: [],
-  });
-  const generatingSession = sessions.setActiveGeneration(sessionId, {
-    generationId,
-    threadId: thread.threadId,
-    turnId: turn.turnId,
-    status: 'starting',
-    startedAt: new Date().toISOString(),
-  }) ?? updatedSession;
+  try {
+    await claimGenerationRun({
+      runId: generationId,
+      sessionId,
+      threadId: thread.threadId,
+      turnId: turn.turnId,
+      leaseOwner: 'extension-background',
+      staleAfterSeconds: GENERATION_RUN_STALE_AFTER_SECONDS,
+    });
+  } catch (error) {
+    return {
+      started: false,
+      sessionId,
+      threadId: thread.threadId,
+      turnId: turn.turnId,
+      error: createDraftletError(
+        'generation_run_claim_failed',
+        error instanceof Error ? error.message : 'Could not claim a runtime generation run.',
+        true,
+        generationId,
+      ),
+    };
+  }
+
+  const abortController = new AbortController();
+  liveGenerationStreamsByRunId.set(generationId, { sessionId, abortController });
+  const generatingSession = await hydrateWorkspaceSessionFromRuntime(sessionId, updatedSession)
+    ?? sessions.setActiveRun(sessionId, {
+      runId: generationId,
+      threadId: thread.threadId,
+      turnId: turn.turnId,
+    })
+    ?? updatedSession;
 
   void emitWorkspaceSessionUpdated(generatingSession);
-  void persistWorkspaceSession(generatingSession);
   void emitConversationThreadUpdated(sessionId, startedSnapshot);
-  void runDraftGeneration(generatingSession.sessionId, context, generationId, mode, thread, startedTurn);
+  void runDraftGeneration(generatingSession.sessionId, context, generationId, mode, thread, startedTurn, abortController.signal);
 
   return {
     started: true,
@@ -501,73 +519,65 @@ async function handleCancelDraftGeneration(sessionId?: string, generationId?: st
     return { canceled: false };
   }
 
-  const activeGeneration = activeGenerationsBySessionId.get(session.sessionId);
-
-  if (activeGeneration && (!generationId || activeGeneration.generationId === generationId)) {
-    const error = { code: 'generation_cancelled', message: 'Draft generation was cancelled.' };
-    const snapshot = threads.updateTurnStatus(activeGeneration.turnId, 'cancelled', error);
-
-    await cancelReplyGenerationRunExecution(activeGeneration.generationId)
-      .catch(() => finalizeGenerationRunStatus(activeGeneration.generationId, activeGeneration.turnId, 'cancelled', error));
-    stopActiveGeneration(session.sessionId, activeGeneration.generationId);
-    const updatedSession = sessions.clearActiveGeneration(session.sessionId, activeGeneration.generationId);
-
-    if (updatedSession) {
-      void emitWorkspaceSessionUpdated(updatedSession);
-    }
-
-    if (snapshot) {
-      void emitConversationThreadUpdated(session.sessionId, snapshot);
-    }
-
-    return { canceled: true };
-  }
-
   let snapshot = await getRestorableThreadSnapshot(session);
   const activeRuns = await getActiveGenerationRuns({ sessionId: session.sessionId }).catch(() => []);
   const latestTurn = snapshot ? latestGenerationTurn(snapshot) : null;
   const activeRun = generationId
     ? activeRuns.find((run) => run.runId === generationId)
-    : activeRuns.find((run) => !latestTurn || run.turnId === latestTurn.turnId) ?? activeRuns[0];
+    : activeRuns.find((run) => run.runId === session.activeRunId)
+      ?? activeRuns.find((run) => !latestTurn || run.turnId === latestTurn.turnId)
+      ?? activeRuns[0];
+  const runId = generationId ?? activeRun?.runId ?? session.activeRunId;
 
   if (!snapshot && activeRun) {
     snapshot = await getConversationThreadSnapshot(activeRun.threadId).catch(() => null);
   }
 
-  if (!snapshot || (!activeRun && (!latestTurn || !isInProgressTurn(latestTurn)))) {
+  if (!runId && (!snapshot || !latestTurn || !isInProgressTurn(latestTurn))) {
     return { canceled: false };
   }
 
   const error = { code: 'generation_cancelled', message: 'Draft generation was cancelled.' };
-  const turnId = activeRun?.turnId ?? latestTurn!.turnId;
-  const hydratedSnapshot = threads.hydrateSnapshot(snapshot);
-  if (activeRun?.runId) {
-    await cancelReplyGenerationRunExecution(activeRun.runId)
-      .catch(() => finalizeGenerationRunStatus(activeRun.runId, turnId, 'cancelled', error));
-  } else {
+  const turnId = activeRun?.turnId ?? session.activeTurnId ?? latestTurn?.turnId;
+
+  if (runId) {
+    abortLiveGenerationStream(runId);
+  }
+
+  if (runId && turnId) {
+    await cancelReplyGenerationRunExecution(runId)
+      .catch(() => finalizeGenerationRunStatus(runId, turnId, 'cancelled', error));
+    await finalizeGenerationRunStatus(runId, turnId, 'cancelled', error);
+    stopLiveGenerationStream(runId);
+  } else if (turnId) {
     await finalizeGenerationRunStatus(undefined, turnId, 'cancelled', error);
+  } else {
+    return { canceled: false };
   }
-  const refreshedSnapshot = await getConversationThreadSnapshot(hydratedSnapshot.thread.threadId).catch(() => null);
-  const refreshedSession = await getWorkspaceSessionSnapshot(session.sessionId).catch(() => null);
-  const cancelledSnapshot = refreshedSnapshot
-    ? threads.hydrateSnapshot(refreshedSnapshot)
-    : threads.updateTurnStatus(turnId, 'cancelled', error) ?? hydratedSnapshot;
-  if (refreshedSession?.session) {
-    const hydratedSession = sessions.hydrateSession({
-      ...refreshedSession.session,
-      tabId: session.tabId,
-      windowId: session.windowId,
-      latestContext: {
-        ...refreshedSession.session.latestContext,
-        tabId: session.tabId,
-        windowId: session.windowId,
-        tone: session.latestContext.tone,
-        activeView: session.latestContext.activeView,
-      },
-    });
-    void emitWorkspaceSessionUpdated(hydratedSession);
+
+  const refreshedSession = await hydrateWorkspaceSessionFromRuntime(session.sessionId, session);
+
+  if (refreshedSession) {
+    void emitWorkspaceSessionUpdated(refreshedSession);
+  } else if (runId) {
+    const updatedSession = sessions.clearActiveRun(session.sessionId, runId);
+
+    if (updatedSession) {
+      void emitWorkspaceSessionUpdated(updatedSession);
+    }
   }
-  void emitConversationThreadUpdated(session.sessionId, cancelledSnapshot);
+
+  const threadId = activeRun?.threadId ?? session.activeThreadId ?? snapshot?.thread.threadId;
+  const refreshedSnapshot = threadId
+    ? await hydrateAndEmitThreadSnapshot(session.sessionId, threadId)
+    : null;
+
+  if (!refreshedSnapshot && snapshot) {
+    const hydratedSnapshot = threads.hydrateSnapshot(snapshot);
+    const cancelledSnapshot = threads.updateTurnStatus(turnId, 'cancelled', error) ?? hydratedSnapshot;
+    void emitConversationThreadUpdated(session.sessionId, cancelledSnapshot);
+  }
+
   return { canceled: true };
 }
 
@@ -578,15 +588,18 @@ async function runDraftGeneration(
   mode: GenerationMode,
   thread: ConversationThread,
   turn: Turn,
+  signal: AbortSignal,
 ): Promise<void> {
   await Promise.resolve();
 
-  if (!isActiveGeneration(sessionId, generationId)) {
+  if (!isLiveGenerationStream(sessionId, generationId)) {
     return;
   }
 
-  const streamingSession = sessions.updateActiveGenerationStatus(sessionId, generationId, 'streaming');
-  const streamingSnapshot = threads.updateTurnStatus(turn.turnId, 'streaming');
+  await finalizeGenerationRunStatus(generationId, turn.turnId, 'streaming');
+  const streamingSession = await hydrateWorkspaceSessionFromRuntime(sessionId, sessions.getBySessionId(sessionId) ?? undefined);
+  const streamingSnapshot = await hydrateAndEmitThreadSnapshot(sessionId, thread.threadId)
+    ?? threads.updateTurnStatus(turn.turnId, 'streaming');
   const streamingTurn = streamingSnapshot ? findTurn(streamingSnapshot, turn.turnId) : null;
 
   if (streamingSession) {
@@ -634,38 +647,41 @@ async function runDraftGeneration(
         generation_mode: mode,
       },
       {
+        signal,
         onReply(reply) {
-          const active = activeGenerationsBySessionId.get(sessionId);
-
-          if (!active || active.generationId !== generationId) {
+          if (!isLiveGenerationStream(sessionId, generationId)) {
             return;
           }
 
-          const variantResult = threads.addVariant({
-            turnId: turn.turnId,
-            tone: context.tone ?? DEFAULT_TONE,
-            content: reply.text,
-            variantId: reply.variantId,
+          void hydrateAndEmitThreadSnapshot(sessionId, thread.threadId).then((runtimeSnapshot) => {
+            if (runtimeSnapshot || !isLiveGenerationStream(sessionId, generationId)) {
+              return;
+            }
+
+            const variantResult = threads.addVariant({
+              turnId: turn.turnId,
+              tone: context.tone ?? DEFAULT_TONE,
+              content: reply.text,
+              variantId: reply.variantId,
+            });
+
+            if (variantResult) {
+              void emitConversationThreadUpdated(sessionId, variantResult.snapshot);
+            }
           });
-
-          if (!variantResult) {
-            return;
-          }
-
-          void emitConversationThreadUpdated(sessionId, variantResult.snapshot);
-          active.variants.push(variantResult.variant);
         },
       },
     );
 
-    const active = activeGenerationsBySessionId.get(sessionId);
-
-    if (!active || active.generationId !== generationId) {
+    if (!isLiveGenerationStream(sessionId, generationId)) {
       return;
     }
 
-    const completedSnapshot = threads.updateTurnStatus(turn.turnId, 'completed');
+    await finalizeGenerationRunStatus(generationId, turn.turnId, 'completed');
+    const completedSnapshot = await hydrateAndEmitThreadSnapshot(sessionId, thread.threadId)
+      ?? threads.updateTurnStatus(turn.turnId, 'completed');
     const completedTurn = completedSnapshot ? findTurn(completedSnapshot, turn.turnId) : null;
+    const completedVariants = completedSnapshot ? findVariantsForTurn(completedSnapshot, turn.turnId) : [];
 
     if (completedSnapshot) {
       void emitConversationThreadUpdated(sessionId, completedSnapshot);
@@ -677,10 +693,14 @@ async function runDraftGeneration(
       generationId,
       thread: completedSnapshot?.thread ?? thread,
       turn: completedTurn ?? { ...turn, generationStatus: 'completed' },
-      variants: completedSnapshot ? findVariantsForTurn(completedSnapshot, turn.turnId) : active.variants,
+      variants: completedVariants,
     });
 
   } catch (error) {
+    if (signal.aborted) {
+      return;
+    }
+
     await emitGenerationFailed(
       sessionId,
       generationId,
@@ -694,13 +714,13 @@ async function runDraftGeneration(
       ),
     );
   } finally {
-    if (isActiveGeneration(sessionId, generationId)) {
-      stopActiveGeneration(sessionId, generationId);
-      const updatedSession = sessions.clearActiveGeneration(sessionId, generationId);
+    if (isLiveGenerationStream(sessionId, generationId)) {
+      stopLiveGenerationStream(generationId);
+      const updatedSession = await hydrateWorkspaceSessionFromRuntime(sessionId, sessions.getBySessionId(sessionId) ?? undefined)
+        ?? sessions.clearActiveRun(sessionId, generationId);
 
       if (updatedSession) {
         void emitWorkspaceSessionUpdated(updatedSession);
-        void persistWorkspaceSession(updatedSession);
       }
     }
   }
@@ -713,15 +733,16 @@ async function emitGenerationFailed(
   turnId: string,
   error: DraftletError,
 ): Promise<void> {
-  if (!isActiveGeneration(sessionId, generationId)) {
+  if (!isLiveGenerationStream(sessionId, generationId)) {
     return;
   }
 
   const failedSnapshot = threads.updateTurnStatus(turnId, 'failed', { code: error.code, message: error.message });
 
   await finalizeGenerationRunStatus(generationId, turnId, 'failed', { code: error.code, message: error.message });
+  const runtimeFailedSnapshot = await hydrateAndEmitThreadSnapshot(sessionId, threadId);
 
-  if (failedSnapshot) {
+  if (!runtimeFailedSnapshot && failedSnapshot) {
     void emitConversationThreadUpdated(sessionId, failedSnapshot);
   }
 
@@ -1233,7 +1254,7 @@ function resolveGenerationSession(sessionId?: string, generationId?: string): Wo
   }
 
   if (generationId) {
-    return sessions.findByGenerationId(generationId);
+    return sessions.findByActiveRunId(generationId);
   }
 
   return null;
@@ -1333,7 +1354,7 @@ async function restoreRuntimeSnapshot(session: WorkspaceSession): Promise<Worksp
 }
 
 async function reconcileInterruptedGeneration(sessionId: string, snapshot: ConversationThreadSnapshot): Promise<ConversationThreadSnapshot> {
-  if (activeGenerationsBySessionId.has(sessionId)) {
+  if (hasLiveGenerationStreamForSession(sessionId)) {
     return snapshot;
   }
 
@@ -1409,14 +1430,64 @@ async function getLiveRuntimeGenerationConflict(sessionId: string) {
   return executionState?.live[0] ?? null;
 }
 
-function stopActiveGeneration(sessionId: string, generationId: string): void {
-  const active = activeGenerationsBySessionId.get(sessionId);
+function abortLiveGenerationStream(runId: string): void {
+  liveGenerationStreamsByRunId.get(runId)?.abortController.abort();
+}
 
-  if (!active || active.generationId !== generationId) {
-    return;
+function stopLiveGenerationStream(runId: string): void {
+  liveGenerationStreamsByRunId.delete(runId);
+}
+
+function hasLiveGenerationStreamForSession(sessionId: string): boolean {
+  for (const stream of liveGenerationStreamsByRunId.values()) {
+    if (stream.sessionId === sessionId) {
+      return true;
+    }
   }
 
-  activeGenerationsBySessionId.delete(sessionId);
+  return false;
+}
+
+async function hydrateWorkspaceSessionFromRuntime(
+  sessionId: string,
+  fallback?: WorkspaceSession,
+): Promise<WorkspaceSession | null> {
+  const snapshot = await getWorkspaceSessionSnapshot(sessionId).catch(() => null);
+
+  if (!snapshot?.session) {
+    return null;
+  }
+
+  return sessions.hydrateSession({
+    ...snapshot.session,
+    tabId: fallback?.tabId ?? snapshot.session.tabId,
+    windowId: fallback?.windowId ?? snapshot.session.windowId,
+    insertionTarget: snapshot.session.insertionTarget ?? fallback?.insertionTarget,
+    insertionTargetStatus: fallback?.insertionTargetStatus ?? snapshot.session.insertionTargetStatus,
+    latestContext: {
+      ...snapshot.session.latestContext,
+      tabId: fallback?.tabId ?? snapshot.session.latestContext.tabId,
+      windowId: fallback?.windowId ?? snapshot.session.latestContext.windowId,
+      tone: fallback?.latestContext.tone ?? snapshot.session.latestContext.tone,
+      activeView: fallback?.latestContext.activeView ?? snapshot.session.latestContext.activeView,
+      composeTarget: snapshot.session.insertionTarget ?? fallback?.insertionTarget ?? snapshot.session.latestContext.composeTarget,
+    },
+  });
+}
+
+async function hydrateAndEmitThreadSnapshot(
+  sessionId: string,
+  threadId: string,
+): Promise<ConversationThreadSnapshot | null> {
+  const runtimeSnapshot = await getConversationThreadSnapshot(threadId).catch(() => null);
+
+  if (!runtimeSnapshot) {
+    return null;
+  }
+
+  const snapshot = threads.hydrateSnapshot(runtimeSnapshot);
+  void emitConversationThreadUpdated(sessionId, snapshot);
+  return snapshot;
 }
 
 async function getRestorableThreadSnapshot(session: WorkspaceSession): Promise<ConversationThreadSnapshot | null> {
@@ -1466,8 +1537,8 @@ async function getActiveTab(): Promise<Browser.tabs.Tab | undefined> {
   }
 }
 
-function isActiveGeneration(sessionId: string, generationId: string): boolean {
-  return activeGenerationsBySessionId.get(sessionId)?.generationId === generationId;
+function isLiveGenerationStream(sessionId: string, runId: string): boolean {
+  return liveGenerationStreamsByRunId.get(runId)?.sessionId === sessionId;
 }
 
 function emitWorkspaceSessionUpdated(session: WorkspaceSession): Promise<unknown> {

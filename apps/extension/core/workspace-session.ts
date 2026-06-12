@@ -1,7 +1,6 @@
 import type {
   DraftletSidePanelContext,
   WorkspaceSession,
-  WorkspaceSessionGeneration,
 } from './messages';
 import type { PlausibleTabCandidate } from './tab-disambiguation';
 import type { ComposeTargetRef, InsertionTargetStatus } from './types';
@@ -26,14 +25,9 @@ export interface WorkspaceSessionStore {
   updateInsertionTarget(sessionId: string, target: ComposeTargetRef | undefined, status: InsertionTargetStatus): WorkspaceSession | null;
   updatePlausibleTabs(sessionId: string, candidates: PlausibleTabCandidate[]): WorkspaceSession | null;
   setActiveThread(sessionId: string, threadId: string, turnId?: string): WorkspaceSession | null;
-  setActiveGeneration(sessionId: string, generation: WorkspaceSessionGeneration): WorkspaceSession | null;
-  updateActiveGenerationStatus(
-    sessionId: string,
-    generationId: string,
-    status: WorkspaceSessionGeneration['status'],
-  ): WorkspaceSession | null;
-  clearActiveGeneration(sessionId: string, generationId?: string): WorkspaceSession | null;
-  findByGenerationId(generationId: string): WorkspaceSession | null;
+  setActiveRun(sessionId: string, run: { runId: string; threadId?: string; turnId?: string }): WorkspaceSession | null;
+  clearActiveRun(sessionId: string, runId?: string): WorkspaceSession | null;
+  findByActiveRunId(runId: string): WorkspaceSession | null;
 }
 
 export function createWorkspaceSessionStore({
@@ -197,7 +191,7 @@ export function createWorkspaceSessionStore({
       });
     },
 
-    setActiveGeneration(sessionId, generation) {
+    setActiveRun(sessionId, run) {
       const session = sessionsById.get(sessionId);
 
       if (!session) {
@@ -205,47 +199,27 @@ export function createWorkspaceSessionStore({
       }
 
       return touch(session, {
-        activeThreadId: generation.threadId ?? session.activeThreadId,
-        activeTurnId: generation.turnId ?? session.activeTurnId,
-        activeRunId: generation.generationId,
-        activeGeneration: generation,
+        activeThreadId: run.threadId ?? session.activeThreadId,
+        activeTurnId: run.turnId ?? session.activeTurnId,
+        activeRunId: run.runId,
       });
     },
 
-    updateActiveGenerationStatus(sessionId, generationId, status) {
+    clearActiveRun(sessionId, runId) {
       const session = sessionsById.get(sessionId);
 
-      if (!session || session.activeGeneration?.generationId !== generationId) {
+      if (!session || (runId && session.activeRunId !== runId)) {
         return null;
       }
 
       return touch(session, {
-        activeRunId: generationId,
-        activeGeneration: {
-          ...session.activeGeneration,
-          status,
-        },
+        activeRunId: session.activeRunId === runId || !runId ? undefined : session.activeRunId,
       });
     },
 
-    clearActiveGeneration(sessionId, generationId) {
-      const session = sessionsById.get(sessionId);
-
-      if (!session || (generationId && session.activeGeneration?.generationId !== generationId)) {
-        return null;
-      }
-
-      const { activeGeneration: _activeGeneration, ...rest } = session;
-      return save({
-        ...rest,
-        activeRunId: session.activeRunId === generationId || !generationId ? undefined : session.activeRunId,
-        updatedAt: timestamp(),
-      });
-    },
-
-    findByGenerationId(generationId) {
+    findByActiveRunId(runId) {
       for (const session of sessionsById.values()) {
-        if (session.activeRunId === generationId || session.activeGeneration?.generationId === generationId) {
+        if (session.activeRunId === runId) {
           return session;
         }
       }
