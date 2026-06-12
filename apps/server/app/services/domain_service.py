@@ -10,6 +10,8 @@ from app.schemas.domain import (
     DomainHistoryItem,
     DraftVariantCreate,
     DraftVariantStateUpdate,
+    GenerationRunProgressEvent,
+    GenerationRunProgressSnapshot,
     GenerationRunClaim,
     GenerationRunExecutionState,
     GenerationRunHeartbeat,
@@ -334,6 +336,90 @@ def inspect_generation_run_execution_state(
     )
 
 
+def get_generation_run_progress_snapshot(
+    session: Session,
+    run_id: str,
+    after_sequence: int = 0,
+    limit: int = 50,
+) -> GenerationRunProgressSnapshot | None:
+    run = session.get(GenerationRun, run_id)
+
+    if not run:
+        return None
+
+    session.refresh(run)
+    thread_snapshot = get_thread_snapshot(session, run.thread_id)
+    all_events = build_generation_run_progress_events(session, run)
+    replay_cursor = max((event.sequence for event in all_events), default=0)
+    events = [event for event in all_events if event.sequence > after_sequence][-limit:]
+
+    return GenerationRunProgressSnapshot(
+        checked_at=datetime.now(UTC),
+        run=run,
+        thread=thread_snapshot,
+        events=events,
+        replay_cursor=replay_cursor,
+    )
+
+
+def build_generation_run_progress_events(session: Session, run: GenerationRun) -> list[GenerationRunProgressEvent]:
+    events = [
+        GenerationRunProgressEvent(
+            sequence=sequence_for_generation_run_status(run.status),
+            event_type="generation_run_status",
+            run_id=run.run_id,
+            session_id=run.session_id,
+            thread_id=run.thread_id,
+            turn_id=run.turn_id,
+            status=run.status,
+            at=timestamp_for_generation_run_status(run),
+        ),
+    ]
+
+    for variant in variants_for_turn(session, run.turn_id):
+        events.append(
+            GenerationRunProgressEvent(
+                sequence=100 + variant.rank,
+                event_type="draft_variant_generated",
+                run_id=run.run_id,
+                session_id=run.session_id,
+                thread_id=run.thread_id,
+                turn_id=run.turn_id,
+                status=variant.status,
+                variant_id=variant.variant_id,
+                at=variant.updated_at or variant.created_at,
+            ),
+        )
+
+    return sorted(events, key=lambda event: event.sequence)
+
+
+def sequence_for_generation_run_status(status: str) -> int:
+    if status in TERMINAL_GENERATION_RUN_STATUSES:
+        return 10000
+
+    if status == "streaming":
+        return 20
+
+    return 10
+
+
+def timestamp_for_generation_run_status(run: GenerationRun) -> datetime | None:
+    if run.status == "completed":
+        return run.completed_at or run.released_at or run.updated_at
+
+    if run.status == "cancelled":
+        return run.cancelled_at or run.released_at or run.updated_at
+
+    if run.status == "interrupted":
+        return run.interrupted_at or run.released_at or run.updated_at
+
+    if run.status == "failed":
+        return run.failed_at or run.released_at or run.updated_at
+
+    return run.heartbeat_at or run.claimed_at or run.updated_at
+
+
 def update_generation_run_status(session: Session, run_id: str, payload: GenerationRunStatusUpdate) -> GenerationRun | None:
     run = session.get(GenerationRun, run_id)
 
@@ -649,6 +735,11 @@ def variants_for_thread(session: Session, thread_id: str) -> list[DraftVariant]:
         .join(Turn, DraftVariant.turn_id == Turn.turn_id)
         .where(Turn.thread_id == thread_id)
     )
+    return list(session.scalars(statement))
+
+
+def variants_for_turn(session: Session, turn_id: str) -> list[DraftVariant]:
+    statement = select(DraftVariant).where(DraftVariant.turn_id == turn_id).order_by(DraftVariant.rank)
     return list(session.scalars(statement))
 
 

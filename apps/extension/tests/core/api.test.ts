@@ -4,9 +4,11 @@ import {
   cancelReplyGenerationRunExecution,
   claimGenerationRun,
   getGenerationRunExecutionState,
+  getGenerationRunProgress,
   heartbeatGenerationRun,
   putWorkspaceSession,
   reconcileGenerationRuns,
+  streamReplyGenerationRunEvents,
   streamReplies,
 } from '../../core/api';
 import type { ReplyRequestPayload } from '../../core/types';
@@ -33,6 +35,34 @@ describe('streamReplies', () => {
       {
         text: 'Domain draft',
         variantId: 'variant-1',
+        sequence: undefined,
+      },
+    ]);
+  });
+
+  it('maps runtime replay event ids into streamed draft variant sequences', async () => {
+    const received: unknown[] = [];
+    vi.stubGlobal('fetch', vi.fn(async () => createStreamResponse([
+      'id: 2\n',
+      'event: draft_variant\n',
+      'data: {"reply":"Replayed draft","variant_id":"variant-2","thread_id":"thread-1","turn_id":"turn-1"}\n\n',
+      'id: 3\n',
+      'event: completed\n',
+      'data: completed\n\n',
+    ])));
+
+    await streamReplyGenerationRunEvents('generation-1', {
+      afterSequence: 1,
+      onReply(variant) {
+        received.push(variant);
+      },
+    });
+
+    expect(received).toEqual([
+      {
+        text: 'Replayed draft',
+        variantId: 'variant-2',
+        sequence: 2,
       },
     ]);
   });
@@ -189,6 +219,36 @@ describe('generation run runtime API', () => {
     });
     expect(state.stale).toEqual([]);
   });
+
+  it('queries runtime generation progress snapshots', async () => {
+    const fetchMock = vi.fn(async () => Response.json(generationRunProgressRead()));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const progress = await getGenerationRunProgress('generation-1', {
+      afterSequence: 100,
+      limit: 20,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/domain/generation-runs/generation-1/progress?'), expect.any(Object));
+    expect(progress).toMatchObject({
+      run: {
+        runId: 'generation-1',
+        status: 'streaming',
+      },
+      replayCursor: 101,
+      events: [
+        {
+          sequence: 101,
+          eventType: 'draft_variant_generated',
+          variantId: 'variant-1',
+        },
+      ],
+    });
+    expect(progress?.thread?.variants[0]).toMatchObject({
+      variantId: 'variant-1',
+      content: 'Domain draft',
+    });
+  });
 });
 
 function payload(): ReplyRequestPayload {
@@ -256,5 +316,74 @@ function generationRunRead({ status }: { status: string }) {
     error_message: status === 'interrupted' ? 'Draft generation was interrupted before completion.' : null,
     created_at: '2026-06-09T00:00:00.000Z',
     updated_at: '2026-06-09T00:00:01.000Z',
+  };
+}
+
+function generationRunProgressRead() {
+  return {
+    checked_at: '2026-06-09T00:00:02.000Z',
+    run: generationRunRead({ status: 'streaming' }),
+    thread: {
+      thread: {
+        thread_id: 'thread-1',
+        session_id: 'session-1',
+        selected_text: 'Please reply to this.',
+        source_url: 'https://example.com/thread',
+        source_domain: 'example.com',
+        page_title: 'Inbox',
+        status: 'active',
+        created_at: '2026-06-09T00:00:00.000Z',
+        updated_at: '2026-06-09T00:00:01.000Z',
+      },
+      turns: [
+        {
+          turn_id: 'turn-1',
+          thread_id: 'thread-1',
+          instruction: 'Generate reply drafts',
+          selected_text: 'Please reply to this.',
+          source_url: 'https://example.com/thread',
+          source_domain: 'example.com',
+          page_title: 'Inbox',
+          tone: 'friendly',
+          generation_status: 'streaming',
+          generation_started_at: '2026-06-09T00:00:00.000Z',
+          generation_completed_at: null,
+          generation_failed_at: null,
+          generation_cancelled_at: null,
+          generation_error_code: null,
+          generation_error_message: null,
+          created_at: '2026-06-09T00:00:00.000Z',
+          updated_at: '2026-06-09T00:00:01.000Z',
+        },
+      ],
+      variants: [
+        {
+          variant_id: 'variant-1',
+          turn_id: 'turn-1',
+          tone: 'friendly',
+          length: null,
+          content: 'Domain draft',
+          rank: 0,
+          status: 'generated',
+          is_current: false,
+          created_at: '2026-06-09T00:00:01.000Z',
+          updated_at: '2026-06-09T00:00:01.000Z',
+        },
+      ],
+    },
+    events: [
+      {
+        sequence: 101,
+        event_type: 'draft_variant_generated',
+        run_id: 'generation-1',
+        session_id: 'session-1',
+        thread_id: 'thread-1',
+        turn_id: 'turn-1',
+        status: 'generated',
+        variant_id: 'variant-1',
+        at: '2026-06-09T00:00:01.000Z',
+      },
+    ],
+    replay_cursor: 101,
   };
 }

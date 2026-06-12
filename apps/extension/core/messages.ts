@@ -129,10 +129,30 @@ export interface GenerationRun {
   updatedAt: string;
 }
 
+export interface GenerationRunProgressEvent {
+  sequence: number;
+  eventType: 'generation_run_status' | 'draft_variant_generated' | string;
+  runId: string;
+  sessionId: string;
+  threadId: string;
+  turnId: string;
+  status?: string;
+  variantId?: string;
+  at?: string;
+}
+
 export interface ConversationThreadSnapshot {
   thread: ConversationThread;
   turns: Turn[];
   variants: DraftVariant[];
+}
+
+export interface GenerationRunProgressSnapshot {
+  checkedAt: string;
+  run: GenerationRun;
+  thread: ConversationThreadSnapshot | null;
+  events: GenerationRunProgressEvent[];
+  replayCursor: number;
 }
 
 export interface WorkspaceSessionSnapshot {
