@@ -119,8 +119,10 @@ The current v2 extension generation flow is intentionally transitional but now s
 - turn lifecycle is durable on the `Turn` with explicit status, lifecycle timestamps, and bounded error metadata
 - each live execution also claims a runtime `GenerationRun` lease tied to the session, thread, and turn; runtime enforces one fresh active lease per session and reconciles stale conflicts before allowing a new claim
 - each streamed runtime reply is stored as a `DraftVariant` on the active turn
+- runtime exposes `/domain/generation-runs/{run_id}/progress` as the bounded durable progress snapshot for a run; it includes the current `GenerationRun`, the thread snapshot when available, a replay cursor, and recent derived progress events
+- runtime exposes `/replies/{run_id}/events` as a run-id subscription/replay feed for live or recently completed in-process executions
 - service worker broadcasts `draftlet:workspace-session-updated` for session metadata and `draftlet:conversation-thread-updated` for thread snapshots
-- service worker emits `draftlet:draft-generation-started`, `draftlet:draft-generation-completed`, and `draftlet:draft-generation-failed` for generation lifecycle, while streamed variants reach extension surfaces through `draftlet:conversation-thread-updated` snapshots
+- service worker emits `draftlet:draft-generation-started`, `draftlet:draft-generation-completed`, and `draftlet:draft-generation-failed` as bounded transitional lifecycle notifications, while progress correlation and streamed variants reach extension surfaces through runtime progress/thread snapshots
 - side panel renders thread snapshots as the primary thread workspace, grouped by `Turn` and `DraftVariant`
 - side panel can cancel with `draftlet:cancel-draft-generation` using `sessionId` and `generationId`; background records runtime cancellation intent, aborts the browser-local fetch handle when present, and the runtime stream stops on the cancelled run state at the next bounded stream check
 - insertion remains explicit: side panel sends `draftlet:insert-reply` with `sessionId`, service worker revalidates the bounded compose target when available, forwards approved text to the plausible live tab, and the content script performs best-effort DOM insertion
@@ -140,11 +142,11 @@ The current v2 generation flow is transitional but now uses durable runtime doma
 - runtime-backed `GenerationRun` records make live execution explicit with `run_id`, `turn_id`, `session_id`, `thread_id`, status, lease owner, claim/heartbeat/release timestamps, bounded error metadata, and terminal-state protection against late stream updates
 - service worker claims a runtime `GenerationRun` for the browser-provided run id before opening `/replies`; runtime `/replies` reuses that run, sends bounded heartbeat updates while the stream is active, and treats runtime conflicts as authoritative
 - runtime stream handling updates and heartbeats the run while preserving `Turn` lifecycle state for side panel restore; cancellation is represented as runtime run state and checked by the active stream between upstream model chunks
-- restore/startup can query execution state, reconcile stale active runtime runs, and mark incomplete live execution as interrupted without pretending stream resume exists
+- restore/startup can query execution state, hydrate `/domain/generation-runs/{run_id}/progress`, subscribe to `/replies/{run_id}/events` when the runtime still has a live in-process execution, reconcile stale active runtime runs, and mark incomplete live execution as interrupted without pretending model streaming is resumable after runtime restart
 - runtime loads prior persisted thread context for refinement prompts, then persists each streamed reply as a `DraftVariant` for the turn
-- runtime emits `draft_variant` SSE events with variant/thread/turn metadata
-- service worker rehydrates the active `ConversationThread` snapshot from runtime for streamed results and broadcasts `draftlet:conversation-thread-updated`; extension-local variant insertion is only a transient fallback if snapshot fetch fails during a live browser stream
-- service worker emits `draftlet:draft-generation-started`, `draftlet:draft-generation-completed`, and `draftlet:draft-generation-failed` for generation lifecycle state
+- runtime emits `draft_variant` SSE events with variant/thread/turn metadata and bounded event ids for in-process replay
+- service worker rehydrates run progress and the active `ConversationThread` snapshot from runtime for streamed results and broadcasts `draftlet:conversation-thread-updated`; it no longer inserts streamed variants into extension-local thread state when runtime snapshot hydration misses an event
+- service worker emits `draftlet:draft-generation-started`, `draftlet:draft-generation-completed`, and `draftlet:draft-generation-failed` as secondary lifecycle notifications during the transition
 - side panel renders the restored thread workspace with chronological turns, grouped variants, and `isCurrent` / `accepted` state
 - side panel requests domain-backed history with `draftlet:get-domain-history`; background reads `/domain/history` from the runtime
 - side panel restores a selected history item with `draftlet:restore-domain-thread`; background hydrates the selected runtime session/thread snapshot and emits workspace/thread updates

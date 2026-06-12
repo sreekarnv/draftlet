@@ -7,6 +7,7 @@ import type {
   DomainHistoryItem,
   DraftVariant,
   GenerationRun,
+  GenerationRunProgressSnapshot,
   GenerationRunStatus,
   SourceSnapshot,
   Turn,
@@ -40,16 +41,24 @@ export async function checkServerHealth(signal?: AbortSignal): Promise<boolean> 
 interface StreamRepliesOptions {
   signal?: AbortSignal;
   onReply: (variant: StreamedDraftVariant) => void;
+  onControl?: (event: StreamedGenerationControlEvent) => void;
 }
 
 interface StreamedDraftVariant {
   text: string;
   variantId?: string;
+  sequence?: number;
+}
+
+interface StreamedGenerationControlEvent {
+  status: 'completed' | 'cancelled' | 'error';
+  message?: string;
+  sequence?: number;
 }
 
 export async function streamReplies(
   payload: ReplyRequestPayload,
-  { signal, onReply }: StreamRepliesOptions,
+  { signal, onReply, onControl }: StreamRepliesOptions,
 ): Promise<void> {
   await streamSse({
     url: `${SERVER_BASE_URL}/replies`,
@@ -66,6 +75,43 @@ export async function streamReplies(
 
       if (variant?.text) {
         onReply(variant);
+        return;
+      }
+
+      const control = parseStreamedGenerationControlEvent(message);
+
+      if (control) {
+        onControl?.(control);
+      }
+    },
+  });
+}
+
+export async function streamReplyGenerationRunEvents(
+  runId: string,
+  {
+    signal,
+    afterSequence = 0,
+    onReply,
+    onControl,
+  }: StreamRepliesOptions & { afterSequence?: number },
+): Promise<void> {
+  const query = afterSequence > 0 ? `?after=${encodeURIComponent(String(afterSequence))}` : '';
+  await streamSse({
+    url: `${SERVER_BASE_URL}/replies/${encodeURIComponent(runId)}/events${query}`,
+    signal,
+    onMessage(message) {
+      const variant = parseStreamedDraftVariant(message);
+
+      if (variant?.text) {
+        onReply(variant);
+        return;
+      }
+
+      const control = parseStreamedGenerationControlEvent(message);
+
+      if (control) {
+        onControl?.(control);
       }
     },
   });
@@ -74,6 +120,14 @@ export async function streamReplies(
 export async function cancelReplyGenerationRunExecution(runId: string): Promise<{ cancelled: boolean }> {
   const response = await postJson<{ cancelled: boolean }>(`${SERVER_BASE_URL}/replies/${encodeURIComponent(runId)}/cancel`, {});
   return response;
+}
+
+export async function getReplyGenerationRunExecution(runId: string): Promise<{ runId: string; live: boolean }> {
+  const response = await getJson<{ run_id: string; live: boolean }>(`${SERVER_BASE_URL}/replies/${encodeURIComponent(runId)}/execution`);
+  return {
+    runId: response.run_id,
+    live: response.live,
+  };
 }
 
 export async function putWorkspaceSession(session: WorkspaceSession): Promise<WorkspaceSession> {
@@ -273,6 +327,36 @@ export async function getGenerationRunExecutionState(filters: {
   };
 }
 
+export async function getGenerationRunProgress(
+  runId: string,
+  options: { afterSequence?: number; limit?: number } = {},
+): Promise<GenerationRunProgressSnapshot | null> {
+  const params = new URLSearchParams();
+
+  if (options.afterSequence !== undefined) {
+    params.set('after_sequence', String(options.afterSequence));
+  }
+
+  if (options.limit !== undefined) {
+    params.set('limit', String(options.limit));
+  }
+
+  const query = params.size > 0 ? `?${params.toString()}` : '';
+
+  try {
+    const response = await getJson<GenerationRunProgressSnapshotRead>(
+      `${SERVER_BASE_URL}/domain/generation-runs/${encodeURIComponent(runId)}/progress${query}`,
+    );
+    return mapGenerationRunProgressSnapshot(response);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('404')) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
 export async function patchGenerationRunStatus(
   runId: string,
   status: GenerationRunStatus,
@@ -426,6 +510,7 @@ function parseStreamedDraftVariant(message: SseMessage): StreamedDraftVariant | 
       return {
         text: payload.reply,
         variantId: payload.variant_id,
+        sequence: parseSseSequence(message.id),
       };
     } catch {
       return null;
@@ -442,7 +527,32 @@ function parseStreamedDraftVariant(message: SseMessage): StreamedDraftVariant | 
     return null;
   }
 
-  return { text: reply };
+  return { text: reply, sequence: parseSseSequence(message.id) };
+}
+
+function parseStreamedGenerationControlEvent(message: SseMessage): StreamedGenerationControlEvent | null {
+  if (
+    message.eventType !== 'completed'
+    && message.eventType !== 'cancelled'
+    && message.eventType !== 'error'
+  ) {
+    return null;
+  }
+
+  return {
+    status: message.eventType,
+    message: message.data || undefined,
+    sequence: parseSseSequence(message.id),
+  };
+}
+
+function parseSseSequence(value?: string): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
 }
 
 
@@ -475,6 +585,26 @@ function mapConversationThreadSnapshot(snapshot: ConversationThreadSnapshotRead)
     thread: mapConversationThread(snapshot.thread),
     turns: snapshot.turns.map(mapTurn),
     variants: snapshot.variants.map(mapDraftVariant),
+  };
+}
+
+function mapGenerationRunProgressSnapshot(snapshot: GenerationRunProgressSnapshotRead): GenerationRunProgressSnapshot {
+  return {
+    checkedAt: snapshot.checked_at,
+    run: mapGenerationRun(snapshot.run),
+    thread: snapshot.thread ? mapConversationThreadSnapshot(snapshot.thread) : null,
+    events: snapshot.events.map((event) => ({
+      sequence: event.sequence,
+      eventType: event.event_type,
+      runId: event.run_id,
+      sessionId: event.session_id,
+      threadId: event.thread_id,
+      turnId: event.turn_id,
+      status: event.status ?? undefined,
+      variantId: event.variant_id ?? undefined,
+      at: event.at ?? undefined,
+    })),
+    replayCursor: snapshot.replay_cursor,
   };
 }
 
@@ -757,6 +887,26 @@ interface GenerationRunExecutionStateRead {
   active: GenerationRunRead[];
   live: GenerationRunRead[];
   stale: GenerationRunRead[];
+}
+
+interface GenerationRunProgressEventRead {
+  sequence: number;
+  event_type: string;
+  run_id: string;
+  session_id: string;
+  thread_id: string;
+  turn_id: string;
+  status: string | null;
+  variant_id: string | null;
+  at: string | null;
+}
+
+interface GenerationRunProgressSnapshotRead {
+  checked_at: string;
+  run: GenerationRunRead;
+  thread: ConversationThreadSnapshotRead | null;
+  events: GenerationRunProgressEventRead[];
+  replay_cursor: number;
 }
 
 export interface GenerationRunExecutionState {

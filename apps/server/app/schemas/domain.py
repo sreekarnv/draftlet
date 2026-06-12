@@ -287,6 +287,26 @@ class ConversationThreadSnapshot(BaseModel):
     variants: list[DraftVariantRead]
 
 
+class GenerationRunProgressEvent(BaseModel):
+    sequence: int
+    event_type: str
+    run_id: str
+    session_id: str
+    thread_id: str
+    turn_id: str
+    status: str | None = None
+    variant_id: str | None = None
+    at: datetime | None = None
+
+
+class GenerationRunProgressSnapshot(BaseModel):
+    checked_at: datetime
+    run: GenerationRunRead
+    thread: ConversationThreadSnapshot | None = None
+    events: list[GenerationRunProgressEvent]
+    replay_cursor: int
+
+
 class WorkspaceSessionSnapshot(BaseModel):
     session: WorkspaceSessionRead
     thread: ConversationThreadSnapshot | None = None

@@ -1,7 +1,7 @@
 from collections.abc import AsyncIterator
 import json
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from app.schemas.reply_event import ReplyEvent
@@ -45,6 +45,21 @@ async def cancel_reply_execution(run_id: str) -> dict[str, bool]:
     return {"cancelled": True}
 
 
+@router.get("/replies/{run_id}/events")
+async def subscribe_reply_execution_events(
+    run_id: str,
+    after: int = Query(default=0, ge=0),
+) -> StreamingResponse:
+    async def events() -> AsyncIterator[str]:
+        try:
+            async for update in reply_execution_registry.subscribe(run_id, after_sequence=after):
+                yield format_sse_update(update)
+        except KeyError:
+            yield format_sse_error("Generation run does not have a live or recent replay feed.")
+
+    return StreamingResponse(events(), media_type="text/event-stream")
+
+
 @router.get("/replies/{run_id}/execution")
 async def get_reply_execution(run_id: str) -> dict[str, bool | str]:
     return {
@@ -55,16 +70,26 @@ async def get_reply_execution(run_id: str) -> dict[str, bool | str]:
 
 def format_sse_update(update: ReplyExecutionUpdate) -> str:
     if update.status == "event" and update.event:
-        return format_sse_event(update.event)
+        return format_sse_event(update.event, update.sequence)
 
     if update.status == "error":
-        return format_sse_error(update.message or "Could not stream replies.")
+        return format_sse_error(update.message or "Could not stream replies.", update.sequence)
 
-    return f"event: {update.status}\ndata: {update.message or update.status}\n\n"
+    lines = []
+
+    if update.sequence:
+        lines.append(f"id: {update.sequence}")
+
+    lines.append(f"event: {update.status}")
+    lines.append(f"data: {update.message or update.status}")
+    return f"{'\n'.join(lines)}\n\n"
 
 
-def format_sse_event(event: ReplyEvent) -> str:
+def format_sse_event(event: ReplyEvent, sequence: int = 0) -> str:
     event_lines = []
+
+    if sequence:
+        event_lines.append(f"id: {sequence}")
 
     if event.variant_id:
         event_lines.append("event: draft_variant")
@@ -82,7 +107,8 @@ def format_sse_event(event: ReplyEvent) -> str:
     return f"{'\n'.join(event_lines)}\n\n"
 
 
-def format_sse_error(message: str) -> str:
+def format_sse_error(message: str, sequence: int = 0) -> str:
+    prefix = f"id: {sequence}\n" if sequence else ""
     lines = message.splitlines() or ["Could not stream replies."]
     data = "\n".join(f"data: {line}" for line in lines)
-    return f"event: error\n{data}\n\n"
+    return f"{prefix}event: error\n{data}\n\n"

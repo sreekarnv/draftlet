@@ -13,6 +13,7 @@ from app.schemas.domain import (
     GenerationRunClaim,
     GenerationRunExecutionState,
     GenerationRunHeartbeat,
+    GenerationRunProgressSnapshot,
     GenerationRunRead,
     GenerationRunReconcileRequest,
     GenerationRunStatusUpdate,
@@ -30,6 +31,7 @@ from app.services.domain_service import (
     GenerationRunConflictError,
     claim_generation_run,
     get_session_snapshot,
+    get_generation_run_progress_snapshot,
     get_thread_snapshot,
     heartbeat_generation_run,
     inspect_generation_run_execution_state,
@@ -191,6 +193,21 @@ def get_generation_run_execution_state(
         turn_id=turn_id,
         stale_after_seconds=stale_after_seconds,
     )
+
+
+@router.get("/generation-runs/{run_id}/progress", response_model=GenerationRunProgressSnapshot)
+def get_generation_run_progress(
+    run_id: str,
+    after_sequence: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=100),
+    session: Session = Depends(get_session),
+) -> GenerationRunProgressSnapshot:
+    snapshot = get_generation_run_progress_snapshot(session, run_id, after_sequence=after_sequence, limit=limit)
+
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Generation run not found")
+
+    return snapshot
 
 
 @router.patch("/generation-runs/{run_id}/heartbeat", response_model=GenerationRunRead)

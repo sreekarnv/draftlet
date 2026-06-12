@@ -5,6 +5,8 @@ import {
   getConversationThreadSnapshot,
   getActiveGenerationRuns,
   getGenerationRunExecutionState,
+  getGenerationRunProgress,
+  getReplyGenerationRunExecution,
   getDomainHistory,
   getWorkspaceSessionSnapshot,
   patchDraftVariantState,
@@ -15,6 +17,7 @@ import {
   putTurn,
   putWorkspaceSession,
   reconcileGenerationRuns,
+  streamReplyGenerationRunEvents,
   streamReplies,
 } from '../core/api';
 import { DEFAULT_TONE } from '../core/constants';
@@ -49,6 +52,7 @@ import {
   type DraftVariantStateResult,
   type DraftletError,
   type DomainHistoryResult,
+  type GenerationRunProgressSnapshot,
   type DraftletMessage,
   type DraftletSidePanelContext,
   type InsertReplyResult,
@@ -591,14 +595,20 @@ async function runDraftGeneration(
   signal: AbortSignal,
 ): Promise<void> {
   await Promise.resolve();
+  let replayCursor = 0;
 
   if (!isLiveGenerationStream(sessionId, generationId)) {
     return;
   }
 
   await finalizeGenerationRunStatus(generationId, turn.turnId, 'streaming');
-  const streamingSession = await hydrateWorkspaceSessionFromRuntime(sessionId, sessions.getBySessionId(sessionId) ?? undefined);
-  const streamingSnapshot = await hydrateAndEmitThreadSnapshot(sessionId, thread.threadId)
+  const streamingProgress = await hydrateAndEmitRunProgress(sessionId, generationId, thread.threadId);
+  replayCursor = Math.max(replayCursor, streamingProgress?.replayCursor ?? 0);
+  const streamingSession = streamingProgress
+    ? sessions.getBySessionId(sessionId)
+    : await hydrateWorkspaceSessionFromRuntime(sessionId, sessions.getBySessionId(sessionId) ?? undefined);
+  const streamingSnapshot = streamingProgress?.thread
+    ?? await hydrateAndEmitThreadSnapshot(sessionId, thread.threadId)
     ?? threads.updateTurnStatus(turn.turnId, 'streaming');
   const streamingTurn = streamingSnapshot ? findTurn(streamingSnapshot, turn.turnId) : null;
 
@@ -653,22 +663,18 @@ async function runDraftGeneration(
             return;
           }
 
-          void hydrateAndEmitThreadSnapshot(sessionId, thread.threadId).then((runtimeSnapshot) => {
-            if (runtimeSnapshot || !isLiveGenerationStream(sessionId, generationId)) {
-              return;
-            }
+          if (reply.sequence !== undefined) {
+            replayCursor = Math.max(replayCursor, reply.sequence);
+          }
 
-            const variantResult = threads.addVariant({
-              turnId: turn.turnId,
-              tone: context.tone ?? DEFAULT_TONE,
-              content: reply.text,
-              variantId: reply.variantId,
-            });
-
-            if (variantResult) {
-              void emitConversationThreadUpdated(sessionId, variantResult.snapshot);
-            }
+          void hydrateAndEmitRunProgress(sessionId, generationId, thread.threadId).then((progress) => {
+            replayCursor = Math.max(replayCursor, progress?.replayCursor ?? 0);
           });
+        },
+        onControl(event) {
+          if (event.sequence !== undefined) {
+            replayCursor = Math.max(replayCursor, event.sequence);
+          }
         },
       },
     );
@@ -678,7 +684,10 @@ async function runDraftGeneration(
     }
 
     await finalizeGenerationRunStatus(generationId, turn.turnId, 'completed');
-    const completedSnapshot = await hydrateAndEmitThreadSnapshot(sessionId, thread.threadId)
+    const completedProgress = await hydrateAndEmitRunProgress(sessionId, generationId, thread.threadId, replayCursor);
+    replayCursor = Math.max(replayCursor, completedProgress?.replayCursor ?? 0);
+    const completedSnapshot = completedProgress?.thread
+      ?? await hydrateAndEmitThreadSnapshot(sessionId, thread.threadId)
       ?? threads.updateTurnStatus(turn.turnId, 'completed');
     const completedTurn = completedSnapshot ? findTurn(completedSnapshot, turn.turnId) : null;
     const completedVariants = completedSnapshot ? findVariantsForTurn(completedSnapshot, turn.turnId) : [];
@@ -1314,9 +1323,36 @@ async function restoreRuntimeSnapshot(session: WorkspaceSession): Promise<Worksp
       },
     };
 
-    const restoredThread = snapshot.thread
-      ? await reconcileInterruptedGeneration(restoredSession.sessionId, snapshot.thread)
-      : null;
+    sessions.hydrateSession(restoredSession);
+    let restoredThread = snapshot.thread;
+    const activeRunId = restoredSession.activeRunId;
+
+    if (activeRunId) {
+      const progress = await hydrateAndEmitRunProgress(
+        restoredSession.sessionId,
+        activeRunId,
+        restoredThread?.thread.threadId,
+      );
+
+      if (progress?.thread) {
+        restoredThread = progress.thread;
+      }
+
+      const liveExecution = await getReplyGenerationRunExecution(activeRunId).catch(() => null);
+
+      if (liveExecution?.live) {
+        void subscribeToRuntimeRunEvents(
+          restoredSession.sessionId,
+          activeRunId,
+          progress?.run.threadId ?? restoredThread?.thread.threadId,
+          progress?.replayCursor ?? 0,
+        );
+      } else if (restoredThread) {
+        restoredThread = await reconcileInterruptedGeneration(restoredSession.sessionId, restoredThread);
+      }
+    } else if (restoredThread) {
+      restoredThread = await reconcileInterruptedGeneration(restoredSession.sessionId, restoredThread);
+    }
 
     if (snapshot.thread) {
       const refreshedSnapshot = await getWorkspaceSessionSnapshot(restoredSession.sessionId).catch(() => null);
@@ -1473,6 +1509,92 @@ async function hydrateWorkspaceSessionFromRuntime(
       composeTarget: snapshot.session.insertionTarget ?? fallback?.insertionTarget ?? snapshot.session.latestContext.composeTarget,
     },
   });
+}
+
+async function hydrateAndEmitRunProgress(
+  sessionId: string,
+  runId: string,
+  fallbackThreadId?: string,
+  afterSequence = 0,
+): Promise<GenerationRunProgressSnapshot | null> {
+  const progress = await getGenerationRunProgress(runId, { afterSequence }).catch(() => null);
+
+  if (!progress) {
+    return null;
+  }
+
+  const fallbackSession = sessions.getBySessionId(sessionId) ?? undefined;
+  const refreshedSession = await hydrateWorkspaceSessionFromRuntime(progress.run.sessionId, fallbackSession);
+
+  if (refreshedSession) {
+    void emitWorkspaceSessionUpdated(refreshedSession);
+  }
+
+  if (progress.thread) {
+    const snapshot = threads.hydrateSnapshot(progress.thread);
+    void emitConversationThreadUpdated(progress.run.sessionId, snapshot);
+    return {
+      ...progress,
+      thread: snapshot,
+    };
+  }
+
+  if (fallbackThreadId) {
+    await hydrateAndEmitThreadSnapshot(progress.run.sessionId, fallbackThreadId);
+  }
+
+  return progress;
+}
+
+async function subscribeToRuntimeRunEvents(
+  sessionId: string,
+  runId: string,
+  threadId?: string,
+  afterSequence = 0,
+): Promise<void> {
+  if (isLiveGenerationStream(sessionId, runId)) {
+    return;
+  }
+
+  const abortController = new AbortController();
+  liveGenerationStreamsByRunId.set(runId, { sessionId, abortController });
+  let replayCursor = afterSequence;
+
+  try {
+    await streamReplyGenerationRunEvents(runId, {
+      signal: abortController.signal,
+      afterSequence,
+      onReply(reply) {
+        if (!isLiveGenerationStream(sessionId, runId)) {
+          return;
+        }
+
+        if (reply.sequence !== undefined) {
+          replayCursor = Math.max(replayCursor, reply.sequence);
+        }
+
+        void hydrateAndEmitRunProgress(sessionId, runId, threadId).then((progress) => {
+          replayCursor = Math.max(replayCursor, progress?.replayCursor ?? 0);
+        });
+      },
+      onControl(event) {
+        if (event.sequence !== undefined) {
+          replayCursor = Math.max(replayCursor, event.sequence);
+        }
+      },
+    });
+  } catch (error) {
+    if (abortController.signal.aborted) {
+      return;
+    }
+
+    await hydrateAndEmitRunProgress(sessionId, runId, threadId, replayCursor);
+  } finally {
+    if (isLiveGenerationStream(sessionId, runId)) {
+      stopLiveGenerationStream(runId);
+      await hydrateAndEmitRunProgress(sessionId, runId, threadId, replayCursor);
+    }
+  }
 }
 
 async function hydrateAndEmitThreadSnapshot(
