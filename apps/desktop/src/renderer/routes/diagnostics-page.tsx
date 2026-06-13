@@ -11,6 +11,7 @@ interface DiagnosticsPageProps {
   maintenanceDiagnostics: RuntimeMaintenanceDiagnosticsResult | null;
   runtime: RuntimeState;
   onCopyBrowserDiagnostics: () => Promise<void>;
+  onCopyDiagnosticsExport: () => Promise<void>;
   onLoadBrowserDiagnostics: () => Promise<void>;
   onLoadMaintenanceDiagnostics: () => Promise<void>;
   onOpenExtensionHelp: () => Promise<void>;
@@ -25,6 +26,7 @@ export function DiagnosticsPage({
   maintenanceDiagnostics,
   runtime,
   onCopyBrowserDiagnostics,
+  onCopyDiagnosticsExport,
   onLoadBrowserDiagnostics,
   onLoadMaintenanceDiagnostics,
   onOpenExtensionHelp,
@@ -38,6 +40,7 @@ export function DiagnosticsPage({
         diagnosticsLastRefreshedAt={diagnosticsLastRefreshedAt}
         diagnosticsRefreshing={diagnosticsRefreshing}
         maintenanceDiagnostics={maintenanceDiagnostics}
+        onCopyDiagnosticsExport={onCopyDiagnosticsExport}
         onRefreshDiagnostics={onRefreshDiagnostics}
         ready={runtime.server.ok}
       />
@@ -65,6 +68,7 @@ function DiagnosticsRefreshGroup({
   diagnosticsLastRefreshedAt,
   diagnosticsRefreshing,
   maintenanceDiagnostics,
+  onCopyDiagnosticsExport,
   onRefreshDiagnostics,
   ready,
 }: {
@@ -73,6 +77,7 @@ function DiagnosticsRefreshGroup({
   diagnosticsLastRefreshedAt: string | null;
   diagnosticsRefreshing: boolean;
   maintenanceDiagnostics: RuntimeMaintenanceDiagnosticsResult | null;
+  onCopyDiagnosticsExport: () => Promise<void>;
   onRefreshDiagnostics: () => Promise<void>;
   ready: boolean;
 }) {
@@ -95,9 +100,14 @@ function DiagnosticsRefreshGroup({
           <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase text-slate-500">Diagnostics refresh</p>
           <h2 className="m-0 text-base font-bold leading-tight text-slate-900">Operational signals</h2>
         </div>
-        <Button disabled={busy || diagnosticsRefreshing || !ready} onClick={() => void onRefreshDiagnostics()} type="button">
-          {diagnosticsRefreshing ? 'Refreshing...' : 'Refresh diagnostics'}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button disabled={busy || diagnosticsRefreshing || !ready} onClick={() => void onRefreshDiagnostics()} type="button">
+            {diagnosticsRefreshing ? 'Refreshing...' : 'Refresh diagnostics'}
+          </Button>
+          <Button disabled={busy || diagnosticsRefreshing} onClick={() => void onCopyDiagnosticsExport()} type="button" variant="secondary">
+            Copy debug export
+          </Button>
+        </div>
       </div>
       <div className="flex flex-wrap gap-2">
         <Badge tone={badgeTone(browserDiagnostics)}>
@@ -112,6 +122,7 @@ function DiagnosticsRefreshGroup({
         {diagnosticsLastRefreshedAt ? <div>Last refreshed {formatDateTime(diagnosticsLastRefreshedAt)}.</div> : null}
         {browserDiagnostics && !browserDiagnostics.ok ? <div>Browser recapture: {browserDiagnostics.error.message}</div> : null}
         {maintenanceDiagnostics && !maintenanceDiagnostics.ok ? <div>Runtime maintenance: {maintenanceDiagnostics.error.message}</div> : null}
+        <div>Debug export copies the currently loaded state and does not refresh diagnostics.</div>
       </div>
     </Card>
   );

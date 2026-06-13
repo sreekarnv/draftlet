@@ -6,6 +6,11 @@ import { RuntimePage } from './routes/runtime-page';
 import { SetupPage } from './routes/setup-page';
 import { desktopApi } from './lib/api';
 import { RECOMMENDED_MODEL } from './lib/constants';
+import {
+  buildDesktopDiagnosticsExportPayload,
+  serializeDesktopDiagnosticsExportPayload,
+  type DesktopDiagnosticsExportPayload,
+} from './lib/diagnostics-export';
 import type {
   BrowserDiagnosticsBridgeResult,
   CommandStatus,
@@ -120,6 +125,22 @@ export default function App() {
     }
   };
 
+  const copyDiagnosticsExport = async () => {
+    const payload = buildDesktopDiagnosticsExportPayload({
+      browserDiagnostics,
+      diagnosticsLastRefreshedAt,
+      maintenanceDiagnostics,
+      runtime,
+    });
+
+    try {
+      await navigator.clipboard.writeText(serializeDesktopDiagnosticsExportPayload(payload));
+      setActionMessage(formatDiagnosticsExportMessage(payload));
+    } catch {
+      setActionMessage('Could not copy diagnostics export.');
+    }
+  };
+
   const selectModel = async (model: string) => {
     setBusy(true);
     const result = await desktopApi.setSelectedModel(model);
@@ -196,6 +217,7 @@ export default function App() {
         diagnosticsRefreshing={diagnosticsRefreshing}
         maintenanceDiagnostics={maintenanceDiagnostics}
         onCopyBrowserDiagnostics={copyBrowserDiagnostics}
+        onCopyDiagnosticsExport={copyDiagnosticsExport}
         onLoadBrowserDiagnostics={loadBrowserDiagnostics}
         onRefreshDiagnostics={refreshDiagnostics}
         onLoadMaintenanceDiagnostics={loadMaintenanceDiagnostics}
@@ -233,4 +255,21 @@ function formatDiagnosticsRefreshMessage(
   }
 
   return 'Diagnostics refresh finished.';
+}
+
+function formatDiagnosticsExportMessage(payload: DesktopDiagnosticsExportPayload) {
+  const loadedCount = [
+    payload.availability.browser_recapture_diagnostics,
+    payload.availability.generation_run_maintenance_diagnostics,
+  ].filter((status) => status === 'loaded').length;
+
+  if (loadedCount === 2) {
+    return 'Copied diagnostics export with browser recapture and runtime maintenance diagnostics.';
+  }
+
+  if (loadedCount === 1) {
+    return 'Copied diagnostics export with 1 of 2 diagnostics sources loaded.';
+  }
+
+  return 'Copied diagnostics export. Diagnostics sources are marked not loaded or unavailable.';
 }
