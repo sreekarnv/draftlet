@@ -15,6 +15,7 @@
     "dev:desktop": "./scripts/dev-desktop.sh",
     "dev:extension": "./scripts/dev-extension.sh",
     "dev:server": "./scripts/dev-server.sh",
+    "typecheck": "pnpm --filter @draftlet/shared typecheck && pnpm --dir apps/extension exec tsc --noEmit && pnpm --dir apps/desktop typecheck",
     "build": "./scripts/build-all.sh",
     "make:desktop": "./scripts/build-server.sh && pnpm --dir apps/desktop make"
   }
