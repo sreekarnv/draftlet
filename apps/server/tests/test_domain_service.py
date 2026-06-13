@@ -27,6 +27,7 @@ from app.services.domain_service import (
     create_or_update_variant,
     get_generation_run_progress_snapshot,
     get_session_snapshot,
+    get_thread_snapshot,
     heartbeat_generation_run,
     inspect_generation_run_execution_state,
     list_generation_run_events,
@@ -576,6 +577,189 @@ class DomainServiceTest(unittest.TestCase):
             self.assertEqual(maintenance.latestStaleReconciliation.reconciledRunCount, 1)
             self.assertEqual(maintenance.latestStaleReconciliation.reconciledRunIds, ["run-1"])
             self.assertEqual(maintenance.latestStaleReconciliation.staleAfterSeconds, 0)
+
+    def test_thread_snapshot_includes_latest_recoverable_interrupted_run(self) -> None:
+        with self.Session() as session:
+            source = SourceSnapshot(
+                selected_text="Can you send the report?",
+                source_url="https://example.com/thread",
+            )
+            workspace = upsert_workspace_session(
+                session,
+                WorkspaceSessionUpsert(
+                    session_id="session-1",
+                    page_url=source.source_url,
+                    selected_text=source.selected_text,
+                ),
+            )
+            thread = create_or_update_thread(
+                session,
+                ConversationThreadCreate(
+                    thread_id="thread-1",
+                    session_id=workspace.session_id,
+                    source=source,
+                ),
+            )
+            turn = create_or_update_turn(
+                session,
+                TurnCreate(
+                    turn_id="turn-1",
+                    thread_id=thread.thread_id,
+                    source=source,
+                    tone="friendly",
+                ),
+            )
+            claim_generation_run(
+                session,
+                GenerationRunClaim(
+                    run_id="run-1",
+                    session_id=workspace.session_id,
+                    thread_id=thread.thread_id,
+                    turn_id=turn.turn_id,
+                    lease_owner="extension-background",
+                ),
+            )
+
+            reconcile_stale_generation_runs(
+                session,
+                GenerationRunReconcileRequest(session_id=workspace.session_id, stale_after_seconds=0),
+            )
+            snapshot = get_thread_snapshot(session, thread.thread_id)
+
+            self.assertIsNotNone(snapshot.latest_recoverable_run)
+            self.assertEqual(snapshot.latest_recoverable_run.run_id, "run-1")
+            self.assertEqual(snapshot.latest_recoverable_run.turn_id, "turn-1")
+            self.assertEqual(snapshot.latest_recoverable_run.status, "interrupted")
+            self.assertTrue(snapshot.latest_recoverable_run.recoverable)
+            self.assertEqual(snapshot.latest_recoverable_run.reason, "generation_interrupted")
+            self.assertEqual(snapshot.latest_recoverable_run.error_message, "Draft generation was interrupted before completion.")
+            self.assertIsNotNone(snapshot.latest_recoverable_run.interrupted_at)
+            self.assertIsNotNone(snapshot.latest_recoverable_run.last_event_at)
+
+    def test_thread_snapshot_omits_recoverable_run_after_newer_completed_run(self) -> None:
+        with self.Session() as session:
+            source = SourceSnapshot(
+                selected_text="Can you send the report?",
+                source_url="https://example.com/thread",
+            )
+            workspace = upsert_workspace_session(
+                session,
+                WorkspaceSessionUpsert(
+                    session_id="session-1",
+                    page_url=source.source_url,
+                    selected_text=source.selected_text,
+                ),
+            )
+            thread = create_or_update_thread(
+                session,
+                ConversationThreadCreate(
+                    thread_id="thread-1",
+                    session_id=workspace.session_id,
+                    source=source,
+                ),
+            )
+            first_turn = create_or_update_turn(
+                session,
+                TurnCreate(
+                    turn_id="turn-1",
+                    thread_id=thread.thread_id,
+                    source=source,
+                    tone="friendly",
+                ),
+            )
+            claim_generation_run(
+                session,
+                GenerationRunClaim(
+                    run_id="run-1",
+                    session_id=workspace.session_id,
+                    thread_id=thread.thread_id,
+                    turn_id=first_turn.turn_id,
+                    lease_owner="extension-background",
+                ),
+            )
+            reconcile_stale_generation_runs(
+                session,
+                GenerationRunReconcileRequest(session_id=workspace.session_id, stale_after_seconds=0),
+            )
+            second_turn = create_or_update_turn(
+                session,
+                TurnCreate(
+                    turn_id="turn-2",
+                    thread_id=thread.thread_id,
+                    source=source,
+                    tone="friendly",
+                ),
+            )
+            claim_generation_run(
+                session,
+                GenerationRunClaim(
+                    run_id="run-2",
+                    session_id=workspace.session_id,
+                    thread_id=thread.thread_id,
+                    turn_id=second_turn.turn_id,
+                    lease_owner="extension-background",
+                ),
+            )
+            update_generation_run_status(session, "run-2", GenerationRunStatusUpdate(status="completed"))
+
+            snapshot = get_thread_snapshot(session, thread.thread_id)
+
+            self.assertIsNone(snapshot.latest_recoverable_run)
+
+    def test_thread_snapshot_omits_non_recoverable_failed_run(self) -> None:
+        with self.Session() as session:
+            source = SourceSnapshot(
+                selected_text="Can you send the report?",
+                source_url="https://example.com/thread",
+            )
+            workspace = upsert_workspace_session(
+                session,
+                WorkspaceSessionUpsert(
+                    session_id="session-1",
+                    page_url=source.source_url,
+                    selected_text=source.selected_text,
+                ),
+            )
+            thread = create_or_update_thread(
+                session,
+                ConversationThreadCreate(
+                    thread_id="thread-1",
+                    session_id=workspace.session_id,
+                    source=source,
+                ),
+            )
+            turn = create_or_update_turn(
+                session,
+                TurnCreate(
+                    turn_id="turn-1",
+                    thread_id=thread.thread_id,
+                    source=source,
+                    tone="friendly",
+                ),
+            )
+            claim_generation_run(
+                session,
+                GenerationRunClaim(
+                    run_id="run-1",
+                    session_id=workspace.session_id,
+                    thread_id=thread.thread_id,
+                    turn_id=turn.turn_id,
+                    lease_owner="extension-background",
+                ),
+            )
+            update_generation_run_status(
+                session,
+                "run-1",
+                GenerationRunStatusUpdate(
+                    status="failed",
+                    error_code="runtime_unavailable",
+                    error_message="Draftlet server is not reachable.",
+                ),
+            )
+
+            snapshot = get_thread_snapshot(session, thread.thread_id)
+
+            self.assertIsNone(snapshot.latest_recoverable_run)
 
     def test_generation_run_claim_blocks_fresh_same_session_conflict(self) -> None:
         with self.Session() as session:

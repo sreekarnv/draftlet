@@ -126,6 +126,18 @@ export interface GenerationRun {
   updatedAt: string;
 }
 
+export interface RecoverableRunProjection {
+  runId: string;
+  turnId: string;
+  status: GenerationRunStatus;
+  recoverable: boolean;
+  reason?: string;
+  interruptedAt?: string;
+  lastEventAt?: string;
+  errorCode?: string;
+  errorMessage?: string;
+}
+
 export interface GenerationRunProgressEvent {
   sequence: number;
   eventType: 'generation_run_status' | 'draft_variant_generated' | string;
@@ -142,6 +154,7 @@ export interface ConversationThreadSnapshot {
   thread: ConversationThread;
   turns: Turn[];
   variants: DraftVariant[];
+  latestRecoverableRun?: RecoverableRunProjection;
 }
 
 export interface GenerationRunProgressSnapshot {
