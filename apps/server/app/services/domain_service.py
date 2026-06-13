@@ -1,9 +1,9 @@
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.db.models import ConversationThread, DraftVariant, GenerationRun, Turn, WorkspaceSession
+from app.db.models import ConversationThread, DraftVariant, GenerationRun, GenerationRunEvent, Turn, WorkspaceSession
 from app.schemas.domain import (
     ConversationThreadCreate,
     ConversationThreadSnapshot,
@@ -26,7 +26,9 @@ from app.schemas.domain import (
 
 ACTIVE_GENERATION_RUN_STATUSES = {"active", "streaming"}
 TERMINAL_GENERATION_RUN_STATUSES = {"completed", "failed", "cancelled", "interrupted"}
+TERMINAL_GENERATION_RUN_EVENT_TYPES = {"run_completed", "run_failed", "run_cancelled"}
 DEFAULT_GENERATION_RUN_STALE_AFTER_SECONDS = 30
+DEFAULT_GENERATION_RUN_EVENT_REPLAY_LIMIT = 100
 
 
 class GenerationRunConflictError(RuntimeError):
@@ -277,6 +279,7 @@ def heartbeat_generation_run(session: Session, run_id: str, payload: GenerationR
     session.refresh(run)
 
     if run.status in TERMINAL_GENERATION_RUN_STATUSES:
+        record_generation_run_terminal_event(session, run, run.status, run.error_message)
         return run
 
     if payload and payload.lease_owner:
@@ -363,6 +366,15 @@ def get_generation_run_progress_snapshot(
 
 
 def build_generation_run_progress_events(session: Session, run: GenerationRun) -> list[GenerationRunProgressEvent]:
+    persisted_events = list_generation_run_events(
+        session,
+        run.run_id,
+        limit=DEFAULT_GENERATION_RUN_EVENT_REPLAY_LIMIT,
+    )
+
+    if persisted_events:
+        return [generation_run_event_to_progress_event(event) for event in persisted_events]
+
     events = [
         GenerationRunProgressEvent(
             sequence=sequence_for_generation_run_status(run.status),
@@ -392,6 +404,116 @@ def build_generation_run_progress_events(session: Session, run: GenerationRun) -
         )
 
     return sorted(events, key=lambda event: event.sequence)
+
+
+def append_generation_run_event(
+    session: Session,
+    run_id: str,
+    event_type: str,
+    status: str | None = None,
+    variant_id: str | None = None,
+    message: str | None = None,
+    reply_text: str | None = None,
+    replay_limit: int = DEFAULT_GENERATION_RUN_EVENT_REPLAY_LIMIT,
+) -> GenerationRunEvent | None:
+    run = session.get(GenerationRun, run_id)
+
+    if not run:
+        return None
+
+    existing = find_existing_generation_run_event(session, run_id, event_type, variant_id)
+
+    if existing:
+        return existing
+
+    next_sequence = (session.scalar(select(func.max(GenerationRunEvent.sequence)).where(GenerationRunEvent.run_id == run_id)) or 0) + 1
+    event = GenerationRunEvent(
+        run_id=run.run_id,
+        sequence=next_sequence,
+        event_type=event_type,
+        session_id=run.session_id,
+        thread_id=run.thread_id,
+        turn_id=run.turn_id,
+        status=status,
+        variant_id=variant_id,
+        message=message,
+        reply_text=reply_text,
+    )
+    session.add(event)
+    session.flush()
+    prune_generation_run_events(session, run_id, replay_limit)
+    session.commit()
+    session.refresh(event)
+    return event
+
+
+def find_existing_generation_run_event(
+    session: Session,
+    run_id: str,
+    event_type: str,
+    variant_id: str | None = None,
+) -> GenerationRunEvent | None:
+    statement = (
+        select(GenerationRunEvent)
+        .where(GenerationRunEvent.run_id == run_id)
+        .where(GenerationRunEvent.event_type == event_type)
+    )
+
+    if event_type == "variant_persisted" and variant_id:
+        statement = statement.where(GenerationRunEvent.variant_id == variant_id)
+    elif event_type == "run_started" or event_type in TERMINAL_GENERATION_RUN_EVENT_TYPES:
+        pass
+    else:
+        return None
+
+    return session.scalar(statement.order_by(GenerationRunEvent.sequence.asc()))
+
+
+def list_generation_run_events(
+    session: Session,
+    run_id: str,
+    after_sequence: int = 0,
+    limit: int = DEFAULT_GENERATION_RUN_EVENT_REPLAY_LIMIT,
+) -> list[GenerationRunEvent]:
+    statement = (
+        select(GenerationRunEvent)
+        .where(GenerationRunEvent.run_id == run_id)
+        .where(GenerationRunEvent.sequence > after_sequence)
+        .order_by(GenerationRunEvent.sequence.asc())
+        .limit(limit)
+    )
+    return list(session.scalars(statement))
+
+
+def prune_generation_run_events(session: Session, run_id: str, replay_limit: int) -> None:
+    if replay_limit <= 0:
+        return
+
+    old_event_ids = list(
+        session.scalars(
+            select(GenerationRunEvent.event_id)
+            .where(GenerationRunEvent.run_id == run_id)
+            .order_by(GenerationRunEvent.sequence.desc())
+            .offset(replay_limit)
+        )
+    )
+
+    if old_event_ids:
+        session.execute(delete(GenerationRunEvent).where(GenerationRunEvent.event_id.in_(old_event_ids)))
+
+
+def generation_run_event_to_progress_event(event: GenerationRunEvent) -> GenerationRunProgressEvent:
+    return GenerationRunProgressEvent(
+        sequence=event.sequence,
+        event_type=event.event_type,
+        run_id=event.run_id,
+        session_id=event.session_id,
+        thread_id=event.thread_id,
+        turn_id=event.turn_id,
+        status=event.status,
+        variant_id=event.variant_id,
+        at=event.created_at,
+    )
 
 
 def sequence_for_generation_run_status(status: str) -> int:
@@ -429,6 +551,7 @@ def update_generation_run_status(session: Session, run_id: str, payload: Generat
     session.refresh(run)
 
     if run.status in TERMINAL_GENERATION_RUN_STATUSES:
+        record_generation_run_terminal_event(session, run, run.status, run.error_message)
         return run
 
     apply_generation_run_lifecycle(run, payload.status, payload.error_code, payload.error_message)
@@ -437,6 +560,7 @@ def update_generation_run_status(session: Session, run_id: str, payload: Generat
     session.add(run)
     session.commit()
     session.refresh(run)
+    record_generation_run_terminal_event(session, run, payload.status, payload.error_message)
     return run
 
 
@@ -464,8 +588,42 @@ def reconcile_stale_generation_runs(session: Session, payload: GenerationRunReco
 
     for run in reconciled:
         session.refresh(run)
+        record_generation_run_terminal_event(session, run, "interrupted", payload.error_message)
 
     return reconciled
+
+
+def record_generation_run_terminal_event(
+    session: Session,
+    run: GenerationRun,
+    status: str,
+    message: str | None = None,
+) -> GenerationRunEvent | None:
+    event_type = event_type_for_generation_run_terminal_status(status)
+
+    if not event_type:
+        return None
+
+    return append_generation_run_event(
+        session,
+        run.run_id,
+        event_type,
+        status=status,
+        message=message or run.error_message or event_type,
+    )
+
+
+def event_type_for_generation_run_terminal_status(status: str) -> str | None:
+    if status == "completed":
+        return "run_completed"
+
+    if status == "cancelled":
+        return "run_cancelled"
+
+    if status in {"failed", "interrupted"}:
+        return "run_failed"
+
+    return None
 
 
 def is_generation_run_stale(run: GenerationRun, now: datetime | None = None, stale_after_seconds: int = DEFAULT_GENERATION_RUN_STALE_AFTER_SECONDS) -> bool:

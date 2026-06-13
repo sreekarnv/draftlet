@@ -105,3 +105,28 @@ class GenerationRun(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     turn: Mapped["Turn"] = relationship(back_populates="generation_runs")
+    events: Mapped[list["GenerationRunEvent"]] = relationship(
+        back_populates="run",
+        cascade="all, delete-orphan",
+        order_by="GenerationRunEvent.sequence",
+    )
+
+
+class GenerationRunEvent(Base):
+    __tablename__ = "generation_run_events"
+    __table_args__ = (UniqueConstraint("run_id", "sequence", name="uq_generation_run_events_run_sequence"),)
+
+    event_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_id: Mapped[str] = mapped_column(ForeignKey("generation_runs.run_id", ondelete="CASCADE"), index=True)
+    sequence: Mapped[int] = mapped_column(Integer)
+    event_type: Mapped[str] = mapped_column(String(80), index=True)
+    session_id: Mapped[str] = mapped_column(String(120))
+    thread_id: Mapped[str] = mapped_column(String(120))
+    turn_id: Mapped[str] = mapped_column(String(120))
+    status: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    variant_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reply_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    run: Mapped["GenerationRun"] = relationship(back_populates="events")

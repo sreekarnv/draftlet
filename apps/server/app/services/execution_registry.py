@@ -44,11 +44,15 @@ class ReplyExecutionRegistry:
         self,
         producer: Callable[[ReplyRequest], AsyncIterator[ReplyEvent]],
         on_cancel_missing: Callable[[str], Awaitable[bool]],
+        record_update: Callable[[str, ReplyExecutionUpdate], ReplyExecutionUpdate | None] | None = None,
+        load_replay: Callable[[str, int, int], list[ReplyExecutionUpdate]] | None = None,
         max_replay_updates_per_run: int = 50,
         max_replay_runs: int = 20,
     ) -> None:
         self._producer = producer
         self._on_cancel_missing = on_cancel_missing
+        self._record_update = record_update
+        self._load_replay = load_replay
         self._max_replay_updates_per_run = max_replay_updates_per_run
         self._max_replay_runs = max_replay_runs
         self._executions: dict[str, ReplyExecution] = {}
@@ -69,15 +73,27 @@ class ReplyExecutionRegistry:
 
     async def subscribe(self, run_id: str, after_sequence: int = 0) -> AsyncIterator[ReplyExecutionUpdate]:
         queue: asyncio.Queue[ReplyExecutionUpdate] = asyncio.Queue()
+        should_subscribe = False
 
         async with self._lock:
             execution = self._executions.get(run_id)
 
             if not execution:
-                raise KeyError(run_id)
+                replay = self._load_durable_replay(run_id, after_sequence)
 
-            replay = [update for update in execution.replay if update.sequence > after_sequence]
-            execution.subscribers.append(queue)
+                if not replay:
+                    raise KeyError(run_id)
+            else:
+                replay = self._load_durable_replay(run_id, after_sequence)
+                if not replay:
+                    replay = [update for update in execution.replay if update.sequence > after_sequence]
+                execution.subscribers.append(queue)
+                should_subscribe = True
+
+        if not should_subscribe:
+            for update in replay:
+                yield update
+            return
 
         try:
             for update in replay:
@@ -85,6 +101,8 @@ class ReplyExecutionRegistry:
 
                 if update.status in TERMINAL_REPLY_EXECUTION_STATUSES:
                     return
+
+                after_sequence = max(after_sequence, update.sequence)
 
             while True:
                 update = await queue.get()
@@ -146,13 +164,17 @@ class ReplyExecutionRegistry:
             if not execution:
                 return
 
-            sequenced = ReplyExecutionUpdate(
-                status=update.status,
-                event=update.event,
-                message=update.message,
-                sequence=execution.next_sequence,
-            )
-            execution.next_sequence += 1
+            sequenced = self._record_durable_update(run_id, update)
+
+            if not sequenced:
+                sequenced = ReplyExecutionUpdate(
+                    status=update.status,
+                    event=update.event,
+                    message=update.message,
+                    sequence=execution.next_sequence,
+                )
+
+            execution.next_sequence = max(execution.next_sequence, sequenced.sequence + 1)
             execution.replay.append(sequenced)
             execution.replay = execution.replay[-self._max_replay_updates_per_run:]
             subscribers = list(execution.subscribers)
@@ -181,6 +203,18 @@ class ReplyExecutionRegistry:
 
         for run_id, _execution in finished[: len(finished) - self._max_replay_runs]:
             self._executions.pop(run_id, None)
+
+    def _record_durable_update(self, run_id: str, update: ReplyExecutionUpdate) -> ReplyExecutionUpdate | None:
+        if not self._record_update:
+            return None
+
+        return self._record_update(run_id, update)
+
+    def _load_durable_replay(self, run_id: str, after_sequence: int) -> list[ReplyExecutionUpdate]:
+        if not self._load_replay:
+            return []
+
+        return self._load_replay(run_id, after_sequence, self._max_replay_updates_per_run)
 
 
 def require_run_id(request: ReplyRequest) -> str:

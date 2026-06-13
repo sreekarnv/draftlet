@@ -3,10 +3,14 @@ import json
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
 
+from app.core.database import SessionLocal
+from app.db.models import GenerationRunEvent
 from app.schemas.reply_event import ReplyEvent
 from app.schemas.reply_request import ReplyRequest
 from app.services.execution_registry import ReplyExecutionRegistry, ReplyExecutionUpdate
+from app.services.domain_service import append_generation_run_event, list_generation_run_events
 from app.services.reply_service import cancel_reply_execution_record, generate_reply_events
 
 
@@ -17,9 +21,78 @@ async def cancel_missing_reply_execution(run_id: str) -> bool:
     return cancel_reply_execution_record(run_id)
 
 
+def record_reply_execution_update(run_id: str, update: ReplyExecutionUpdate) -> ReplyExecutionUpdate | None:
+    with SessionLocal() as session:
+        event = durable_event_for_reply_execution_update(session, run_id, update)
+
+        if not event:
+            return None
+
+        return reply_execution_update_for_durable_event(event)
+
+
+def durable_event_for_reply_execution_update(session: Session, run_id: str, update: ReplyExecutionUpdate) -> GenerationRunEvent | None:
+    if update.status == "event" and update.event and update.event.variant_id:
+        return append_generation_run_event(
+            session,
+            run_id,
+            "variant_persisted",
+            status="generated",
+            variant_id=update.event.variant_id,
+            reply_text=update.event.reply,
+        )
+
+    if update.status == "run_started":
+        return append_generation_run_event(session, run_id, "run_started", status="active", message=update.message or "run_started")
+
+    if update.status == "run_completed":
+        return append_generation_run_event(session, run_id, "run_completed", status="completed", message=update.message or "run_completed")
+
+    if update.status == "run_cancelled":
+        return append_generation_run_event(session, run_id, "run_cancelled", status="cancelled", message=update.message or "run_cancelled")
+
+    if update.status == "run_failed":
+        return append_generation_run_event(session, run_id, "run_failed", status="failed", message=update.message or "run_failed")
+
+    return None
+
+
+def load_reply_execution_replay(run_id: str, after_sequence: int, limit: int) -> list[ReplyExecutionUpdate]:
+    with SessionLocal() as session:
+        return [
+            reply_execution_update_for_durable_event(event)
+            for event in list_generation_run_events(session, run_id, after_sequence=after_sequence, limit=limit)
+        ]
+
+
+def reply_execution_update_for_durable_event(event: GenerationRunEvent) -> ReplyExecutionUpdate:
+    if event.event_type == "variant_persisted":
+        return ReplyExecutionUpdate(
+            status="event",
+            event=ReplyEvent(
+                reply=event.reply_text or "",
+                variant_id=event.variant_id,
+                turn_id=event.turn_id,
+                thread_id=event.thread_id,
+            ),
+            sequence=event.sequence,
+        )
+
+    if event.event_type in {"run_started", "run_completed", "run_cancelled", "run_failed"}:
+        return ReplyExecutionUpdate(
+            status=event.event_type,
+            message=event.message or event.event_type,
+            sequence=event.sequence,
+        )
+
+    return ReplyExecutionUpdate(status="event", message=event.message, sequence=event.sequence)
+
+
 reply_execution_registry = ReplyExecutionRegistry(
     producer=generate_reply_events,
     on_cancel_missing=cancel_missing_reply_execution,
+    record_update=record_reply_execution_update,
+    load_replay=load_reply_execution_replay,
 )
 
 
