@@ -6,7 +6,13 @@ import { RuntimePage } from './routes/runtime-page';
 import { SetupPage } from './routes/setup-page';
 import { desktopApi } from './lib/api';
 import { RECOMMENDED_MODEL } from './lib/constants';
-import type { BrowserDiagnosticsBridgeResult, CommandStatus, InstalledModel, RuntimeState } from './lib/types';
+import type {
+  BrowserDiagnosticsBridgeResult,
+  CommandStatus,
+  InstalledModel,
+  RuntimeMaintenanceDiagnosticsResult,
+  RuntimeState,
+} from './lib/types';
 import { Button } from './components/ui';
 import { serializeRecaptureDiagnosticsReport } from '../../../../shared/recapture-diagnostics-contract';
 
@@ -24,6 +30,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [actionMessage, setActionMessage] = useState('');
   const [browserDiagnostics, setBrowserDiagnostics] = useState<BrowserDiagnosticsBridgeResult | null>(null);
+  const [maintenanceDiagnostics, setMaintenanceDiagnostics] = useState<RuntimeMaintenanceDiagnosticsResult | null>(null);
 
   const refreshStatus = async () => {
     setBusy(true);
@@ -70,6 +77,14 @@ export default function App() {
     const result = await desktopApi.getBrowserRecaptureDiagnosticsReport();
     setBrowserDiagnostics(result);
     setActionMessage(result.ok ? 'Loaded browser recapture diagnostics.' : result.error.message);
+    setBusy(false);
+  };
+
+  const loadMaintenanceDiagnostics = async () => {
+    setBusy(true);
+    const result = await desktopApi.getGenerationRunMaintenanceDiagnostics();
+    setMaintenanceDiagnostics(result);
+    setActionMessage(result.ok ? 'Loaded runtime maintenance diagnostics.' : result.error.message);
     setBusy(false);
   };
 
@@ -159,8 +174,10 @@ export default function App() {
       <DiagnosticsPage
         browserDiagnostics={browserDiagnostics}
         busy={busy}
+        maintenanceDiagnostics={maintenanceDiagnostics}
         onCopyBrowserDiagnostics={copyBrowserDiagnostics}
         onLoadBrowserDiagnostics={loadBrowserDiagnostics}
+        onLoadMaintenanceDiagnostics={loadMaintenanceDiagnostics}
         onOpenExtensionHelp={openExtensionHelp}
         runtime={runtime}
       />
