@@ -176,6 +176,7 @@ curl http://127.0.0.1:11434/api/tags
 - `GET /health` identifies and checks the Draftlet server
 - `POST /replies/{run_id}/start` starts a runtime-owned reply generation run
 - `GET /replies/{run_id}/events` streams live/replayed run progress as SSE
+- `GET /replies/{run_id}/events?after=N` is intended for active and recent terminal run replay. Runtime keeps active replay rows, caps each run to the latest 100 rows, and prunes terminal run replay rows after 14 days. Older terminal run history remains available through domain snapshots such as `/domain/generation-runs/{run_id}/progress` and `/domain/history`, but the SSE replay feed may no longer have old rows.
 - `GET /domain/history` returns recent persisted Draftlet workspace threads
 - `GET /preferences` lists saved preferences
 - `PUT /preferences` upserts a preference
