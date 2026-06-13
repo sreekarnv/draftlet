@@ -14,9 +14,6 @@ export const GET_RUNTIME_STATUS = 'draftlet:get-runtime-status';
 export const START_DRAFT_GENERATION = 'draftlet:start-draft-generation';
 export const START_DRAFT_REFINEMENT = 'draftlet:start-draft-refinement';
 export const CANCEL_DRAFT_GENERATION = 'draftlet:cancel-draft-generation';
-export const DRAFT_GENERATION_STARTED = 'draftlet:draft-generation-started';
-export const DRAFT_GENERATION_COMPLETED = 'draftlet:draft-generation-completed';
-export const DRAFT_GENERATION_FAILED = 'draftlet:draft-generation-failed';
 export const INSERT_REPLY = 'draftlet:insert-reply';
 export const GET_INSERTION_TARGET_STATUS = 'draftlet:get-insertion-target-status';
 export const REVALIDATE_INSERTION_TARGET = 'draftlet:revalidate-insertion-target';
@@ -246,29 +243,6 @@ export type DraftletMessage =
   | { type: typeof START_DRAFT_GENERATION; sessionId: string; tone?: Tone; activeView?: PanelView }
   | { type: typeof START_DRAFT_REFINEMENT; sessionId: string; instruction: string; tone?: Tone; activeView?: PanelView }
   | { type: typeof CANCEL_DRAFT_GENERATION; sessionId?: string; generationId?: string }
-  | {
-      type: typeof DRAFT_GENERATION_STARTED;
-      sessionId: string;
-      generationId: string;
-      thread: ConversationThread;
-      turn: Turn;
-    }
-  | {
-      type: typeof DRAFT_GENERATION_COMPLETED;
-      sessionId: string;
-      generationId: string;
-      thread: ConversationThread;
-      turn: Turn;
-      variants: DraftVariant[];
-    }
-  | {
-      type: typeof DRAFT_GENERATION_FAILED;
-      sessionId: string;
-      generationId: string;
-      threadId?: string;
-      turnId?: string;
-      error: DraftletError;
-    }
   | { type: typeof INSERT_REPLY; sessionId?: string; replyText: string; variantId?: string; target?: ComposeTargetRef }
   | { type: typeof GET_INSERTION_TARGET_STATUS; sessionId?: string }
   | { type: typeof REVALIDATE_INSERTION_TARGET; sessionId: string; target?: ComposeTargetRef }

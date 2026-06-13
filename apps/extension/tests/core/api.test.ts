@@ -10,7 +10,6 @@ import {
   reconcileGenerationRuns,
   startReplyGenerationRunExecution,
   streamReplyGenerationRunEvents,
-  streamReplies,
 } from '../../core/api';
 import type { ReplyRequestPayload } from '../../core/types';
 
@@ -18,38 +17,16 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('streamReplies', () => {
-  it('maps runtime draft_variant events into streamed draft variant metadata', async () => {
-    const received: unknown[] = [];
-    vi.stubGlobal('fetch', vi.fn(async () => createStreamResponse([
-      'event: draft_variant\n',
-      'data: {"reply":"Domain draft","variant_id":"variant-1","thread_id":"thread-1","turn_id":"turn-1"}\n\n',
-    ])));
-
-    await streamReplies(payload(), {
-      onReply(variant) {
-        received.push(variant);
-      },
-    });
-
-    expect(received).toEqual([
-      {
-        text: 'Domain draft',
-        variantId: 'variant-1',
-        sequence: undefined,
-      },
-    ]);
-  });
-
+describe('streamReplyGenerationRunEvents', () => {
   it('maps runtime replay event ids into streamed draft variant sequences', async () => {
     const received: unknown[] = [];
     vi.stubGlobal('fetch', vi.fn(async () => createStreamResponse([
       'id: 2\n',
-      'event: draft_variant\n',
+      'event: variant_persisted\n',
       'data: {"reply":"Replayed draft","variant_id":"variant-2","thread_id":"thread-1","turn_id":"turn-1"}\n\n',
       'id: 3\n',
-      'event: completed\n',
-      'data: completed\n\n',
+      'event: run_completed\n',
+      'data: run_completed\n\n',
     ])));
 
     await streamReplyGenerationRunEvents('generation-1', {
@@ -68,20 +45,28 @@ describe('streamReplies', () => {
     ]);
   });
 
-  it('ignores runtime terminal control events', async () => {
+  it('maps runtime control events into run status metadata', async () => {
     const received: unknown[] = [];
     vi.stubGlobal('fetch', vi.fn(async () => createStreamResponse([
-      'event: completed\n',
-      'data: completed\n\n',
+      'id: 1\n',
+      'event: run_started\n',
+      'data: run_started\n\n',
+      'id: 2\n',
+      'event: run_completed\n',
+      'data: run_completed\n\n',
     ])));
 
-    await streamReplies(payload(), {
-      onReply(variant) {
-        received.push(variant);
+    await streamReplyGenerationRunEvents('generation-1', {
+      onReply() {},
+      onControl(event) {
+        received.push(event);
       },
     });
 
-    expect(received).toEqual([]);
+    expect(received).toEqual([
+      { status: 'run_started', message: 'run_started', sequence: 1 },
+      { status: 'run_completed', message: 'run_completed', sequence: 2 },
+    ]);
   });
 });
 
