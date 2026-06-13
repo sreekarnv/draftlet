@@ -47,6 +47,31 @@ describe('recapture diagnostics view helpers', () => {
     expect(createRecaptureDiagnosticsReport(entries, '2026-01-01T00:00:01.000Z')).toEqual({
       kind: RECAPTURE_DIAGNOSTICS_REPORT_KIND,
       exportedAt: '2026-01-01T00:00:01.000Z',
+      summary: {
+        lastUpdatedAt: '2026-01-01T00:00:00.000Z',
+        entryCount: 1,
+        currentTarget: undefined,
+        latestAttempt: {
+          event: 'content_recapture_failed',
+          sessionId: 'session-1',
+          tabId: 12,
+          status: 'unavailable',
+          outcome: 'recapture_failed',
+          reason: 'content_script_unavailable',
+          message: 'Content script was unavailable during recapture.',
+          at: '2026-01-01T00:00:00.000Z',
+        },
+        latestOutcome: {
+          event: 'content_recapture_failed',
+          sessionId: 'session-1',
+          tabId: 12,
+          status: 'unavailable',
+          outcome: 'recapture_failed',
+          reason: 'content_script_unavailable',
+          message: 'Content script was unavailable during recapture.',
+          at: '2026-01-01T00:00:00.000Z',
+        },
+      },
       entries,
     });
     expect(serializeRecaptureDiagnostics(entries, '2026-01-01T00:00:01.000Z')).toContain(`"kind": "${RECAPTURE_DIAGNOSTICS_REPORT_KIND}"`);
@@ -78,6 +103,31 @@ describe('recapture diagnostics view helpers', () => {
       report: {
         kind: RECAPTURE_DIAGNOSTICS_REPORT_KIND,
         exportedAt: '2026-01-01T00:00:01.000Z',
+        summary: {
+          lastUpdatedAt: '2026-01-01T00:00:00.000Z',
+          entryCount: 1,
+          currentTarget: undefined,
+          latestAttempt: {
+            event: 'content_recapture_completed',
+            sessionId: 'session-2',
+            tabId: 44,
+            status: 'needs_focus',
+            outcome: 'needs_focused_compose',
+            reason: 'no_focused_compose',
+            message: 'Focus a compose field and retry.',
+            at: '2026-01-01T00:00:00.000Z',
+          },
+          latestOutcome: {
+            event: 'content_recapture_completed',
+            sessionId: 'session-2',
+            tabId: 44,
+            status: 'needs_focus',
+            outcome: 'needs_focused_compose',
+            reason: 'no_focused_compose',
+            message: 'Focus a compose field and retry.',
+            at: '2026-01-01T00:00:00.000Z',
+          },
+        },
         entries: [
           {
             id: 2,

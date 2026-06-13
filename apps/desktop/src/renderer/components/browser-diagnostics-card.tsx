@@ -19,11 +19,13 @@ export function BrowserDiagnosticsCard({
   onOpenExtensionHelp,
 }: BrowserDiagnosticsCardProps) {
   const latestEntries = diagnostics?.ok ? diagnostics.report.entries.slice(-3).reverse() : [];
+  const summary = diagnostics?.ok ? diagnostics.report.summary : null;
   const reportDetails = diagnostics?.ok
     ? [
         ['Kind', diagnostics.report.kind],
         ['Received', formatReportTime(diagnostics.receivedAt ?? diagnostics.report.exportedAt)],
         ['Exported', formatReportTime(diagnostics.report.exportedAt)],
+        ['Last updated', formatReportTime(diagnostics.report.summary.lastUpdatedAt)],
         ['Entries', String(diagnostics.report.entries.length)],
         ['Stale window', diagnostics.staleAfterSeconds ? `${Math.round(diagnostics.staleAfterSeconds / 60)} minutes` : 'Unknown'],
       ]
@@ -54,10 +56,22 @@ export function BrowserDiagnosticsCard({
         {diagnostics?.staleAfterSeconds ? (
           <div>Reports expire after {Math.round(diagnostics.staleAfterSeconds / 60)} minutes.</div>
         ) : null}
-        <div>Open the Draftlet extension popup from Chrome toolbar.</div>
-        <div>Use Send to desktop in Recapture diagnostics to share the bounded browser-side report.</div>
+        <div>The extension publishes this report during recapture and insertion-target checks when the local runtime is reachable.</div>
         <div>The report omits selected text and page content.</div>
       </div>
+      {summary?.currentTarget ? (
+        <div className="grid gap-1.5 rounded-lg bg-white px-3 py-2 text-[13px] leading-5 text-slate-700 ring-1 ring-slate-200">
+          <div className="font-semibold text-slate-900">Current target: {summary.currentTarget.status}</div>
+          <div>{summary.currentTarget.message ?? 'No target message published.'}</div>
+          {summary.currentTarget.candidateCount !== undefined ? <div>{summary.currentTarget.candidateCount} plausible tabs.</div> : null}
+        </div>
+      ) : null}
+      {summary?.latestOutcome ? (
+        <div className="grid gap-1.5 rounded-lg bg-white px-3 py-2 text-[13px] leading-5 text-slate-700 ring-1 ring-slate-200">
+          <div className="font-semibold text-slate-900">Latest outcome: {summary.latestOutcome.status ?? summary.latestOutcome.outcome ?? summary.latestOutcome.event}</div>
+          <div>{summary.latestOutcome.message}</div>
+        </div>
+      ) : null}
       {latestEntries.length > 0 ? (
         <div className="grid gap-1.5 text-[13px] leading-5 text-slate-700">
           {latestEntries.map((entry) => (

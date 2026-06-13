@@ -35,10 +35,10 @@ export async function getBrowserRecaptureDiagnosticsReport(): Promise<DesktopExt
 
     if (!data.report) {
       return createRecaptureDiagnosticsBridgeFailure(
-        'diagnostics_unavailable',
+        data.stale ? 'report_expired' : 'report_not_published',
         data.stale
-          ? 'The last browser recapture diagnostics report expired. Send a fresh report from the extension popup.'
-          : 'No browser recapture diagnostics have been sent from the extension yet.',
+          ? 'The last browser recapture diagnostics report expired. Trigger recapture or open the extension popup to publish a fresh report.'
+          : 'No browser recapture diagnostics report has been published by the extension yet.',
         true,
         {
           receivedAt: data.receivedAt,

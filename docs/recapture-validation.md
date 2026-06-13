@@ -68,16 +68,15 @@ Expected result:
 ## Diagnostics Relay
 
 1. Produce at least one failed or focus-required recapture attempt.
-2. Open the extension popup.
-3. Use `Send to desktop`.
-4. Open desktop diagnostics and load the browser report.
-5. Copy the loaded report.
+2. Open desktop diagnostics and refresh diagnostics.
+3. Load or copy the browser report.
+4. Optional: open the extension popup and use `Send to desktop` to manually republish the same bounded report.
 
 Expected result:
-- desktop shows report metadata, recent entries, and freshness window
+- desktop shows report metadata, summary target state, recent entries, and freshness window
 - copied report uses `draftlet.recapture-diagnostics`
 - report does not include selected text, generated draft text, full page content, DOM selectors, cookies, tokens, local runtime secrets, or raw exception objects
-- expired reports ask for a fresh popup send
+- missing reports clearly say the extension has not published one yet; expired reports ask for a fresh recapture or popup send
 
 ## Pass Criteria
 

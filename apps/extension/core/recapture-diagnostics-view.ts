@@ -2,6 +2,7 @@ import {
   createRecaptureDiagnosticsReport as createSharedRecaptureDiagnosticsReport,
   serializeRecaptureDiagnosticsReport,
   type RecaptureDiagnosticsReport,
+  type RecaptureDiagnosticsReportSummary,
 } from '../../../shared/recapture-diagnostics-contract';
 import type { RecaptureDiagnosticEntry, RecaptureDiagnosticLevel } from './messages';
 
@@ -10,8 +11,9 @@ export type { RecaptureDiagnosticsReport } from '../../../shared/recapture-diagn
 export function createRecaptureDiagnosticsReport(
   entries: RecaptureDiagnosticEntry[],
   exportedAt = new Date().toISOString(),
+  summary?: Partial<RecaptureDiagnosticsReportSummary>,
 ): RecaptureDiagnosticsReport {
-  return createSharedRecaptureDiagnosticsReport(entries, exportedAt);
+  return createSharedRecaptureDiagnosticsReport(entries, exportedAt, summary);
 }
 
 export function serializeRecaptureDiagnostics(
@@ -24,6 +26,18 @@ export function serializeRecaptureDiagnostics(
 export function recaptureDiagnosticEventLabel(entry: Pick<RecaptureDiagnosticEntry, 'event'>): string {
   if (entry.event === 'recapture_requested') {
     return 'Recapture requested';
+  }
+
+  if (entry.event === 'target_revalidation_requested') {
+    return 'Target check requested';
+  }
+
+  if (entry.event === 'target_revalidation_completed') {
+    return 'Target check returned';
+  }
+
+  if (entry.event === 'target_revalidation_failed') {
+    return 'Target check failed';
   }
 
   if (entry.event === 'tab_resolution_ambiguous') {

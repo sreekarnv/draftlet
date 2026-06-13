@@ -18,11 +18,47 @@ class RecaptureDiagnosticsReportEntry(BaseModel):
     at: str = Field(min_length=1, max_length=80)
 
 
+class BrowserRecaptureTargetSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sessionId: str = Field(min_length=1, max_length=120)
+    tabId: int | None = None
+    status: str = Field(min_length=1, max_length=80)
+    reason: str | None = Field(default=None, max_length=160)
+    message: str | None = Field(default=None, max_length=1000)
+    updatedAt: str = Field(min_length=1, max_length=80)
+    candidateCount: int | None = Field(default=None, ge=0, le=20)
+
+
+class BrowserRecaptureAttemptSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    event: str = Field(min_length=1, max_length=120)
+    sessionId: str = Field(min_length=1, max_length=120)
+    tabId: int | None = None
+    status: str | None = Field(default=None, max_length=80)
+    outcome: str | None = Field(default=None, max_length=120)
+    reason: str | None = Field(default=None, max_length=160)
+    message: str = Field(min_length=1, max_length=1000)
+    at: str = Field(min_length=1, max_length=80)
+
+
+class RecaptureDiagnosticsReportSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    lastUpdatedAt: str = Field(min_length=1, max_length=80)
+    entryCount: int = Field(ge=0, le=50)
+    currentTarget: BrowserRecaptureTargetSummary | None = None
+    latestAttempt: BrowserRecaptureAttemptSummary | None = None
+    latestOutcome: BrowserRecaptureAttemptSummary | None = None
+
+
 class RecaptureDiagnosticsReport(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     kind: str = Field(pattern=r"^draftlet\.recapture-diagnostics$")
     exportedAt: str = Field(min_length=1, max_length=80)
+    summary: RecaptureDiagnosticsReportSummary
     entries: list[RecaptureDiagnosticsReportEntry] = Field(default_factory=list, max_length=50)
 
 

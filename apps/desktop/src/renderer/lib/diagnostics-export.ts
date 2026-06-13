@@ -104,7 +104,7 @@ export function buildDesktopDiagnosticsExportPayload({
     generation_run_maintenance_diagnostics: maintenanceSection,
     notes: [
       'This payload is built from diagnostics currently loaded in the desktop app.',
-      'Browser recapture diagnostics are present only after the extension sends a bounded report to desktop.',
+      'Browser recapture diagnostics are present after the extension publishes a bounded report through the runtime relay.',
       'Generation-run maintenance diagnostics are a bounded runtime snapshot when the endpoint is available.',
     ],
   };
