@@ -10,7 +10,8 @@ from app.schemas.reply_event import ReplyEvent
 from app.schemas.reply_request import ReplyRequest
 
 
-ReplyExecutionStatus = Literal["event", "completed", "cancelled", "error"]
+ReplyExecutionStatus = Literal["event", "run_started", "run_completed", "run_cancelled", "run_failed"]
+TERMINAL_REPLY_EXECUTION_STATUSES = {"run_completed", "run_cancelled", "run_failed"}
 
 
 @dataclass(frozen=True)
@@ -66,13 +67,6 @@ class ReplyExecutionRegistry:
             self._executions[run_id] = ReplyExecution(request=request, task=task, subscribers=[], replay=[])
             return ReplyExecutionStart(run_id=run_id, started=True, live=True)
 
-    async def start_and_subscribe(self, request: ReplyRequest) -> AsyncIterator[ReplyExecutionUpdate]:
-        run_id = require_run_id(request)
-        await self.start(request)
-
-        async for update in self.subscribe(run_id):
-            yield update
-
     async def subscribe(self, run_id: str, after_sequence: int = 0) -> AsyncIterator[ReplyExecutionUpdate]:
         queue: asyncio.Queue[ReplyExecutionUpdate] = asyncio.Queue()
 
@@ -89,7 +83,7 @@ class ReplyExecutionRegistry:
             for update in replay:
                 yield update
 
-                if update.status in {"completed", "cancelled", "error"}:
+                if update.status in TERMINAL_REPLY_EXECUTION_STATUSES:
                     return
 
             while True:
@@ -100,7 +94,7 @@ class ReplyExecutionRegistry:
 
                 yield update
 
-                if update.status in {"completed", "cancelled", "error"}:
+                if update.status in TERMINAL_REPLY_EXECUTION_STATUSES:
                     break
         finally:
             await self._unsubscribe(run_id, queue)
@@ -124,17 +118,19 @@ class ReplyExecutionRegistry:
         run_id = require_run_id(request)
 
         try:
+            await self._publish(run_id, ReplyExecutionUpdate(status="run_started"))
+
             async for event in self._producer(request):
                 await self._publish(run_id, ReplyExecutionUpdate(status="event", event=event))
 
-            await self._publish(run_id, ReplyExecutionUpdate(status="completed"))
+            await self._publish(run_id, ReplyExecutionUpdate(status="run_completed"))
         except asyncio.CancelledError:
             await self._publish(
                 run_id,
-                ReplyExecutionUpdate(status="cancelled", message="Draft generation was cancelled."),
+                ReplyExecutionUpdate(status="run_cancelled", message="Draft generation was cancelled."),
             )
         except Exception as error:
-            await self._publish(run_id, ReplyExecutionUpdate(status="error", message=str(error)))
+            await self._publish(run_id, ReplyExecutionUpdate(status="run_failed", message=str(error)))
         finally:
             async with self._lock:
                 execution = self._executions.get(run_id)

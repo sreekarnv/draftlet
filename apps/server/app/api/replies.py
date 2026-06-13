@@ -23,23 +23,12 @@ reply_execution_registry = ReplyExecutionRegistry(
 )
 
 
-@router.post("/replies")
-def create_replies(request: ReplyRequest) -> StreamingResponse:
-    async def events() -> AsyncIterator[str]:
-        try:
-            async for update in reply_execution_registry.start_and_subscribe(request):
-                yield format_sse_update(update)
-        except ValueError as error:
-            yield format_sse_error(str(error))
-
-    return StreamingResponse(events(), media_type="text/event-stream")
-
-
 @router.post("/replies/{run_id}/start")
 async def start_reply_execution(run_id: str, request: ReplyRequest) -> dict[str, bool | str]:
     if request.run_id and request.run_id != run_id:
         raise HTTPException(status_code=400, detail="run_id does not match path")
 
+    validate_runtime_reply_request(request)
     start = await reply_execution_registry.start(request.model_copy(update={"run_id": run_id}))
     return {
         "run_id": start.run_id,
@@ -81,12 +70,23 @@ async def get_reply_execution(run_id: str) -> dict[str, bool | str]:
     }
 
 
+def validate_runtime_reply_request(request: ReplyRequest) -> None:
+    missing = [
+        field_name
+        for field_name in ("session_id", "thread_id", "turn_id", "source_url")
+        if not getattr(request, field_name)
+    ]
+
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Runtime-owned reply execution requires {', '.join(missing)}.",
+        )
+
+
 def format_sse_update(update: ReplyExecutionUpdate) -> str:
     if update.status == "event" and update.event:
         return format_sse_event(update.event, update.sequence)
-
-    if update.status == "error":
-        return format_sse_error(update.message or "Could not stream replies.", update.sequence)
 
     lines = []
 
@@ -105,7 +105,7 @@ def format_sse_event(event: ReplyEvent, sequence: int = 0) -> str:
         event_lines.append(f"id: {sequence}")
 
     if event.variant_id:
-        event_lines.append("event: draft_variant")
+        event_lines.append("event: variant_persisted")
         payload = {
             "reply": event.reply,
             "variant_id": event.variant_id,

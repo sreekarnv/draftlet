@@ -38,7 +38,7 @@ export async function checkServerHealth(signal?: AbortSignal): Promise<boolean> 
   }
 }
 
-interface StreamRepliesOptions {
+interface StreamReplyGenerationRunEventsOptions {
   signal?: AbortSignal;
   onReply: (variant: StreamedDraftVariant) => void;
   onControl?: (event: StreamedGenerationControlEvent) => void;
@@ -51,7 +51,7 @@ interface StreamedDraftVariant {
 }
 
 interface StreamedGenerationControlEvent {
-  status: 'completed' | 'cancelled' | 'error';
+  status: 'run_started' | 'run_completed' | 'run_cancelled' | 'run_failed';
   message?: string;
   sequence?: number;
 }
@@ -66,37 +66,6 @@ export interface ReplyGenerationRunExecutionStart {
   runId: string;
   started: boolean;
   live: boolean;
-}
-
-export async function streamReplies(
-  payload: ReplyRequestPayload,
-  { signal, onReply, onControl }: StreamRepliesOptions,
-): Promise<void> {
-  await streamSse({
-    url: `${SERVER_BASE_URL}/replies`,
-    init: {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    },
-    signal,
-    onMessage(message) {
-      const variant = parseStreamedDraftVariant(message);
-
-      if (variant?.text) {
-        onReply(variant);
-        return;
-      }
-
-      const control = parseStreamedGenerationControlEvent(message);
-
-      if (control) {
-        onControl?.(control);
-      }
-    },
-  });
 }
 
 export async function startReplyGenerationRunExecution(
@@ -125,7 +94,7 @@ export async function streamReplyGenerationRunEvents(
     afterSequence = 0,
     onReply,
     onControl,
-  }: StreamRepliesOptions & { afterSequence?: number },
+  }: StreamReplyGenerationRunEventsOptions & { afterSequence?: number },
 ): Promise<void> {
   const query = afterSequence > 0 ? `?after=${encodeURIComponent(String(afterSequence))}` : '';
   await streamSse({
@@ -535,7 +504,7 @@ async function putJson<T>(url: string, payload: unknown): Promise<T> {
 }
 
 function parseStreamedDraftVariant(message: SseMessage): StreamedDraftVariant | null {
-  if (message.eventType === 'draft_variant') {
+  if (message.eventType === 'variant_persisted') {
     try {
       const payload = JSON.parse(message.data) as DraftVariantStreamPayload;
       return {
@@ -548,24 +517,15 @@ function parseStreamedDraftVariant(message: SseMessage): StreamedDraftVariant | 
     }
   }
 
-  if (message.eventType) {
-    return null;
-  }
-
-  const reply = message.data.trim();
-
-  if (!reply) {
-    return null;
-  }
-
-  return { text: reply, sequence: parseSseSequence(message.id) };
+  return null;
 }
 
 function parseStreamedGenerationControlEvent(message: SseMessage): StreamedGenerationControlEvent | null {
   if (
-    message.eventType !== 'completed'
-    && message.eventType !== 'cancelled'
-    && message.eventType !== 'error'
+    message.eventType !== 'run_started'
+    && message.eventType !== 'run_completed'
+    && message.eventType !== 'run_cancelled'
+    && message.eventType !== 'run_failed'
   ) {
     return null;
   }
