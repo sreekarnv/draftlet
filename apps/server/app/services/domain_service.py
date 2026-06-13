@@ -23,6 +23,7 @@ from app.schemas.domain import (
     WorkspaceSessionSnapshot,
     WorkspaceSessionUpsert,
 )
+from app.services.diagnostics_service import record_generation_run_maintenance_outcome
 
 ACTIVE_GENERATION_RUN_STATUSES = {"active", "streaming"}
 TERMINAL_GENERATION_RUN_STATUSES = {"completed", "failed", "cancelled", "interrupted"}
@@ -211,6 +212,7 @@ def claim_generation_run(session: Session, payload: GenerationRunClaim) -> Gener
             error_code="generation_run_stale",
             error_message="A previous draft generation lease became stale before completion.",
         ),
+        maintenance_source="claim_generation_run",
     )
     active_conflicts = [
         active_run
@@ -508,6 +510,7 @@ def prune_terminal_generation_run_events(
     session: Session,
     older_than_days: int = DEFAULT_GENERATION_RUN_EVENT_RETENTION_DAYS,
     max_runs: int = DEFAULT_GENERATION_RUN_EVENT_PRUNE_BATCH_SIZE,
+    maintenance_source: str = "runtime",
 ) -> int:
     if older_than_days <= 0 or max_runs <= 0:
         return 0
@@ -535,6 +538,14 @@ def prune_terminal_generation_run_events(
     if pruned_count:
         session.commit()
 
+    record_generation_run_maintenance_outcome(
+        "replay_prune",
+        source=maintenance_source,
+        pruned_event_count=pruned_count,
+        retention_days=older_than_days,
+        replay_limit=DEFAULT_GENERATION_RUN_EVENT_REPLAY_LIMIT,
+        prune_batch_size=max_runs,
+    )
     return pruned_count
 
 
@@ -600,7 +611,11 @@ def update_generation_run_status(session: Session, run_id: str, payload: Generat
     return run
 
 
-def reconcile_stale_generation_runs(session: Session, payload: GenerationRunReconcileRequest) -> list[GenerationRun]:
+def reconcile_stale_generation_runs(
+    session: Session,
+    payload: GenerationRunReconcileRequest,
+    maintenance_source: str = "runtime",
+) -> list[GenerationRun]:
     now = datetime.now(UTC)
     runs = list_active_generation_runs(
         session,
@@ -626,6 +641,12 @@ def reconcile_stale_generation_runs(session: Session, payload: GenerationRunReco
         session.refresh(run)
         record_generation_run_terminal_event(session, run, "interrupted", payload.error_message)
 
+    record_generation_run_maintenance_outcome(
+        "stale_reconciliation",
+        source=maintenance_source,
+        reconciled_run_ids=[run.run_id for run in reconciled],
+        stale_after_seconds=payload.stale_after_seconds,
+    )
     return reconciled
 
 
@@ -647,7 +668,7 @@ def record_generation_run_terminal_event(
         status=status,
         message=message or run.error_message or event_type,
     )
-    prune_terminal_generation_run_events(session)
+    prune_terminal_generation_run_events(session, maintenance_source="terminal_event")
     return event
 
 

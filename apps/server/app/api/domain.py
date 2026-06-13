@@ -243,7 +243,7 @@ def post_reconcile_generation_runs(
     payload: GenerationRunReconcileRequest,
     session: Session = Depends(get_session),
 ) -> list[GenerationRunRead]:
-    return reconcile_stale_generation_runs(session, payload)
+    return reconcile_stale_generation_runs(session, payload, maintenance_source="domain_reconcile_endpoint")
 
 
 @router.put("/variants/{variant_id}", response_model=DraftVariantRead)

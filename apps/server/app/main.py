@@ -12,7 +12,14 @@ from app.api.replies import router as replies_router
 from app.core.database import SessionLocal
 from app.core.config import get_settings
 from app.schemas.domain import GenerationRunReconcileRequest
-from app.services.domain_service import prune_terminal_generation_run_events, reconcile_stale_generation_runs
+from app.services.diagnostics_service import record_generation_run_maintenance_outcome
+from app.services.domain_service import (
+    DEFAULT_GENERATION_RUN_EVENT_PRUNE_BATCH_SIZE,
+    DEFAULT_GENERATION_RUN_EVENT_REPLAY_LIMIT,
+    DEFAULT_GENERATION_RUN_EVENT_RETENTION_DAYS,
+    prune_terminal_generation_run_events,
+    reconcile_stale_generation_runs,
+)
 
 
 settings = get_settings()
@@ -20,15 +27,36 @@ settings = get_settings()
 
 def maintain_generation_runs_on_startup() -> None:
     with SessionLocal() as session:
-        reconcile_stale_generation_runs(
-            session,
-            GenerationRunReconcileRequest(
+        try:
+            reconciled_runs = reconcile_stale_generation_runs(
+                session,
+                GenerationRunReconcileRequest(
+                    stale_after_seconds=0,
+                    error_code="runtime_restarted",
+                    error_message="Draft generation was interrupted because the runtime restarted.",
+                ),
+                maintenance_source="startup",
+            )
+            pruned_event_count = prune_terminal_generation_run_events(session, maintenance_source="startup")
+            record_generation_run_maintenance_outcome(
+                "startup_maintenance",
+                source="startup",
+                reconciled_run_ids=[run.run_id for run in reconciled_runs],
+                pruned_event_count=pruned_event_count,
                 stale_after_seconds=0,
-                error_code="runtime_restarted",
-                error_message="Draft generation was interrupted because the runtime restarted.",
-            ),
-        )
-        prune_terminal_generation_run_events(session)
+                retention_days=DEFAULT_GENERATION_RUN_EVENT_RETENTION_DAYS,
+                replay_limit=DEFAULT_GENERATION_RUN_EVENT_REPLAY_LIMIT,
+                prune_batch_size=DEFAULT_GENERATION_RUN_EVENT_PRUNE_BATCH_SIZE,
+            )
+        except Exception as error:
+            record_generation_run_maintenance_outcome(
+                "startup_maintenance",
+                status="error",
+                source="startup",
+                error_code=type(error).__name__,
+                error_message=str(error),
+            )
+            raise
 
 
 @asynccontextmanager
