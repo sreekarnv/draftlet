@@ -37,6 +37,59 @@ export interface DraftletSidePanelContext {
 export type WorkspaceSessionStatus = 'active' | 'stale';
 export type GenerationRunStatus = 'active' | 'streaming' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
 
+export type WorkspaceRestoreSource = 'current_tab' | 'history' | 'session_update';
+export type WorkspaceRestoreStatus = 'ready' | 'restored' | 'needs_action' | 'conflict';
+export type WorkspaceRestoreIssueSeverity = 'info' | 'warning' | 'error';
+export type WorkspaceRecoveryActionKind =
+  | 'choose_tab'
+  | 'recapture_target'
+  | 'retry_interrupted_run'
+  | 'wait_for_active_run'
+  | 'copy_fallback';
+
+export type WorkspaceRestoreIssueCode =
+  | 'restored_session'
+  | 'restored_thread'
+  | 'active_run_restored'
+  | 'active_context_mismatch'
+  | 'tab_choice_required'
+  | 'target_stale'
+  | 'target_unavailable'
+  | 'target_needs_focus'
+  | 'target_needs_recapture'
+  | 'interrupted_run_retryable';
+
+export interface WorkspaceRecoveryAction {
+  kind: WorkspaceRecoveryActionKind;
+  label: string;
+  message: string;
+  turnId?: string;
+}
+
+export interface WorkspaceRestoreIssue {
+  code: WorkspaceRestoreIssueCode;
+  severity: WorkspaceRestoreIssueSeverity;
+  message: string;
+  action?: WorkspaceRecoveryAction;
+  candidateCount?: number;
+  runId?: string;
+  threadId?: string;
+  turnId?: string;
+}
+
+export interface WorkspaceRestoreState {
+  source: WorkspaceRestoreSource;
+  status: WorkspaceRestoreStatus;
+  summary: string;
+  primaryAction?: WorkspaceRecoveryAction;
+  issues: WorkspaceRestoreIssue[];
+  restoredSession: boolean;
+  restoredThread: boolean;
+  activeThreadId?: string;
+  activeTurnId?: string;
+  activeRunId?: string;
+}
+
 export interface WorkspaceSession {
   sessionId: string;
   tabId: number;
@@ -53,6 +106,7 @@ export interface WorkspaceSession {
   insertionTarget?: ComposeTargetRef;
   insertionTargetStatus?: InsertionTargetStatus;
   plausibleTabs?: PlausibleTabCandidate[];
+  restoreState?: WorkspaceRestoreState;
 }
 
 export interface SourceSnapshot {
@@ -276,6 +330,7 @@ export interface LaunchSidePanelResult {
 export interface WorkspaceSessionResult {
   session: WorkspaceSession | null;
   thread?: ConversationThreadSnapshot | null;
+  restoreState?: WorkspaceRestoreState;
 }
 
 export interface RuntimeStatusResult {
@@ -297,6 +352,7 @@ export interface RestoreDomainThreadResult {
   restored: boolean;
   session?: WorkspaceSession;
   thread?: ConversationThreadSnapshot;
+  restoreState?: WorkspaceRestoreState;
   error?: DraftletError;
 }
 

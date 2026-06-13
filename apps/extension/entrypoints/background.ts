@@ -62,12 +62,14 @@ import {
   type RuntimeStatusResult,
   type StartDraftGenerationResult,
   type Turn,
+  type WorkspaceRestoreSource,
   type WorkspaceSession,
   type WorkspaceSessionResult,
 } from '../core/messages';
 import { createConversationThreadStore } from '../core/conversation-thread';
 import { buildRecaptureDiagnosticsReportSummary, createRecaptureDiagnosticsLog } from '../core/recapture-diagnostics';
 import { createRecaptureDiagnosticsReport } from '../core/recapture-diagnostics-view';
+import { attachWorkspaceRestoreState, buildWorkspaceRestoreState } from '../core/restore-conflict';
 import { findPlausibleTabCandidates, isPlausibleSessionTab, type PlausibleTabCandidate } from '../core/tab-disambiguation';
 import { createWorkspaceSessionStore } from '../core/workspace-session';
 import type { GenerationMode, InsertionTargetStatus, Tone } from '../core/types';
@@ -235,6 +237,7 @@ async function handleGetCurrentWorkspaceSession(tabId?: number): Promise<Workspa
   return {
     session: restored.session,
     thread: restored.thread,
+    restoreState: restored.restoreState,
   };
 }
 
@@ -287,7 +290,7 @@ async function handleRestoreDomainThread(sessionId: string, threadId: string): P
 
     const previous = sessions.getBySessionId(sessionId);
     const activeTurn = latestGenerationTurn(threadSnapshot);
-    const restoredSession: WorkspaceSession = {
+    let restoredSession: WorkspaceSession = {
       ...sessionSnapshot.session,
       tabId: previous?.tabId ?? sessionSnapshot.session.tabId,
       windowId: previous?.windowId ?? sessionSnapshot.session.windowId,
@@ -307,6 +310,15 @@ async function handleRestoreDomainThread(sessionId: string, threadId: string): P
         composeTarget: previous?.insertionTarget ?? sessionSnapshot.session.insertionTarget,
       },
     };
+    const restoreState = buildWorkspaceRestoreState({
+      session: restoredSession,
+      thread: threadSnapshot,
+      source: 'history',
+    });
+    restoredSession = {
+      ...restoredSession,
+      restoreState,
+    };
     sessions.hydrateSession(restoredSession);
     threads.hydrateSnapshot(threadSnapshot);
     void persistWorkspaceSession(restoredSession);
@@ -317,6 +329,7 @@ async function handleRestoreDomainThread(sessionId: string, threadId: string): P
       restored: true,
       session: restoredSession,
       thread: threadSnapshot,
+      restoreState,
     };
   } catch (error) {
     return {
@@ -1292,7 +1305,9 @@ async function restoreRuntimeSnapshot(session: WorkspaceSession): Promise<Worksp
     const snapshot = await getWorkspaceSessionSnapshot(session.sessionId);
 
     if (!snapshot) {
-      return { session };
+      const fallbackSession = attachWorkspaceRestoreState(session, null, 'current_tab');
+      sessions.hydrateSession(fallbackSession);
+      return { session: fallbackSession, restoreState: fallbackSession.restoreState };
     }
 
     let restoredSession: WorkspaceSession = {
@@ -1358,6 +1373,7 @@ async function restoreRuntimeSnapshot(session: WorkspaceSession): Promise<Worksp
       }
     }
 
+    restoredSession = attachWorkspaceRestoreState(restoredSession, restoredThread, 'current_tab');
     sessions.hydrateSession(restoredSession);
 
     if (restoredThread) {
@@ -1365,9 +1381,15 @@ async function restoreRuntimeSnapshot(session: WorkspaceSession): Promise<Worksp
       void emitConversationThreadUpdated(restoredSession.sessionId, restoredThread);
     }
 
-    return { session: restoredSession, thread: restoredThread };
+    return {
+      session: restoredSession,
+      thread: restoredThread,
+      restoreState: restoredSession.restoreState,
+    };
   } catch {
-    return { session };
+    const fallbackSession = attachWorkspaceRestoreState(session, null, 'current_tab');
+    sessions.hydrateSession(fallbackSession);
+    return { session: fallbackSession, restoreState: fallbackSession.restoreState };
   }
 }
 
@@ -1666,7 +1688,7 @@ function hasLocalGenerationTransport(sessionId: string, runId: string): boolean 
 function emitWorkspaceSessionUpdated(session: WorkspaceSession): Promise<unknown> {
   return emitDraftletMessage({
     type: WORKSPACE_SESSION_UPDATED,
-    session,
+    session: withCurrentRestoreState(session, 'session_update'),
   });
 }
 
@@ -1802,6 +1824,13 @@ function createDraftletError(
     retryable,
     correlationId,
   };
+}
+
+function withCurrentRestoreState(session: WorkspaceSession, source: WorkspaceRestoreSource): WorkspaceSession {
+  const thread = session.activeThreadId
+    ? threads.getSnapshot(session.activeThreadId)
+    : threads.getSnapshotForSession(session.sessionId);
+  return attachWorkspaceRestoreState(session, thread, source);
 }
 
 function createGenerationId(): string {

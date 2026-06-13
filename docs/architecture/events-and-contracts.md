@@ -158,6 +158,7 @@ The current v2 generation flow is transitional but now uses durable runtime doma
 - side panel renders the restored thread workspace with chronological turns, grouped variants, and `isCurrent` / `accepted` state
 - side panel requests domain-backed history with `draftlet:get-domain-history`; background reads `/domain/history` from the runtime
 - side panel restores a selected history item with `draftlet:restore-domain-thread`; background hydrates the selected runtime session/thread snapshot and emits workspace/thread updates
+- restore responses and workspace-session updates may include an extension-owned `WorkspaceRestoreState` projection. It does not replace runtime truth; it orders visible browser recovery issues such as tab choice, target recapture, active run replay, and interrupted-run retry so the side panel can present a clear next action.
 - side panel can request `draftlet:set-current-draft-variant` or `draftlet:accept-draft-variant`; background patches runtime state and emits an updated thread snapshot
 - refinement prompts prefer the accepted variant, then the current variant, then the latest prior turn variants as a compatibility fallback
 - insertion remains explicit: side panel sends `draftlet:insert-reply` with `sessionId` and `variantId` when available; service worker checks `ComposeTargetRef` metadata, asks the content script to revalidate the target with `draftlet:revalidate-insertion-target`, and reports live/stale/unavailable status for fallback copy/manual use
