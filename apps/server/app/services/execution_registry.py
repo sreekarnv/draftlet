@@ -21,6 +21,13 @@ class ReplyExecutionUpdate:
     sequence: int = 0
 
 
+@dataclass(frozen=True)
+class ReplyExecutionStart:
+    run_id: str
+    started: bool
+    live: bool
+
+
 @dataclass
 class ReplyExecution:
     request: ReplyRequest
@@ -46,36 +53,25 @@ class ReplyExecutionRegistry:
         self._executions: dict[str, ReplyExecution] = {}
         self._lock = asyncio.Lock()
 
-    async def start_and_subscribe(self, request: ReplyRequest) -> AsyncIterator[ReplyExecutionUpdate]:
+    async def start(self, request: ReplyRequest) -> ReplyExecutionStart:
         run_id = require_run_id(request)
-        queue: asyncio.Queue[ReplyExecutionUpdate] = asyncio.Queue()
-        replay: list[ReplyExecutionUpdate] = []
 
         async with self._lock:
             execution = self._executions.get(run_id)
 
             if execution:
-                replay = list(execution.replay)
-                execution.subscribers.append(queue)
-            else:
-                task = asyncio.create_task(self._run(request), name=f"draftlet-generation-{run_id}")
-                self._executions[run_id] = ReplyExecution(request=request, task=task, subscribers=[queue], replay=[])
+                return ReplyExecutionStart(run_id=run_id, started=False, live=not execution.task.done())
 
-        try:
-            for update in replay:
-                yield update
+            task = asyncio.create_task(self._run(request), name=f"draftlet-generation-{run_id}")
+            self._executions[run_id] = ReplyExecution(request=request, task=task, subscribers=[], replay=[])
+            return ReplyExecutionStart(run_id=run_id, started=True, live=True)
 
-                if update.status in {"completed", "cancelled", "error"}:
-                    return
+    async def start_and_subscribe(self, request: ReplyRequest) -> AsyncIterator[ReplyExecutionUpdate]:
+        run_id = require_run_id(request)
+        await self.start(request)
 
-            while True:
-                update = await queue.get()
-                yield update
-
-                if update.status in {"completed", "cancelled", "error"}:
-                    break
-        finally:
-            await self._unsubscribe(run_id, queue)
+        async for update in self.subscribe(run_id):
+            yield update
 
     async def subscribe(self, run_id: str, after_sequence: int = 0) -> AsyncIterator[ReplyExecutionUpdate]:
         queue: asyncio.Queue[ReplyExecutionUpdate] = asyncio.Queue()

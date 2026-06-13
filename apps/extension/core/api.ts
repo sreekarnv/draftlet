@@ -56,6 +56,18 @@ interface StreamedGenerationControlEvent {
   sequence?: number;
 }
 
+interface ReplyGenerationRunExecutionStartRead {
+  run_id: string;
+  started: boolean;
+  live: boolean;
+}
+
+export interface ReplyGenerationRunExecutionStart {
+  runId: string;
+  started: boolean;
+  live: boolean;
+}
+
 export async function streamReplies(
   payload: ReplyRequestPayload,
   { signal, onReply, onControl }: StreamRepliesOptions,
@@ -85,6 +97,25 @@ export async function streamReplies(
       }
     },
   });
+}
+
+export async function startReplyGenerationRunExecution(
+  runId: string,
+  payload: ReplyRequestPayload,
+): Promise<ReplyGenerationRunExecutionStart> {
+  const response = await postJson<ReplyGenerationRunExecutionStartRead>(
+    `${SERVER_BASE_URL}/replies/${encodeURIComponent(runId)}/start`,
+    {
+      ...payload,
+      run_id: runId,
+    },
+  );
+
+  return {
+    runId: response.run_id,
+    started: response.started,
+    live: response.live,
+  };
 }
 
 export async function streamReplyGenerationRunEvents(

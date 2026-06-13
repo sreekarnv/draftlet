@@ -35,6 +35,19 @@ def create_replies(request: ReplyRequest) -> StreamingResponse:
     return StreamingResponse(events(), media_type="text/event-stream")
 
 
+@router.post("/replies/{run_id}/start")
+async def start_reply_execution(run_id: str, request: ReplyRequest) -> dict[str, bool | str]:
+    if request.run_id and request.run_id != run_id:
+        raise HTTPException(status_code=400, detail="run_id does not match path")
+
+    start = await reply_execution_registry.start(request.model_copy(update={"run_id": run_id}))
+    return {
+        "run_id": start.run_id,
+        "started": start.started,
+        "live": start.live,
+    }
+
+
 @router.post("/replies/{run_id}/cancel")
 async def cancel_reply_execution(run_id: str) -> dict[str, bool]:
     cancelled = await reply_execution_registry.cancel(run_id)

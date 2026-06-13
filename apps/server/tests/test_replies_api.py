@@ -56,6 +56,36 @@ def test_runtime_reply_execution_registry_streams_terminal_updates() -> None:
     assert asyncio.run(run()) == ["event", "completed"]
 
 
+def test_runtime_reply_execution_registry_starts_then_subscribes() -> None:
+    async def run() -> tuple[bool, list[tuple[str, int]]]:
+        async def produce(_request: ReplyRequest):
+            yield ReplyEvent(reply="Generated draft", variant_id="variant-1", turn_id="turn-1", thread_id="thread-1")
+
+        async def cancel_missing(_run_id: str) -> bool:
+            return False
+
+        registry = ReplyExecutionRegistry(producer=produce, on_cancel_missing=cancel_missing)
+        request = ReplyRequest(
+            selected_text="Please reply.",
+            tone="friendly",
+            source_url="https://example.com",
+            session_id="session-1",
+            thread_id="thread-1",
+            turn_id="turn-1",
+            run_id="run-1",
+        )
+
+        start = await registry.start(request)
+        updates: list[tuple[str, int]] = []
+
+        async for update in registry.subscribe("run-1"):
+            updates.append((update.status, update.sequence))
+
+        return start.started, updates
+
+    assert asyncio.run(run()) == (True, [("event", 1), ("completed", 2)])
+
+
 def test_runtime_reply_execution_registry_replays_recent_updates() -> None:
     async def run() -> list[tuple[str, int]]:
         async def produce(_request: ReplyRequest):
@@ -90,6 +120,10 @@ def test_runtime_reply_execution_registry_replays_recent_updates() -> None:
 
 def test_runtime_reply_execution_cancel_endpoint_is_registered() -> None:
     assert any(route.path == "/replies/{run_id}/cancel" and "POST" in route.methods for route in app.routes if hasattr(route, "methods"))
+
+
+def test_runtime_reply_execution_start_endpoint_is_registered() -> None:
+    assert any(route.path == "/replies/{run_id}/start" and "POST" in route.methods for route in app.routes if hasattr(route, "methods"))
 
 
 def test_runtime_reply_execution_events_endpoint_is_registered() -> None:
