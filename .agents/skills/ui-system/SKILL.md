@@ -12,6 +12,7 @@ Use this skill for:
 - design tokens and component decisions
 - layout, typography, spacing, and component consistency
 - inline UI, popup, side panel, and desktop UI refinement
+- shared UI primitives and React structure decisions when visual consistency is involved
 
 ## UI goals
 
@@ -61,6 +62,7 @@ Use:
 - Tailwind CSS
 - shadcn/ui primitives where useful
 - Draftlet-owned wrappers and design tokens
+- shared Draftlet UI primitives from `packages/shared` as they become available
 
 ## Token ownership
 
@@ -107,12 +109,32 @@ Prefer:
 - reusable primitives
 - clear props and predictable state
 - semantic wrappers for repeated UI patterns
+- extracting large React surfaces into feature components, focused hooks, and small helpers before adding more behavior
 
 Avoid:
 - giant one-off components
 - copy-pasted styling variants
 - ad hoc visual systems per feature
 - overuse of decorative containers
+- route/page files that mix rendering, state orchestration, data mapping, event handlers, and styling helpers in one large file
+
+## React structure rules
+
+- Shared UI primitives, tokens, and reusable React helpers should live in `packages/shared` when they are useful across extension and desktop surfaces.
+- Surface-local components should stay close to the feature that owns them until they are genuinely shared.
+- Keep page/route files thin: route selection, data handoff, and layout composition belong there; detailed rendering, helpers, and workflow logic should be extracted.
+- Split files when a component starts owning multiple independent regions, workflows, or state machines.
+- Prefer presentational components for stable visual pieces and hooks for reusable UI behavior. Do not hide cross-boundary Draftlet business logic in UI hooks.
+- Keep manually created TypeScript/TSX filenames in the repo's kebab-case convention.
+
+## Forms, State, And Routing
+
+- Use local `useState` for local control state such as open/closed, selected tab, input text, hover, or transient loading indicators.
+- Use Zustand, or a similarly small repo-standard state manager if one is later adopted, when state is shared across sibling trees, route boundaries, panels, or repeated workflow controls.
+- Do not mirror durable domain state in UI stores when runtime/session/thread snapshots are the source of truth; store identifiers, UI preferences, and transient view state instead.
+- Use `react-hook-form` for non-trivial forms, especially settings, onboarding, diagnostics filters, runtime configuration, and forms with validation/defaults/submit lifecycle.
+- Simple one-field controls can remain controlled inputs when that is clearer than form infrastructure.
+- Use React Router where a surface has real page/view boundaries, deep enough navigation state, or desktop-style routes. Do not add routing for tiny tab switches that are just local controls.
 
 ## shadcn/ui rules
 

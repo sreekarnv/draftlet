@@ -172,6 +172,14 @@ If the task is implementation-heavy:
 - Do not duplicate message contracts in multiple places.
 - Do not couple UI state to DOM state unnecessarily.
 
+## React/UI structure rules
+
+- Do not keep growing large React files. For new or touched UI work, prefer extracting small components, hooks, helpers, and stores around clear feature boundaries.
+- Shared UI primitives, tokens, and reusable React utilities should move toward `packages/shared`; extension and desktop surfaces should reuse shared primitives where practical.
+- Use local `useState` for local widget state only. Cross-component UI/app state should prefer Zustand, or an equivalent small state manager if the repo later standardizes one, over prop chains and scattered mirrored state.
+- Non-trivial forms should prefer `react-hook-form`; keep validation, defaults, submit handling, and field wiring explicit and testable.
+- Use React Router when a surface has real page/view boundaries. Keep route/page files thin and move feature rendering, data orchestration, and helpers out of route files.
+
 ## State and domain expectations
 
 The system should move toward a domain model with concepts like:
@@ -213,5 +221,6 @@ Use the relevant skill file before making decisions in these areas:
 - FastAPI daemon design
 - contracts and events
 - migration rules
+- React UI architecture
 
 If multiple skills apply, follow the most specific one for the area being changed.
