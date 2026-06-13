@@ -6,7 +6,6 @@ import {
   getActiveGenerationRuns,
   getGenerationRunExecutionState,
   getGenerationRunProgress,
-  getReplyGenerationRunExecution,
   getDomainHistory,
   getWorkspaceSessionSnapshot,
   patchDraftVariantState,
@@ -1269,18 +1268,12 @@ async function restoreRuntimeSnapshot(session: WorkspaceSession): Promise<Worksp
         restoredThread = progress.thread;
       }
 
-      const liveExecution = await getReplyGenerationRunExecution(activeRunId).catch(() => null);
-
-      if (liveExecution?.live) {
-        void subscribeToRuntimeRunEvents(
-          restoredSession.sessionId,
-          activeRunId,
-          progress?.run.threadId ?? restoredThread?.thread.threadId,
-          progress?.replayCursor ?? 0,
-        );
-      } else if (restoredThread) {
-        restoredThread = await reconcileInterruptedGeneration(restoredSession.sessionId, restoredThread);
-      }
+      void subscribeToRuntimeRunEvents(
+        restoredSession.sessionId,
+        activeRunId,
+        progress?.run.threadId ?? restoredThread?.thread.threadId,
+        progress?.replayCursor ?? 0,
+      );
     } else if (restoredThread) {
       restoredThread = await reconcileInterruptedGeneration(restoredSession.sessionId, restoredThread);
     }

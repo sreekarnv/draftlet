@@ -20,6 +20,7 @@ from app.schemas.domain import (
 )
 from app.services.domain_service import (
     GenerationRunConflictError,
+    append_generation_run_event,
     claim_generation_run,
     create_or_update_thread,
     create_or_update_turn,
@@ -28,6 +29,7 @@ from app.services.domain_service import (
     get_session_snapshot,
     heartbeat_generation_run,
     inspect_generation_run_execution_state,
+    list_generation_run_events,
     list_active_generation_runs,
     list_recent_domain_history,
     reconcile_stale_generation_runs,
@@ -302,21 +304,100 @@ class DomainServiceTest(unittest.TestCase):
                     rank=1,
                 ),
             )
+            append_generation_run_event(session, "run-1", "run_started", status="active", message="run_started")
+            append_generation_run_event(
+                session,
+                "run-1",
+                "variant_persisted",
+                status="generated",
+                variant_id="variant-1",
+                reply_text="Sure, I can send it today.",
+            )
+            append_generation_run_event(
+                session,
+                "run-1",
+                "variant_persisted",
+                status="generated",
+                variant_id="variant-2",
+                reply_text="I will send it over today.",
+            )
             update_generation_run_status(session, "run-1", GenerationRunStatusUpdate(status="completed"))
 
             progress = get_generation_run_progress_snapshot(session, "run-1")
-            replayed = get_generation_run_progress_snapshot(session, "run-1", after_sequence=100)
+            replayed = get_generation_run_progress_snapshot(session, "run-1", after_sequence=2)
 
             self.assertIsNotNone(progress)
             self.assertEqual(progress.run.run_id, "run-1")
             self.assertEqual(progress.thread.thread.thread_id, "thread-1")
             self.assertEqual([event.event_type for event in progress.events], [
-                "draft_variant_generated",
-                "draft_variant_generated",
-                "generation_run_status",
+                "run_started",
+                "variant_persisted",
+                "variant_persisted",
+                "run_completed",
             ])
-            self.assertEqual(progress.replay_cursor, 10000)
+            self.assertEqual(progress.replay_cursor, 4)
             self.assertEqual([event.variant_id for event in replayed.events], ["variant-2", None])
+
+    def test_generation_run_events_are_replayable_from_durable_state(self) -> None:
+        with self.Session() as session:
+            source = SourceSnapshot(
+                selected_text="Can you send the report?",
+                source_url="https://example.com/thread",
+            )
+            workspace = upsert_workspace_session(
+                session,
+                WorkspaceSessionUpsert(
+                    session_id="session-1",
+                    page_url=source.source_url,
+                    selected_text=source.selected_text,
+                ),
+            )
+            thread = create_or_update_thread(
+                session,
+                ConversationThreadCreate(
+                    thread_id="thread-1",
+                    session_id=workspace.session_id,
+                    source=source,
+                ),
+            )
+            turn = create_or_update_turn(
+                session,
+                TurnCreate(
+                    turn_id="turn-1",
+                    thread_id=thread.thread_id,
+                    source=source,
+                    tone="friendly",
+                ),
+            )
+            claim_generation_run(
+                session,
+                GenerationRunClaim(
+                    run_id="run-1",
+                    session_id=workspace.session_id,
+                    thread_id=thread.thread_id,
+                    turn_id=turn.turn_id,
+                    lease_owner="extension-background",
+                ),
+            )
+            append_generation_run_event(session, "run-1", "run_started", status="active", message="run_started")
+            append_generation_run_event(
+                session,
+                "run-1",
+                "variant_persisted",
+                status="generated",
+                variant_id="variant-1",
+                reply_text="Sure, I can send it today.",
+            )
+            update_generation_run_status(session, "run-1", GenerationRunStatusUpdate(status="completed"))
+
+        with self.Session() as session:
+            events = list_generation_run_events(session, "run-1", after_sequence=1)
+            progress = get_generation_run_progress_snapshot(session, "run-1", after_sequence=1)
+
+            self.assertEqual([event.sequence for event in events], [2, 3])
+            self.assertEqual([event.event_type for event in events], ["variant_persisted", "run_completed"])
+            self.assertEqual([event.event_type for event in progress.events], ["variant_persisted", "run_completed"])
+            self.assertEqual(progress.replay_cursor, 3)
 
     def test_reconcile_stale_generation_runs_marks_turn_failed_interrupted(self) -> None:
         with self.Session() as session:

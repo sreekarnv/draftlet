@@ -8,7 +8,7 @@ from app.api.replies import format_sse_event, validate_runtime_reply_request
 from app.main import app
 from app.schemas.reply_event import ReplyEvent
 from app.schemas.reply_request import ReplyRequest
-from app.services.execution_registry import ReplyExecutionRegistry
+from app.services.execution_registry import ReplyExecutionRegistry, ReplyExecutionUpdate
 
 
 def test_formats_domain_variant_sse_without_legacy_reply_id() -> None:
@@ -124,6 +124,42 @@ def test_runtime_reply_execution_registry_replays_recent_updates() -> None:
         return replayed
 
     assert asyncio.run(run()) == [("event", 2), ("event", 3), ("run_completed", 4)]
+
+
+def test_runtime_reply_execution_registry_replays_durable_updates_without_live_execution() -> None:
+    async def run() -> list[tuple[str, int]]:
+        async def produce(_request: ReplyRequest):
+            if False:
+                yield ReplyEvent(reply="unused")
+
+        async def cancel_missing(_run_id: str) -> bool:
+            return False
+
+        def load_replay(_run_id: str, after_sequence: int, _limit: int) -> list[ReplyExecutionUpdate]:
+            updates = [
+                ReplyExecutionUpdate(status="run_started", sequence=1),
+                ReplyExecutionUpdate(
+                    status="event",
+                    event=ReplyEvent(reply="Generated draft", variant_id="variant-1", turn_id="turn-1", thread_id="thread-1"),
+                    sequence=2,
+                ),
+                ReplyExecutionUpdate(status="run_completed", sequence=3),
+            ]
+            return [update for update in updates if update.sequence > after_sequence]
+
+        registry = ReplyExecutionRegistry(
+            producer=produce,
+            on_cancel_missing=cancel_missing,
+            load_replay=load_replay,
+        )
+        replayed: list[tuple[str, int]] = []
+
+        async for update in registry.subscribe("run-1", after_sequence=1):
+            replayed.append((update.status, update.sequence))
+
+        return replayed
+
+    assert asyncio.run(run()) == [("event", 2), ("run_completed", 3)]
 
 
 def test_legacy_reply_start_and_stream_endpoint_is_not_registered() -> None:
