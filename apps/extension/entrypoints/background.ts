@@ -66,13 +66,14 @@ import {
   type WorkspaceSessionResult,
 } from '../core/messages';
 import { createConversationThreadStore } from '../core/conversation-thread';
-import { createRecaptureDiagnosticsLog } from '../core/recapture-diagnostics';
+import { buildRecaptureDiagnosticsReportSummary, createRecaptureDiagnosticsLog } from '../core/recapture-diagnostics';
 import { createRecaptureDiagnosticsReport } from '../core/recapture-diagnostics-view';
 import { findPlausibleTabCandidates, isPlausibleSessionTab, type PlausibleTabCandidate } from '../core/tab-disambiguation';
 import { createWorkspaceSessionStore } from '../core/workspace-session';
-import type { GenerationMode, Tone } from '../core/types';
+import type { GenerationMode, InsertionTargetStatus, Tone } from '../core/types';
 import {
   DESKTOP_EXTENSION_DIAGNOSTICS_BRIDGE_PROTOCOL,
+  type BrowserRecaptureTargetSummary,
   createRecaptureDiagnosticsBridgeFailure,
 } from '../../../shared/recapture-diagnostics-contract';
 
@@ -267,22 +268,7 @@ async function handlePublishRecaptureDiagnosticsReport(
   sessionId?: string,
   limit = 50,
 ): Promise<PublishRecaptureDiagnosticsReportResult> {
-  try {
-    const report = createRecaptureDiagnosticsReport(recaptureDiagnostics.list({ sessionId, limit }));
-    const published = await publishBrowserRecaptureDiagnosticsReport(report);
-
-    return {
-      ok: true,
-      protocol: DESKTOP_EXTENSION_DIAGNOSTICS_BRIDGE_PROTOCOL,
-      report: published,
-    };
-  } catch (error) {
-    return createRecaptureDiagnosticsBridgeFailure(
-      'diagnostics_unavailable',
-      error instanceof Error ? error.message : 'Could not publish browser recapture diagnostics.',
-      true,
-    );
-  }
+  return publishLatestRecaptureDiagnosticsReport(sessionId, limit);
 }
 
 async function handleRestoreDomainThread(sessionId: string, threadId: string): Promise<RestoreDomainThreadResult> {
@@ -866,16 +852,6 @@ async function handleRecaptureInsertionTarget(sessionId: string, tabId?: number)
       target,
     } satisfies DraftletMessage) as RecaptureInsertionTargetResult;
     const normalizedResult = normalizeRecaptureResult(result, selectedTab, Boolean(tabId));
-    recordRecaptureDiagnostic({
-      event: 'content_recapture_completed',
-      level: normalizedResult.recaptured ? 'info' : normalizedResult.status === 'needs_focus' ? 'warning' : 'error',
-      sessionId,
-      tabId: recaptureTabId,
-      status: normalizedResult.status,
-      outcome: normalizedResult.outcome,
-      reason: normalizedResult.reason,
-      message: normalizedResult.message,
-    });
     const updated = sessions.updateInsertionTarget(
       session.sessionId,
       normalizedResult.target ?? target,
@@ -888,6 +864,17 @@ async function handleRecaptureInsertionTarget(sessionId: string, tabId?: number)
         void persistWorkspaceSession(updated);
       }
     }
+
+    recordRecaptureDiagnostic({
+      event: 'content_recapture_completed',
+      level: normalizedResult.recaptured ? 'info' : normalizedResult.status === 'needs_focus' ? 'warning' : 'error',
+      sessionId,
+      tabId: recaptureTabId,
+      status: normalizedResult.status,
+      outcome: normalizedResult.outcome,
+      reason: normalizedResult.reason,
+      message: normalizedResult.message,
+    });
 
     return normalizedResult;
   } catch {
@@ -962,6 +949,30 @@ function normalizeRecaptureResult(
     outcome: result.outcome ?? 'recapture_failed',
     selectedTab,
   };
+}
+
+function reasonForInsertionTargetStatus(status: InsertionTargetStatus): string | undefined {
+  if (status === 'stale') {
+    return 'target_stale';
+  }
+
+  if (status === 'unavailable') {
+    return 'content_script_unavailable';
+  }
+
+  if (status === 'needs_focus') {
+    return 'no_focused_compose_target';
+  }
+
+  if (status === 'tab_disambiguation_required') {
+    return 'tab_disambiguation_required';
+  }
+
+  if (status === 'needs_recapture') {
+    return 'no_focused_compose_target';
+  }
+
+  return undefined;
 }
 
 async function handleActivateRecaptureTab(sessionId: string, tabId: number): Promise<ActivateRecaptureTabResult> {
@@ -1043,6 +1054,13 @@ async function handleActivateRecaptureTab(sessionId: string, tabId: number): Pro
 }
 
 async function revalidateInsertionTarget(session: WorkspaceSession): Promise<InsertionTargetStatusResult> {
+  recordRecaptureDiagnostic({
+    event: 'target_revalidation_requested',
+    level: 'debug',
+    sessionId: session.sessionId,
+    message: 'Insertion target revalidation requested.',
+  });
+
   const tabResolution = await resolveInsertionTab(session);
 
   if (tabResolution.status === 'ambiguous') {
@@ -1051,6 +1069,15 @@ async function revalidateInsertionTarget(session: WorkspaceSession): Promise<Ins
     if (updated) {
       void emitWorkspaceSessionUpdated(updated);
     }
+
+    recordRecaptureDiagnostic({
+      event: 'target_revalidation_completed',
+      level: 'warning',
+      sessionId: session.sessionId,
+      status: 'tab_disambiguation_required',
+      reason: 'tab_disambiguation_required',
+      message: `Revalidation found ${tabResolution.candidates.length} plausible tabs.`,
+    });
 
     return {
       status: 'tab_disambiguation_required',
@@ -1068,6 +1095,16 @@ async function revalidateInsertionTarget(session: WorkspaceSession): Promise<Ins
     if (updated) {
       void emitWorkspaceSessionUpdated(updated);
     }
+
+    recordRecaptureDiagnostic({
+      event: 'target_revalidation_completed',
+      level: 'warning',
+      sessionId: session.sessionId,
+      tabId: revalidationTabId,
+      status: 'unavailable',
+      reason: 'tab_unavailable',
+      message: 'Original page is not open.',
+    });
 
     return { status: 'unavailable', target: session.insertionTarget, message: 'Original page is not open.' };
   }
@@ -1093,6 +1130,16 @@ async function revalidateInsertionTarget(session: WorkspaceSession): Promise<Ins
       }
     }
 
+    recordRecaptureDiagnostic({
+      event: 'target_revalidation_completed',
+      level: result.status === 'live' ? 'info' : result.status === 'needs_recapture' || result.status === 'needs_focus' ? 'warning' : 'error',
+      sessionId: session.sessionId,
+      tabId: revalidationTabId,
+      status: result.status,
+      reason: reasonForInsertionTargetStatus(result.status),
+      message: result.message ?? 'Insertion target revalidation completed.',
+    });
+
     return result;
   } catch {
     const updated = sessions.updateInsertionTarget(session.sessionId, target, 'unavailable');
@@ -1100,6 +1147,16 @@ async function revalidateInsertionTarget(session: WorkspaceSession): Promise<Ins
     if (updated) {
       void emitWorkspaceSessionUpdated(updated);
     }
+
+    recordRecaptureDiagnostic({
+      event: 'target_revalidation_failed',
+      level: 'error',
+      sessionId: session.sessionId,
+      tabId: revalidationTabId,
+      status: 'unavailable',
+      reason: 'content_script_unavailable',
+      message: 'Content script was unavailable during insertion target revalidation.',
+    });
 
     return { status: 'unavailable', target, message: 'Draftlet cannot reach the page for insertion.' };
   }
@@ -1639,7 +1696,84 @@ function recordRecaptureDiagnostic(input: Omit<RecaptureDiagnosticEntry, 'id' | 
     message: entry.message,
     at: entry.at,
   });
+  void publishLatestRecaptureDiagnosticsReport(entry.sessionId);
   return entry;
+}
+
+async function publishLatestRecaptureDiagnosticsReport(
+  sessionId?: string,
+  limit = 50,
+): Promise<PublishRecaptureDiagnosticsReportResult> {
+  try {
+    const exportedAt = new Date().toISOString();
+    const entries = recaptureDiagnostics.list({ sessionId, limit });
+    const reportSessionId = sessionId ?? entries.at(-1)?.sessionId;
+    const summary = buildRecaptureDiagnosticsReportSummary({
+      entries,
+      currentTarget: reportSessionId ? currentTargetSummary(reportSessionId) : undefined,
+      exportedAt,
+    });
+    const report = createRecaptureDiagnosticsReport(entries, exportedAt, summary);
+    const published = await publishBrowserRecaptureDiagnosticsReport(report);
+
+    return {
+      ok: true,
+      protocol: DESKTOP_EXTENSION_DIAGNOSTICS_BRIDGE_PROTOCOL,
+      report: published,
+    };
+  } catch (error) {
+    return createRecaptureDiagnosticsBridgeFailure(
+      'diagnostics_unavailable',
+      error instanceof Error ? error.message : 'Could not publish browser recapture diagnostics.',
+      true,
+    );
+  }
+}
+
+function currentTargetSummary(sessionId: string): BrowserRecaptureTargetSummary | undefined {
+  const session = sessions.getBySessionId(sessionId);
+
+  if (!session) {
+    return undefined;
+  }
+
+  const status = session.insertionTargetStatus ?? (session.insertionTarget ? 'stale' : 'needs_recapture');
+
+  return {
+    sessionId: session.sessionId,
+    tabId: session.tabId >= 0 ? session.tabId : undefined,
+    status,
+    reason: reasonForInsertionTargetStatus(status),
+    message: currentTargetSummaryMessage(status, session.plausibleTabs?.length),
+    updatedAt: session.updatedAt,
+    candidateCount: session.plausibleTabs?.length,
+  };
+}
+
+function currentTargetSummaryMessage(status: InsertionTargetStatus, candidateCount?: number): string {
+  if (status === 'live') {
+    return 'Insertion target is live.';
+  }
+
+  if (status === 'stale') {
+    return 'Saved insertion target is stale and needs recapture.';
+  }
+
+  if (status === 'unavailable') {
+    return 'Insertion target page is unavailable.';
+  }
+
+  if (status === 'needs_focus') {
+    return 'A compose field must be focused before recapture can complete.';
+  }
+
+  if (status === 'tab_disambiguation_required') {
+    return candidateCount
+      ? `Choose one of ${candidateCount} plausible tabs before recapture.`
+      : 'Choose the tab with the compose field before recapture.';
+  }
+
+  return 'Insertion target needs recapture.';
 }
 
 function findTurn(snapshot: ConversationThreadSnapshot, turnId: string): Turn | null {

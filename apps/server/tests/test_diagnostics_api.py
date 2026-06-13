@@ -39,6 +39,38 @@ def test_browser_recapture_diagnostics_route_stores_bounded_report_in_memory() -
     report = {
         "kind": "draftlet.recapture-diagnostics",
         "exportedAt": "2026-01-01T00:00:01.000Z",
+        "summary": {
+            "lastUpdatedAt": "2026-01-01T00:00:00.000Z",
+            "entryCount": 1,
+            "currentTarget": {
+                "sessionId": "session-1",
+                "tabId": 42,
+                "status": "needs_focus",
+                "reason": "no_focused_compose_target",
+                "message": "A compose field must be focused before recapture can complete.",
+                "updatedAt": "2026-01-01T00:00:00.000Z",
+            },
+            "latestAttempt": {
+                "event": "content_recapture_completed",
+                "sessionId": "session-1",
+                "tabId": 42,
+                "status": "needs_focus",
+                "outcome": "needs_focused_compose",
+                "reason": "no_focused_compose",
+                "message": "Focus a compose field and retry.",
+                "at": "2026-01-01T00:00:00.000Z",
+            },
+            "latestOutcome": {
+                "event": "content_recapture_completed",
+                "sessionId": "session-1",
+                "tabId": 42,
+                "status": "needs_focus",
+                "outcome": "needs_focused_compose",
+                "reason": "no_focused_compose",
+                "message": "Focus a compose field and retry.",
+                "at": "2026-01-01T00:00:00.000Z",
+            },
+        },
         "entries": [
             {
                 "id": 1,
@@ -59,7 +91,7 @@ def test_browser_recapture_diagnostics_route_stores_bounded_report_in_memory() -
     stored = put_browser_recapture_diagnostics(parsed)
     state = get_browser_recapture_diagnostics()
 
-    assert stored.model_dump() == report
+    assert stored.model_dump(exclude_none=True) == report
     assert get_latest_browser_recapture_report() == stored
     assert state.report == stored
     assert state.receivedAt is not None
@@ -73,6 +105,10 @@ def test_browser_recapture_diagnostics_clears_stale_report() -> None:
         {
             "kind": "draftlet.recapture-diagnostics",
             "exportedAt": "2026-01-01T00:00:01.000Z",
+            "summary": {
+                "lastUpdatedAt": "2026-01-01T00:00:00.000Z",
+                "entryCount": 1,
+            },
             "entries": [
                 {
                     "id": 1,
@@ -107,6 +143,10 @@ def test_browser_recapture_diagnostics_rejects_unbounded_fields() -> None:
             {
                 "kind": "draftlet.recapture-diagnostics",
                 "exportedAt": "2026-01-01T00:00:01.000Z",
+                "summary": {
+                    "lastUpdatedAt": "2026-01-01T00:00:00.000Z",
+                    "entryCount": 1,
+                },
                 "entries": [
                     {
                         "id": 1,

@@ -219,6 +219,9 @@ export interface RecaptureStatusTrailItem {
 
 export type RecaptureDiagnosticEvent =
   | 'recapture_requested'
+  | 'target_revalidation_requested'
+  | 'target_revalidation_completed'
+  | 'target_revalidation_failed'
   | 'tab_resolution_ambiguous'
   | 'tab_resolution_missing'
   | 'content_recapture_requested'

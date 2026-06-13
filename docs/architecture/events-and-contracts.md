@@ -165,20 +165,21 @@ The current v2 generation flow is transitional but now uses durable runtime doma
 - the side panel may keep a bounded, local recapture status trail for recent activation/recapture attempts; this is UI recovery context, not durable runtime history
 - background keeps a bounded in-memory recapture diagnostics log for extension debugging; debug surfaces can query it with `draftlet:get-recapture-diagnostics`, and it must not include selected text or full page content
 - the popup may display compact runtime status and recent recapture diagnostics, and may copy a bounded diagnostics report for debugging, but it must remain a quick status/debug surface and not duplicate side-panel drafting workflow
-- desktop diagnostics may point users to extension-owned recapture diagnostics, but browser tab/content-script state stays in the extension until an explicit desktop-extension diagnostics bridge exists
+- desktop diagnostics reads the latest extension-published browser recapture diagnostics report through the runtime relay; browser tab/content-script state remains extension-owned
 
 Legacy runtime `Generation`/`Reply` persistence and `/history` are retired. Side-panel history and streaming now use domain-backed `WorkspaceSession` / `ConversationThread` / `Turn` / `DraftVariant` data end to end, with `GenerationRun` as the bounded durable execution lease for active/recoverable generation work. Current and accepted variant state is bounded to one variant per thread in this phase.
 
-## Future Desktop-Extension Diagnostics Bridge
+## Desktop-Extension Diagnostics Bridge
 
 The first desktop-extension diagnostics transport is a bounded runtime relay:
 - extension background owns the recapture diagnostics log
-- extension popup can ask background to publish a privacy-bounded report to `/diagnostics/browser-recapture`
+- extension background publishes a privacy-bounded report to `/diagnostics/browser-recapture` when recapture or insertion-target revalidation diagnostics change
+- extension popup can still ask background to publish/copy the same bounded report for manual debugging
 - runtime stores only the latest report in memory, records when it was received, and clears it after the bounded freshness window
 - desktop reads the latest report through its normal main-process IPC and the runtime endpoint
 - desktop can display the report or an expired-report state, but cannot mutate browser recapture state
 
-The transitional shared contract lives in `shared/recapture-diagnostics-contract.ts`. Extension popup export and desktop diagnostics guidance must use that shared contract instead of defining parallel report shapes.
+The shared contract lives in `shared/recapture-diagnostics-contract.ts`. Extension popup export and desktop diagnostics guidance must use that shared contract instead of defining parallel report shapes.
 
 The bridge contract stays narrow and diagnostics-only:
 - desktop requests the latest bounded recapture diagnostics report from the runtime relay
@@ -198,6 +199,13 @@ The bridge response should include only fields already safe for the popup diagno
 - `reason`
 - `message`
 - `at`
+
+The report also includes a bounded summary envelope with:
+- `lastUpdatedAt`
+- `entryCount`
+- `currentTarget` status/message metadata
+- `latestAttempt`
+- `latestOutcome`
 
 Relay freshness metadata may include `receivedAt`, `stale`, and `staleAfterSeconds`. These fields describe the runtime-held report envelope, not live browser state.
 
