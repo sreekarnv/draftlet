@@ -2,6 +2,7 @@ import { act } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { mountDraftletPanel } from '../../ui/mount-panel';
+import type { ConversationThreadSnapshot, Turn } from '../../core/messages';
 import type { InsertionResult } from '../../core/types';
 
 describe('DraftletPanel recapture guidance', () => {
@@ -85,4 +86,111 @@ describe('DraftletPanel recapture guidance', () => {
     expect(activatedTabId).toBe(42);
     expect(container.textContent).toContain('Selected tab opened. Focus the compose field there, then retry recapture.');
   });
+
+  it('shows interrupted generation recovery and retries from the existing thread', async () => {
+    const container = document.createElement('div');
+    let retriedTurnId: string | null = null;
+    document.body.append(container);
+
+    await act(async () => {
+      mounted = mountDraftletPanel(container, {
+        onGenerate() {},
+        onRetryInterruptedTurn: async (turnId) => {
+          retriedTurnId = turnId;
+          return { ok: true, message: 'Started a new run from this thread.' };
+        },
+        onInsert: async (): Promise<InsertionResult> => ({ status: 'copied', message: 'Copied' }),
+        onCloseRequest() {},
+        onAfterRender() {},
+      });
+    });
+
+    await act(async () => {
+      mounted!.controller.open({
+        selectedText: 'Can you reply to this thread?',
+      });
+      mounted!.controller.setThreadSnapshot(interruptedThreadSnapshot());
+      mounted!.controller.setState('error', 'Draft generation was interrupted before completion.');
+    });
+
+    expect(container.textContent).toContain('Interrupted after restart');
+    expect(container.textContent).toContain('Retry starts a new run from this thread');
+    expect(container.textContent).toContain('will not resume the old stream');
+    expect(container.textContent).toContain('Retry from thread');
+
+    const retryButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Retry from thread'));
+
+    await act(async () => {
+      retryButton?.click();
+    });
+
+    expect(retriedTurnId).toBe('turn-2');
+    expect(container.textContent).toContain('Started a new run from this thread.');
+  });
 });
+
+function interruptedThreadSnapshot(): ConversationThreadSnapshot {
+  return {
+    thread: {
+      threadId: 'thread-1',
+      sessionId: 'session-1',
+      source: {
+        selectedText: 'Can you reply to this thread?',
+        sourceUrl: 'https://example.com/thread',
+        sourceDomain: 'example.com',
+        pageTitle: 'Example',
+      },
+      status: 'active',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:02:00.000Z',
+      latestTurnId: 'turn-2',
+    },
+    turns: [
+      turn('turn-1', 'Generate reply drafts', 'completed', '2026-01-01T00:01:00.000Z'),
+      turn('turn-2', 'Generate reply drafts', 'failed', '2026-01-01T00:02:00.000Z', {
+        code: 'generation_interrupted',
+        message: 'Draft generation was interrupted before completion.',
+      }),
+    ],
+    variants: [
+      {
+        variantId: 'variant-1',
+        turnId: 'turn-1',
+        tone: 'friendly',
+        content: 'Prior completed draft.',
+        rank: 0,
+        status: 'generated',
+        isCurrent: true,
+        createdAt: '2026-01-01T00:01:10.000Z',
+        updatedAt: '2026-01-01T00:01:10.000Z',
+      },
+    ],
+  };
+}
+
+function turn(
+  turnId: string,
+  instruction: string,
+  generationStatus: Turn['generationStatus'],
+  createdAt: string,
+  error?: { code: string; message: string },
+): Turn {
+  return {
+    turnId,
+    threadId: 'thread-1',
+    instruction,
+    source: {
+      selectedText: 'Can you reply to this thread?',
+      sourceUrl: 'https://example.com/thread',
+      sourceDomain: 'example.com',
+      pageTitle: 'Example',
+    },
+    tone: 'friendly',
+    generationStatus,
+    generationErrorCode: error?.code,
+    generationErrorMessage: error?.message,
+    createdAt,
+    updatedAt: createdAt,
+  };
+}

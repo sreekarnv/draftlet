@@ -117,6 +117,17 @@ export function DraftletPanel({ callbacks, controller }: DraftletPanelProps) {
     setView((current) => ({ ...current, persistenceMessage: result.message }));
   };
 
+  const retryInterruptedTurn = async (turnId: string) => {
+    if (!callbacks.onRetryInterruptedTurn) {
+      setView((current) => ({ ...current, persistenceMessage: 'Retry is unavailable here.' }));
+      return;
+    }
+
+    setView((current) => ({ ...current, persistenceMessage: 'Starting a new run from this thread...' }));
+    const result = await callbacks.onRetryInterruptedTurn(turnId);
+    setView((current) => ({ ...current, persistenceMessage: result.message }));
+  };
+
   const activateRecaptureTab = async (tabId: number) => {
     if (!callbacks.onActivateRecaptureTab) {
       setView((current) => ({ ...current, persistenceMessage: 'Opening the selected tab is unavailable here.' }));
@@ -154,7 +165,7 @@ export function DraftletPanel({ callbacks, controller }: DraftletPanelProps) {
         </div>
       </div>
       <div className="grid min-h-0 gap-3 overflow-y-auto bg-[linear-gradient(180deg,#fbfaf7,#f1f5f9)] p-3.5">
-        {view.activeView === 'replies' ? renderRepliesView(view, callbacks) : null}
+        {view.activeView === 'replies' ? renderRepliesView(view, callbacks, retryInterruptedTurn) : null}
         {view.activeView === 'history' ? renderHistoryView(view, loadHistory, restoreHistoryItem) : null}
         {view.persistenceMessage ? <p className="m-0 text-xs leading-5 text-slate-600" role="status">{view.persistenceMessage}</p> : null}
       </div>
@@ -338,11 +349,12 @@ function renderTabCandidates(
 function renderRepliesView(
   view: PanelViewState,
   callbacks: PanelCallbacks,
+  retryInterruptedTurn: (turnId: string) => Promise<void>,
 ) {
   const isGenerating = view.state === 'loading' || view.state === 'streaming';
 
   if (view.threadSnapshot) {
-    return renderThreadWorkspace(view.threadSnapshot, view, callbacks);
+    return renderThreadWorkspace(view.threadSnapshot, view, callbacks, retryInterruptedTurn);
   }
 
   return <EmptyState title={isGenerating ? 'Waiting for streamed replies...' : 'Generated drafts will appear here.'} />;
@@ -352,6 +364,7 @@ function renderThreadWorkspace(
   snapshot: ConversationThreadSnapshot,
   view: PanelViewState,
   callbacks: PanelCallbacks,
+  retryInterruptedTurn: (turnId: string) => Promise<void>,
 ) {
   const model = buildThreadWorkspace(snapshot);
   const source = formatSource(snapshot.thread.source.sourceDomain ?? null, snapshot.thread.source.sourceUrl ?? null);
@@ -378,7 +391,7 @@ function renderThreadWorkspace(
         </p>
       </div>
       <div className="grid gap-4">
-        {model.groups.map((group, index) => renderTurnGroup(group, index, view, callbacks))}
+        {model.groups.map((group, index) => renderTurnGroup(group, index, view, callbacks, retryInterruptedTurn))}
       </div>
     </section>
   );
@@ -389,9 +402,11 @@ function renderTurnGroup(
   index: number,
   view: PanelViewState,
   callbacks: PanelCallbacks,
+  retryInterruptedTurn: (turnId: string) => Promise<void>,
 ) {
   const isGenerating = view.state === 'loading' || view.state === 'streaming';
   const waitingForVariants = group.isLatest && isGenerating && group.variants.length === 0;
+  const recoverableInterruption = group.isLatest && isRecoverableInterruptedTurn(group.turn);
 
   return (
     <section
@@ -412,11 +427,32 @@ function renderTurnGroup(
           </div>
           <div className="flex flex-wrap justify-end gap-1.5">
             {group.isLatest ? <StatePill label="Latest" tone="slate" /> : null}
-            <StatePill label={group.turn.generationStatus} tone={group.turn.generationStatus === 'failed' ? 'rose' : 'slate'} />
+            <StatePill
+              label={recoverableInterruption ? 'Interrupted' : group.turn.generationStatus}
+              tone={group.turn.generationStatus === 'failed' ? 'rose' : 'slate'}
+            />
           </div>
         </div>
         <p className="m-0 text-[13px] leading-6 text-slate-700">{turnInstructionLabel(group.turn.instruction, index)}</p>
       </div>
+      {recoverableInterruption ? (
+        <div className="grid gap-2 rounded-md bg-amber-50 p-3 text-[13px] leading-6 text-amber-950 ring-1 ring-amber-200">
+          <div className="font-semibold">Interrupted after restart</div>
+          <p className="m-0">
+            {group.turn.generationErrorMessage ?? 'Draft generation stopped before completion.'} Retry starts a new run from this thread; it will not resume the old stream.
+          </p>
+          <Button
+            className="justify-self-start"
+            disabled={isGenerating}
+            onClick={() => void retryInterruptedTurn(group.turn.turnId)}
+            type="button"
+            variant="secondary"
+          >
+            <RefreshCw aria-hidden="true" className="h-3.5 w-3.5" />
+            Retry from thread
+          </Button>
+        </div>
+      ) : null}
       {waitingForVariants ? <div className="rounded-md bg-white/65 p-3 text-[13px] leading-6 text-slate-500 ring-1 ring-slate-200/70">Waiting for streamed variants...</div> : null}
       {group.variants.length > 0 ? (
         <div className="grid gap-2.5">
@@ -435,6 +471,21 @@ function renderTurnGroup(
       ) : null}
     </section>
   );
+}
+
+function isRecoverableInterruptedTurn(turn: ThreadTurnGroup['turn']) {
+  if (turn.generationStatus !== 'failed') {
+    return false;
+  }
+
+  const code = turn.generationErrorCode ?? '';
+  const message = turn.generationErrorMessage?.toLowerCase() ?? '';
+
+  return code === 'generation_interrupted'
+    || code === 'runtime_restarted'
+    || code === 'generation_run_stale'
+    || message.includes('interrupted')
+    || message.includes('runtime restarted');
 }
 
 function renderViewNavigation(view: PanelViewState, selectView: (activeView: PanelView) => void) {
