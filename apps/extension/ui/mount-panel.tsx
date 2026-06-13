@@ -7,6 +7,7 @@ import type {
   DomainHistoryItem,
   RecaptureInsertionTargetOutcome,
   RecaptureStatusTrailItem,
+  WorkspaceRestoreState,
 } from '../core/messages';
 import type { PlausibleTabCandidate } from '../core/tab-disambiguation';
 import type {
@@ -46,6 +47,7 @@ export type PanelAction =
   | { type: 'setActiveView'; activeView: PanelView }
   | { type: 'setConnectionStatus'; status: ConnectionStatus }
   | { type: 'setInsertionTargetStatus'; target: InsertionTargetViewState }
+  | { type: 'setRestoreState'; restoreState: WorkspaceRestoreState | null }
   | { type: 'setState'; state: PanelState; message: string }
   | { type: 'setThreadSnapshot'; snapshot: ConversationThreadSnapshot | null };
 
@@ -57,6 +59,7 @@ export interface PanelController {
   getActiveView(): PanelView;
   setConnectionStatus(status: ConnectionStatus): void;
   setInsertionTargetStatus(target: InsertionTargetViewState): void;
+  setRestoreState(restoreState: WorkspaceRestoreState | null): void;
   setState(state: PanelState, message?: string): void;
   setThreadSnapshot(snapshot: ConversationThreadSnapshot | null): void;
   subscribe(listener: (action: PanelAction) => void): () => void;
@@ -157,6 +160,9 @@ function createPanelController(initialTone: Tone, initialView: PanelView): Panel
     },
     setInsertionTargetStatus(target) {
       emit({ type: 'setInsertionTargetStatus', target });
+    },
+    setRestoreState(restoreState) {
+      emit({ type: 'setRestoreState', restoreState });
     },
     setState(state, message = '') {
       emit({ type: 'setState', state, message });

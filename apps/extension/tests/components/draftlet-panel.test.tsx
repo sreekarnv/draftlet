@@ -2,7 +2,7 @@ import { act } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { mountDraftletPanel } from '../../ui/mount-panel';
-import type { ConversationThreadSnapshot, Turn } from '../../core/messages';
+import type { ConversationThreadSnapshot, Turn, WorkspaceRestoreState } from '../../core/messages';
 import type { InsertionResult } from '../../core/types';
 
 describe('DraftletPanel recapture guidance', () => {
@@ -129,6 +129,46 @@ describe('DraftletPanel recapture guidance', () => {
     expect(retriedTurnId).toBe('turn-2');
     expect(container.textContent).toContain('Started a new run from this thread.');
   });
+
+  it('shows restore conflict guidance and uses the projected primary recapture action', async () => {
+    const container = document.createElement('div');
+    let recaptured = false;
+    document.body.append(container);
+
+    await act(async () => {
+      mounted = mountDraftletPanel(container, {
+        onGenerate() {},
+        onRecaptureInsertionTarget: async () => {
+          recaptured = true;
+          return { ok: false, message: 'Focus a compose field and recapture.' };
+        },
+        onInsert: async (): Promise<InsertionResult> => ({ status: 'copied', message: 'Copied' }),
+        onCloseRequest() {},
+        onAfterRender() {},
+      });
+    });
+
+    await act(async () => {
+      mounted!.controller.open({
+        selectedText: 'Can you reply to this thread?',
+      });
+      mounted!.controller.setRestoreState(staleTargetRestoreState());
+    });
+
+    expect(container.textContent).toContain('Restored thread is ready, but insertion needs target recovery.');
+    expect(container.textContent).toContain('The saved compose target is stale after restore.');
+    expect(container.textContent).toContain('Recapture');
+
+    const recaptureButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Recapture'));
+
+    await act(async () => {
+      recaptureButton?.click();
+    });
+
+    expect(recaptured).toBe(true);
+    expect(container.textContent).toContain('Focus a compose field and recapture.');
+  });
 });
 
 function interruptedThreadSnapshot(): ConversationThreadSnapshot {
@@ -175,6 +215,46 @@ function interruptedThreadSnapshot(): ConversationThreadSnapshot {
       errorCode: 'generation_interrupted',
       errorMessage: 'Draft generation was interrupted before completion.',
     },
+  };
+}
+
+function staleTargetRestoreState(): WorkspaceRestoreState {
+  return {
+    source: 'history',
+    status: 'needs_action',
+    summary: 'Restored thread is ready, but insertion needs target recovery.',
+    restoredSession: true,
+    restoredThread: true,
+    activeThreadId: 'thread-1',
+    activeTurnId: 'turn-2',
+    primaryAction: {
+      kind: 'recapture_target',
+      label: 'Recapture',
+      message: 'Recapture the compose field before inserting.',
+    },
+    issues: [
+      {
+        code: 'restored_session',
+        severity: 'info',
+        message: 'Restored a saved Draftlet session from history.',
+      },
+      {
+        code: 'restored_thread',
+        severity: 'info',
+        message: 'Restored the saved conversation thread.',
+        threadId: 'thread-1',
+      },
+      {
+        code: 'target_stale',
+        severity: 'warning',
+        message: 'The saved compose target is stale after restore.',
+        action: {
+          kind: 'recapture_target',
+          label: 'Recapture',
+          message: 'Recapture the compose field before inserting.',
+        },
+      },
+    ],
   };
 }
 

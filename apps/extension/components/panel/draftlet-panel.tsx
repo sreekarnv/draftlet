@@ -2,7 +2,13 @@ import { ExternalLink, FileText, History, RefreshCw, Sparkles, Wand2, X } from '
 import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 
 import { DEFAULT_PANEL_VIEW, DEFAULT_TONE } from '../../core/constants';
-import type { ConversationThreadSnapshot, DomainHistoryItem, RecoverableRunProjection } from '../../core/messages';
+import type {
+  ConversationThreadSnapshot,
+  DomainHistoryItem,
+  RecoverableRunProjection,
+  WorkspaceRecoveryAction,
+  WorkspaceRestoreState,
+} from '../../core/messages';
 import type { ConnectionStatus, PanelState, PanelView, Tone } from '../../core/types';
 import type { InsertionTargetViewState, PanelAction, PanelCallbacks, PanelController } from '../../ui/mount-panel';
 import { ReplyCard } from './reply-card';
@@ -25,6 +31,7 @@ interface PanelViewState {
   state: PanelState;
   connectionStatus: ConnectionStatus;
   insertionTarget: InsertionTargetViewState;
+  restoreState: WorkspaceRestoreState | null;
   threadSnapshot: ConversationThreadSnapshot | null;
   history: DomainHistoryItem[];
   historyState: LoadState;
@@ -40,6 +47,7 @@ export function DraftletPanel({ callbacks, controller }: DraftletPanelProps) {
     state: 'empty',
     connectionStatus: 'disconnected',
     insertionTarget: { status: 'needs_recapture', message: 'Open Draftlet from a compose field to enable insertion.' },
+    restoreState: null,
     threadSnapshot: null,
     history: [],
     historyState: 'idle',
@@ -158,7 +166,16 @@ export function DraftletPanel({ callbacks, controller }: DraftletPanelProps) {
           </Button>
         </div>
         {view.activeView === 'replies'
-          ? renderComposerWorkspace(view, callbacks, selectTone, recaptureInsertionTarget, activateRecaptureTab, refinementInstruction, setRefinementInstruction)
+          ? renderComposerWorkspace(
+            view,
+            callbacks,
+            selectTone,
+            recaptureInsertionTarget,
+            activateRecaptureTab,
+            retryInterruptedTurn,
+            refinementInstruction,
+            setRefinementInstruction,
+          )
           : null}
         <div className="mt-3">
           {renderViewNavigation(view, selectView)}
@@ -179,6 +196,7 @@ function renderComposerWorkspace(
   selectTone: (tone: Tone) => void,
   recaptureInsertionTarget: (tabId?: number) => Promise<void>,
   activateRecaptureTab: (tabId: number) => Promise<void>,
+  retryInterruptedTurn: (turnId: string) => Promise<void>,
   refinementInstruction: string,
   setRefinementInstruction: (instruction: string) => void,
 ) {
@@ -200,6 +218,7 @@ function renderComposerWorkspace(
         </div>
         <p className="m-0 max-h-[4.75rem] overflow-hidden text-[13.5px] leading-6 text-slate-800">{view.selectedText}</p>
       </div>
+      {renderRestoreGuidance(view.restoreState, recaptureInsertionTarget, retryInterruptedTurn)}
       <div className="grid gap-2">
         <ToneTabs onSelect={selectTone} selectedTone={view.tone} />
         <Button
@@ -236,6 +255,89 @@ function renderComposerWorkspace(
         ) : null}
       </div>
     </section>
+  );
+}
+
+function renderRestoreGuidance(
+  restoreState: WorkspaceRestoreState | null,
+  recaptureInsertionTarget: (tabId?: number) => Promise<void>,
+  retryInterruptedTurn: (turnId: string) => Promise<void>,
+) {
+  if (!restoreState || restoreState.status === 'ready') {
+    return null;
+  }
+
+  const visibleIssues = restoreState.issues
+    .filter((issue) => issue.code !== 'restored_session' && issue.code !== 'restored_thread')
+    .slice(0, 3);
+
+  return (
+    <div className={cn(
+      'grid gap-2 rounded-md p-2.5 text-[12px] leading-5 ring-1',
+      restoreGuidanceToneClass(restoreState.status),
+    )}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="font-semibold">{restoreState.summary}</div>
+          {visibleIssues.length > 0 ? (
+            <div className="mt-1 grid gap-0.5 text-[11px] leading-4">
+              {visibleIssues.map((issue) => (
+                <div className="min-w-0 truncate" key={`${issue.code}-${issue.runId ?? issue.turnId ?? issue.threadId ?? ''}`} title={issue.message}>
+                  {issue.message}
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        {renderRestorePrimaryAction(restoreState.primaryAction, recaptureInsertionTarget, retryInterruptedTurn)}
+      </div>
+    </div>
+  );
+}
+
+function renderRestorePrimaryAction(
+  action: WorkspaceRecoveryAction | undefined,
+  recaptureInsertionTarget: (tabId?: number) => Promise<void>,
+  retryInterruptedTurn: (turnId: string) => Promise<void>,
+) {
+  if (!action) {
+    return null;
+  }
+
+  if (action.kind === 'recapture_target') {
+    return (
+      <Button
+        className="h-7 shrink-0 px-2.5 text-[11px] leading-4"
+        onClick={() => void recaptureInsertionTarget()}
+        title={action.message}
+        type="button"
+        variant="secondary"
+      >
+        <RefreshCw aria-hidden="true" className="h-3 w-3" />
+        {action.label}
+      </Button>
+    );
+  }
+
+  if (action.kind === 'retry_interrupted_run' && action.turnId) {
+    return (
+      <Button
+        className="h-7 shrink-0 px-2.5 text-[11px] leading-4"
+        onClick={() => void retryInterruptedTurn(action.turnId!)}
+        title={action.message}
+        type="button"
+        variant="secondary"
+      >
+        <RefreshCw aria-hidden="true" className="h-3 w-3" />
+        {action.label}
+      </Button>
+    );
+  }
+
+  return (
+    <span className="shrink-0 rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-semibold leading-4 text-slate-600 ring-1 ring-slate-200">
+      {action.label}
+    </span>
   );
 }
 
@@ -621,7 +723,8 @@ function reducePanelAction(current: PanelViewState, action: PanelAction): PanelV
       selectedText: action.options.selectedText,
       tone: action.options.tone ?? current.tone,
       state: 'empty',
-        threadSnapshot: null,
+      restoreState: null,
+      threadSnapshot: null,
       errorMessage: '',
       persistenceMessage: '',
     };
@@ -641,6 +744,10 @@ function reducePanelAction(current: PanelViewState, action: PanelAction): PanelV
 
   if (action.type === 'setInsertionTargetStatus') {
     return { ...current, insertionTarget: action.target };
+  }
+
+  if (action.type === 'setRestoreState') {
+    return { ...current, restoreState: action.restoreState };
   }
 
   if (action.type === 'setState') {
@@ -725,6 +832,18 @@ function targetToneClass(status: InsertionTargetViewState['status']) {
   }
 
   return 'text-slate-500';
+}
+
+function restoreGuidanceToneClass(status: WorkspaceRestoreState['status']) {
+  if (status === 'conflict') {
+    return 'bg-rose-50 text-rose-950 ring-rose-200';
+  }
+
+  if (status === 'needs_action') {
+    return 'bg-amber-50 text-amber-950 ring-amber-200';
+  }
+
+  return 'bg-slate-50 text-slate-700 ring-slate-200';
 }
 
 function recaptureTrailToneClass(level: NonNullable<InsertionTargetViewState['trail']>[number]['level']) {

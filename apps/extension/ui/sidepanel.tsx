@@ -32,14 +32,17 @@ import {
   type RestoreDomainThreadResult,
   type RuntimeStatusResult,
   type StartDraftGenerationResult,
+  type WorkspaceRestoreState,
   type WorkspaceSession,
   type WorkspaceSessionResult,
 } from '../core/messages';
+import { buildWorkspaceRestoreState } from '../core/restore-conflict';
 import { getSavedPanelView, getSavedTone, savePanelView, saveTone } from '../core/storage';
 import type { InsertionResult, PanelView, Tone } from '../core/types';
 import { mountDraftletPanel } from '../ui/mount-panel';
 
 let currentSession: WorkspaceSession | null = null;
+let currentThreadSnapshot: ConversationThreadSnapshot | null = null;
 let currentTone: Tone = DEFAULT_TONE;
 let currentPanelView: PanelView = DEFAULT_PANEL_VIEW;
 let recaptureTrail: RecaptureStatusTrailItem[] = [];
@@ -136,7 +139,7 @@ async function initializeSidePanel() {
     } satisfies DraftletMessage) as WorkspaceSessionResult;
 
     if (response.session) {
-      applySession(response.session);
+      applySession(response.session, response.restoreState);
 
       if (response.thread) {
         applyThreadSnapshot(response.thread);
@@ -173,7 +176,9 @@ function handleDraftletMessage(message: DraftletMessage) {
 }
 
 function applyThreadSnapshot(snapshot: ConversationThreadSnapshot) {
+  currentThreadSnapshot = snapshot;
   panel.setThreadSnapshot(snapshot);
+  refreshRestoreState();
   applyPanelStateFromThread(snapshot);
 }
 
@@ -228,7 +233,7 @@ function shouldApplySessionUpdate(session: WorkspaceSession): boolean {
     || currentSession.tabId === session.tabId;
 }
 
-function applySession(session: WorkspaceSession) {
+function applySession(session: WorkspaceSession, restoreState?: WorkspaceRestoreState) {
   const previousSession = currentSession;
   const tone = session.latestContext.tone ?? currentTone;
   const activeView = session.latestContext.activeView ?? currentPanelView;
@@ -250,6 +255,7 @@ function applySession(session: WorkspaceSession) {
 
   if (previousSession?.sessionId !== session.sessionId) {
     recaptureTrail = [];
+    currentThreadSnapshot = null;
   }
 
   if (shouldOpenSession) {
@@ -266,10 +272,27 @@ function applySession(session: WorkspaceSession) {
     candidates: session.plausibleTabs,
     trail: recaptureTrail,
   });
+  panel.setRestoreState(restoreState ?? currentSession.restoreState ?? buildCurrentRestoreState());
 
   if (shouldOpenSession) {
     void refreshInsertionTargetStatus();
   }
+}
+
+function refreshRestoreState() {
+  panel.setRestoreState(buildCurrentRestoreState());
+}
+
+function buildCurrentRestoreState(): WorkspaceRestoreState | null {
+  if (!currentSession) {
+    return null;
+  }
+
+  return buildWorkspaceRestoreState({
+    session: currentSession,
+    thread: currentThreadSnapshot,
+    source: currentSession.restoreState?.source ?? 'session_update',
+  });
 }
 
 async function refreshHealth() {
@@ -308,12 +331,25 @@ async function refreshInsertionTargetStatus() {
       candidates: response.candidates,
       trail: recaptureTrail,
     });
+    currentSession = {
+      ...currentSession,
+      insertionTarget: response.target ?? currentSession.insertionTarget,
+      insertionTargetStatus: response.status,
+      plausibleTabs: response.candidates,
+    };
+    refreshRestoreState();
   } catch {
     panel.setInsertionTargetStatus({
       status: 'unavailable',
       message: 'Insertion target is unavailable.',
       trail: recaptureTrail,
     });
+    currentSession = currentSession ? {
+      ...currentSession,
+      insertionTargetStatus: 'unavailable',
+      plausibleTabs: undefined,
+    } : currentSession;
+    refreshRestoreState();
   }
 }
 
@@ -347,7 +383,7 @@ async function restoreDomainHistoryItem(item: DomainHistoryItem) {
       return { ok: false, message: response.error?.message ?? 'Could not restore this thread.' };
     }
 
-    applySession(response.session);
+    applySession(response.session, response.restoreState);
     applyThreadSnapshot(response.thread);
     panel.setActiveView('replies');
     return { ok: true, message: 'Restored this thread.' };
@@ -519,6 +555,12 @@ async function insertIntoActivePage(replyText: string, variantId?: string): Prom
         message: response.result.message,
         trail: recaptureTrail,
       });
+      currentSession = currentSession ? {
+        ...currentSession,
+        insertionTargetStatus: response.result.targetStatus,
+        plausibleTabs: undefined,
+      } : currentSession;
+      refreshRestoreState();
     }
 
     if (response.result.status !== 'failed') {
@@ -560,6 +602,11 @@ async function recaptureInsertionTarget(tabId?: number) {
       : 'Focus a compose field on the page, then recapture.',
     trail: requestedTrail,
   });
+  currentSession = {
+    ...currentSession,
+    insertionTargetStatus: tabId ? 'needs_focus' : 'needs_recapture',
+  };
+  refreshRestoreState();
 
   try {
     const response = await browser.runtime.sendMessage({
@@ -608,6 +655,7 @@ async function recaptureInsertionTarget(tabId?: number) {
         plausibleTabs: undefined,
       };
     }
+    refreshRestoreState();
 
     return {
       ok: response.recaptured,
@@ -621,6 +669,12 @@ async function recaptureInsertionTarget(tabId?: number) {
       message,
       trail,
     });
+    currentSession = {
+      ...currentSession,
+      insertionTargetStatus: 'unavailable',
+      plausibleTabs: undefined,
+    };
+    refreshRestoreState();
     return { ok: false, message };
   }
 }
@@ -659,6 +713,7 @@ async function activateRecaptureTab(tabId: number) {
         insertionTargetStatus: 'needs_focus',
         plausibleTabs: undefined,
       };
+      refreshRestoreState();
       return { ok: true, message: response.message };
     }
 
@@ -668,6 +723,12 @@ async function activateRecaptureTab(tabId: number) {
       message: response.message,
       trail,
     });
+    currentSession = {
+      ...currentSession,
+      insertionTargetStatus: 'unavailable',
+      plausibleTabs: undefined,
+    };
+    refreshRestoreState();
     return { ok: false, message: response.message };
   } catch {
     const message = 'Draftlet could not open the selected tab. Switch to it manually, focus the compose field, then retry.';
@@ -677,6 +738,12 @@ async function activateRecaptureTab(tabId: number) {
       message,
       trail,
     });
+    currentSession = {
+      ...currentSession,
+      insertionTargetStatus: 'unavailable',
+      plausibleTabs: undefined,
+    };
+    refreshRestoreState();
     return { ok: false, message };
   }
 }
