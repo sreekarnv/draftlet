@@ -76,7 +76,7 @@ import {
   createRecaptureDiagnosticsBridgeFailure,
 } from '../../../shared/recapture-diagnostics-contract';
 
-interface LiveGenerationStreamHandle {
+interface LocalGenerationTransportHandle {
   sessionId: string;
   abortController: AbortController;
 }
@@ -89,7 +89,8 @@ type InsertionTabResolution =
 const sessions = createWorkspaceSessionStore();
 const threads = createConversationThreadStore();
 const recaptureDiagnostics = createRecaptureDiagnosticsLog();
-const liveGenerationStreamsByRunId = new Map<string, LiveGenerationStreamHandle>();
+// Browser-local fetch/SSE handles only. Runtime GenerationRun state and durable replay remain the recovery source.
+const localGenerationTransportByRunId = new Map<string, LocalGenerationTransportHandle>();
 const GENERATION_RUN_STALE_AFTER_SECONDS = 30;
 
 export default defineBackground(() => {
@@ -490,7 +491,7 @@ async function handleStartDraftGeneration(
   }
 
   const abortController = new AbortController();
-  liveGenerationStreamsByRunId.set(generationId, { sessionId, abortController });
+  localGenerationTransportByRunId.set(generationId, { sessionId, abortController });
   const generatingSession = await hydrateWorkspaceSessionFromRuntime(sessionId, updatedSession)
     ?? sessions.setActiveRun(sessionId, {
       runId: generationId,
@@ -541,14 +542,14 @@ async function handleCancelDraftGeneration(sessionId?: string, generationId?: st
   const turnId = activeRun?.turnId ?? session.activeTurnId ?? latestTurn?.turnId;
 
   if (runId) {
-    abortLiveGenerationStream(runId);
+    cancelLocalGenerationTransport(runId);
   }
 
   if (runId && turnId) {
     await cancelReplyGenerationRunExecution(runId)
       .catch(() => finalizeGenerationRunStatus(runId, turnId, 'cancelled', error));
     await finalizeGenerationRunStatus(runId, turnId, 'cancelled', error);
-    stopLiveGenerationStream(runId);
+    clearLocalGenerationTransport(runId);
   } else if (turnId) {
     await finalizeGenerationRunStatus(undefined, turnId, 'cancelled', error);
   } else {
@@ -593,7 +594,7 @@ async function runDraftGeneration(
   await Promise.resolve();
   let replayCursor = 0;
 
-  if (!isLiveGenerationStream(sessionId, generationId)) {
+  if (!hasLocalGenerationTransport(sessionId, generationId)) {
     return;
   }
 
@@ -637,7 +638,7 @@ async function runDraftGeneration(
 
     replayCursor = await streamRuntimeRunEvents(sessionId, generationId, thread.threadId, replayCursor, signal);
 
-    if (!isLiveGenerationStream(sessionId, generationId)) {
+    if (!hasLocalGenerationTransport(sessionId, generationId)) {
       return;
     }
 
@@ -662,8 +663,8 @@ async function runDraftGeneration(
       ),
     );
   } finally {
-    if (isLiveGenerationStream(sessionId, generationId)) {
-      stopLiveGenerationStream(generationId);
+    if (hasLocalGenerationTransport(sessionId, generationId)) {
+      clearLocalGenerationTransport(generationId);
       const updatedSession = await hydrateWorkspaceSessionFromRuntime(sessionId, sessions.getBySessionId(sessionId) ?? undefined)
         ?? sessions.clearActiveRun(sessionId, generationId);
 
@@ -681,7 +682,7 @@ async function emitGenerationFailed(
   turnId: string,
   error: DraftletError,
 ): Promise<void> {
-  if (!isLiveGenerationStream(sessionId, generationId)) {
+  if (!hasLocalGenerationTransport(sessionId, generationId)) {
     return;
   }
 
@@ -1314,7 +1315,7 @@ async function restoreRuntimeSnapshot(session: WorkspaceSession): Promise<Worksp
 }
 
 async function reconcileInterruptedGeneration(sessionId: string, snapshot: ConversationThreadSnapshot): Promise<ConversationThreadSnapshot> {
-  if (hasLiveGenerationStreamForSession(sessionId)) {
+  if (hasLocalGenerationTransportForSession(sessionId)) {
     return snapshot;
   }
 
@@ -1390,17 +1391,17 @@ async function getLiveRuntimeGenerationConflict(sessionId: string) {
   return executionState?.live[0] ?? null;
 }
 
-function abortLiveGenerationStream(runId: string): void {
-  liveGenerationStreamsByRunId.get(runId)?.abortController.abort();
+function cancelLocalGenerationTransport(runId: string): void {
+  localGenerationTransportByRunId.get(runId)?.abortController.abort();
 }
 
-function stopLiveGenerationStream(runId: string): void {
-  liveGenerationStreamsByRunId.delete(runId);
+function clearLocalGenerationTransport(runId: string): void {
+  localGenerationTransportByRunId.delete(runId);
 }
 
-function hasLiveGenerationStreamForSession(sessionId: string): boolean {
-  for (const stream of liveGenerationStreamsByRunId.values()) {
-    if (stream.sessionId === sessionId) {
+function hasLocalGenerationTransportForSession(sessionId: string): boolean {
+  for (const transport of localGenerationTransportByRunId.values()) {
+    if (transport.sessionId === sessionId) {
       return true;
     }
   }
@@ -1483,7 +1484,7 @@ async function streamRuntimeRunEvents(
     signal,
     afterSequence,
     onReply(reply) {
-      if (!isLiveGenerationStream(sessionId, runId)) {
+      if (!hasLocalGenerationTransport(sessionId, runId)) {
         return;
       }
 
@@ -1515,12 +1516,12 @@ async function subscribeToRuntimeRunEvents(
   threadId?: string,
   afterSequence = 0,
 ): Promise<void> {
-  if (isLiveGenerationStream(sessionId, runId)) {
+  if (hasLocalGenerationTransport(sessionId, runId)) {
     return;
   }
 
   const abortController = new AbortController();
-  liveGenerationStreamsByRunId.set(runId, { sessionId, abortController });
+  localGenerationTransportByRunId.set(runId, { sessionId, abortController });
   let replayCursor = afterSequence;
 
   try {
@@ -1532,8 +1533,8 @@ async function subscribeToRuntimeRunEvents(
 
     await hydrateAndEmitRunProgress(sessionId, runId, threadId, replayCursor);
   } finally {
-    if (isLiveGenerationStream(sessionId, runId)) {
-      stopLiveGenerationStream(runId);
+    if (hasLocalGenerationTransport(sessionId, runId)) {
+      clearLocalGenerationTransport(runId);
       await hydrateAndEmitRunProgress(sessionId, runId, threadId, replayCursor);
     }
   }
@@ -1601,8 +1602,8 @@ async function getActiveTab(): Promise<Browser.tabs.Tab | undefined> {
   }
 }
 
-function isLiveGenerationStream(sessionId: string, runId: string): boolean {
-  return liveGenerationStreamsByRunId.get(runId)?.sessionId === sessionId;
+function hasLocalGenerationTransport(sessionId: string, runId: string): boolean {
+  return localGenerationTransportByRunId.get(runId)?.sessionId === sessionId;
 }
 
 function emitWorkspaceSessionUpdated(session: WorkspaceSession): Promise<unknown> {

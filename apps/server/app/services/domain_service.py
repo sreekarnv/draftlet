@@ -29,6 +29,8 @@ TERMINAL_GENERATION_RUN_STATUSES = {"completed", "failed", "cancelled", "interru
 TERMINAL_GENERATION_RUN_EVENT_TYPES = {"run_completed", "run_failed", "run_cancelled"}
 DEFAULT_GENERATION_RUN_STALE_AFTER_SECONDS = 30
 DEFAULT_GENERATION_RUN_EVENT_REPLAY_LIMIT = 100
+DEFAULT_GENERATION_RUN_EVENT_RETENTION_DAYS = 14
+DEFAULT_GENERATION_RUN_EVENT_PRUNE_BATCH_SIZE = 200
 
 
 class GenerationRunConflictError(RuntimeError):
@@ -502,6 +504,40 @@ def prune_generation_run_events(session: Session, run_id: str, replay_limit: int
         session.execute(delete(GenerationRunEvent).where(GenerationRunEvent.event_id.in_(old_event_ids)))
 
 
+def prune_terminal_generation_run_events(
+    session: Session,
+    older_than_days: int = DEFAULT_GENERATION_RUN_EVENT_RETENTION_DAYS,
+    max_runs: int = DEFAULT_GENERATION_RUN_EVENT_PRUNE_BATCH_SIZE,
+) -> int:
+    if older_than_days <= 0 or max_runs <= 0:
+        return 0
+
+    cutoff = datetime.now(UTC) - timedelta(days=older_than_days)
+    runs = list(
+        session.scalars(
+            select(GenerationRun)
+            .where(GenerationRun.status.in_(TERMINAL_GENERATION_RUN_STATUSES))
+            .order_by(GenerationRun.updated_at.asc())
+            .limit(max_runs)
+        )
+    )
+    pruned_count = 0
+
+    for run in runs:
+        terminal_at = as_utc(timestamp_for_generation_run_status(run) or run.updated_at or run.created_at)
+
+        if not terminal_at or terminal_at > cutoff:
+            continue
+
+        result = session.execute(delete(GenerationRunEvent).where(GenerationRunEvent.run_id == run.run_id))
+        pruned_count += result.rowcount or 0
+
+    if pruned_count:
+        session.commit()
+
+    return pruned_count
+
+
 def generation_run_event_to_progress_event(event: GenerationRunEvent) -> GenerationRunProgressEvent:
     return GenerationRunProgressEvent(
         sequence=event.sequence,
@@ -604,13 +640,15 @@ def record_generation_run_terminal_event(
     if not event_type:
         return None
 
-    return append_generation_run_event(
+    event = append_generation_run_event(
         session,
         run.run_id,
         event_type,
         status=status,
         message=message or run.error_message or event_type,
     )
+    prune_terminal_generation_run_events(session)
+    return event
 
 
 def event_type_for_generation_run_terminal_status(status: str) -> str | None:

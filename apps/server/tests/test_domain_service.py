@@ -1,5 +1,5 @@
 import unittest
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -32,6 +32,7 @@ from app.services.domain_service import (
     list_generation_run_events,
     list_active_generation_runs,
     list_recent_domain_history,
+    prune_terminal_generation_run_events,
     reconcile_stale_generation_runs,
     update_generation_run_status,
     update_turn_status,
@@ -398,6 +399,116 @@ class DomainServiceTest(unittest.TestCase):
             self.assertEqual([event.event_type for event in events], ["variant_persisted", "run_completed"])
             self.assertEqual([event.event_type for event in progress.events], ["variant_persisted", "run_completed"])
             self.assertEqual(progress.replay_cursor, 3)
+
+    def test_prunes_old_terminal_generation_run_events_only(self) -> None:
+        with self.Session() as session:
+            source = SourceSnapshot(
+                selected_text="Can you send the report?",
+                source_url="https://example.com/thread",
+            )
+            workspace = upsert_workspace_session(
+                session,
+                WorkspaceSessionUpsert(
+                    session_id="session-1",
+                    page_url=source.source_url,
+                    selected_text=source.selected_text,
+                ),
+            )
+            thread = create_or_update_thread(
+                session,
+                ConversationThreadCreate(
+                    thread_id="thread-1",
+                    session_id=workspace.session_id,
+                    source=source,
+                ),
+            )
+            old_turn = create_or_update_turn(
+                session,
+                TurnCreate(
+                    turn_id="turn-old",
+                    thread_id=thread.thread_id,
+                    source=source,
+                    tone="friendly",
+                ),
+            )
+            recent_turn = create_or_update_turn(
+                session,
+                TurnCreate(
+                    turn_id="turn-recent",
+                    thread_id=thread.thread_id,
+                    source=source,
+                    tone="friendly",
+                ),
+            )
+            active_turn = create_or_update_turn(
+                session,
+                TurnCreate(
+                    turn_id="turn-active",
+                    thread_id=thread.thread_id,
+                    source=source,
+                    tone="friendly",
+                ),
+            )
+
+            claim_generation_run(
+                session,
+                GenerationRunClaim(
+                    run_id="run-old",
+                    session_id=workspace.session_id,
+                    thread_id=thread.thread_id,
+                    turn_id=old_turn.turn_id,
+                    lease_owner="extension-background",
+                    stale_after_seconds=30,
+                ),
+            )
+            append_generation_run_event(session, "run-old", "run_started", status="active", message="run_started")
+            old_run = update_generation_run_status(session, "run-old", GenerationRunStatusUpdate(status="completed"))
+
+            claim_generation_run(
+                session,
+                GenerationRunClaim(
+                    run_id="run-recent",
+                    session_id=workspace.session_id,
+                    thread_id=thread.thread_id,
+                    turn_id=recent_turn.turn_id,
+                    lease_owner="extension-background",
+                    stale_after_seconds=30,
+                ),
+            )
+            append_generation_run_event(session, "run-recent", "run_started", status="active", message="run_started")
+            update_generation_run_status(session, "run-recent", GenerationRunStatusUpdate(status="completed"))
+
+            claim_generation_run(
+                session,
+                GenerationRunClaim(
+                    run_id="run-active",
+                    session_id=workspace.session_id,
+                    thread_id=thread.thread_id,
+                    turn_id=active_turn.turn_id,
+                    lease_owner="extension-background",
+                    stale_after_seconds=30,
+                ),
+            )
+            append_generation_run_event(session, "run-active", "run_started", status="active", message="run_started")
+            old_at = datetime.now(UTC) - timedelta(days=30)
+            old_run.completed_at = old_at
+            old_run.released_at = old_at
+            old_run.updated_at = old_at
+            session.add(old_run)
+            session.commit()
+
+            pruned = prune_terminal_generation_run_events(session, older_than_days=14, max_runs=20)
+            old_progress = get_generation_run_progress_snapshot(session, "run-old")
+
+            self.assertEqual(pruned, 2)
+            self.assertEqual(list_generation_run_events(session, "run-old"), [])
+            self.assertEqual([event.event_type for event in list_generation_run_events(session, "run-recent")], [
+                "run_started",
+                "run_completed",
+            ])
+            self.assertEqual([event.event_type for event in list_generation_run_events(session, "run-active")], ["run_started"])
+            self.assertEqual([event.event_type for event in old_progress.events], ["generation_run_status"])
+            self.assertEqual(old_progress.run.status, "completed")
 
     def test_reconcile_stale_generation_runs_marks_turn_failed_interrupted(self) -> None:
         with self.Session() as session:

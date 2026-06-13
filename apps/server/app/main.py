@@ -12,13 +12,13 @@ from app.api.replies import router as replies_router
 from app.core.database import SessionLocal
 from app.core.config import get_settings
 from app.schemas.domain import GenerationRunReconcileRequest
-from app.services.domain_service import reconcile_stale_generation_runs
+from app.services.domain_service import prune_terminal_generation_run_events, reconcile_stale_generation_runs
 
 
 settings = get_settings()
 
 
-def reconcile_interrupted_generation_runs_on_startup() -> None:
+def maintain_generation_runs_on_startup() -> None:
     with SessionLocal() as session:
         reconcile_stale_generation_runs(
             session,
@@ -28,11 +28,12 @@ def reconcile_interrupted_generation_runs_on_startup() -> None:
                 error_message="Draft generation was interrupted because the runtime restarted.",
             ),
         )
+        prune_terminal_generation_run_events(session)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    reconcile_interrupted_generation_runs_on_startup()
+    maintain_generation_runs_on_startup()
     yield
 
 
