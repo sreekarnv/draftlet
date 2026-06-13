@@ -121,6 +121,7 @@ The current v2 extension generation flow is intentionally transitional but now s
 - each streamed runtime reply is stored as a `DraftVariant` on the active turn
 - runtime exposes `/domain/generation-runs/{run_id}/progress` as the bounded durable progress snapshot for a run; it includes the current `GenerationRun`, the thread snapshot when available, a replay cursor, and recent persisted replay events
 - runtime exposes `POST /replies/{run_id}/start` to start a claimed run and `/replies/{run_id}/events` as the primary run-id subscription/replay feed backed by durable run events plus live fanout when an execution is still active
+- runtime no longer exposes `GET /replies/{run_id}/execution`; recovery uses durable events, domain progress snapshots, stale-run reconciliation, and explicit cancel-by-run behavior instead of a parallel live-status helper
 - service worker broadcasts `draftlet:workspace-session-updated` for session metadata and `draftlet:conversation-thread-updated` for thread snapshots
 - service worker treats runtime progress/thread snapshots as the primary side-panel state source; older `draftlet:draft-generation-started`, `draftlet:draft-generation-completed`, and `draftlet:draft-generation-failed` message contracts are retired
 - side panel renders thread snapshots as the primary thread workspace, grouped by `Turn` and `DraftVariant`
@@ -143,6 +144,7 @@ The current v2 generation flow is transitional but now uses durable runtime doma
 - service worker claims a runtime `GenerationRun` for the browser-provided run id before requesting execution start; runtime execution reuses that run, sends bounded heartbeat updates while the stream is active, and treats runtime conflicts as authoritative
 - runtime stream handling updates and heartbeats the run while preserving `Turn` lifecycle state for side panel restore; cancellation is represented as runtime run state and checked by the active stream between upstream model chunks
 - restore/startup can hydrate `/domain/generation-runs/{run_id}/progress`, subscribe to `/replies/{run_id}/events` by replay cursor, reconcile stale active runtime runs, and mark incomplete live execution as interrupted without pretending model streaming is resumable after runtime restart
+- `GET /replies/{run_id}/execution` is retired; clients should not branch on live-process status and should use the progress snapshot, durable replay cursor, and domain run state as the single recovery path
 - runtime loads prior persisted thread context for refinement prompts, then persists each streamed reply as a `DraftVariant` for the turn
 - runtime persists bounded `GenerationRun` replay events and emits `run_started`, `variant_persisted`, `run_completed`, `run_failed`, and `run_cancelled` SSE events with durable run-local event ids; `variant_persisted` events include variant/thread/turn metadata
 - service worker rehydrates run progress and the active `ConversationThread` snapshot from runtime for streamed results and broadcasts `draftlet:conversation-thread-updated`; it no longer inserts streamed variants into extension-local thread state when runtime snapshot hydration misses an event

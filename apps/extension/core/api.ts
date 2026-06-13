@@ -122,14 +122,6 @@ export async function cancelReplyGenerationRunExecution(runId: string): Promise<
   return response;
 }
 
-export async function getReplyGenerationRunExecution(runId: string): Promise<{ runId: string; live: boolean }> {
-  const response = await getJson<{ run_id: string; live: boolean }>(`${SERVER_BASE_URL}/replies/${encodeURIComponent(runId)}/execution`);
-  return {
-    runId: response.run_id,
-    live: response.live,
-  };
-}
-
 export async function putWorkspaceSession(session: WorkspaceSession): Promise<WorkspaceSession> {
   const response = await putJson<WorkspaceSessionRead>(`${SERVER_BASE_URL}/domain/sessions/${encodeURIComponent(session.sessionId)}`, {
     session_id: session.sessionId,

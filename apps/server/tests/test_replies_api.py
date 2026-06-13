@@ -187,3 +187,7 @@ def test_runtime_reply_execution_start_endpoint_is_registered() -> None:
 
 def test_runtime_reply_execution_events_endpoint_is_registered() -> None:
     assert any(route.path == "/replies/{run_id}/events" and "GET" in route.methods for route in app.routes if hasattr(route, "methods"))
+
+
+def test_runtime_reply_execution_status_endpoint_is_not_registered() -> None:
+    assert not any(route.path == "/replies/{run_id}/execution" and "GET" in route.methods for route in app.routes if hasattr(route, "methods"))

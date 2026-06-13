@@ -135,14 +135,6 @@ async def subscribe_reply_execution_events(
     return StreamingResponse(events(), media_type="text/event-stream")
 
 
-@router.get("/replies/{run_id}/execution")
-async def get_reply_execution(run_id: str) -> dict[str, bool | str]:
-    return {
-        "run_id": run_id,
-        "live": await reply_execution_registry.has_live_execution(run_id),
-    }
-
-
 def validate_runtime_reply_request(request: ReplyRequest) -> None:
     missing = [
         field_name
