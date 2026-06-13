@@ -28,6 +28,8 @@ export default function App() {
     server: UNKNOWN,
   });
   const [busy, setBusy] = useState(false);
+  const [diagnosticsRefreshing, setDiagnosticsRefreshing] = useState(false);
+  const [diagnosticsLastRefreshedAt, setDiagnosticsLastRefreshedAt] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState('');
   const [browserDiagnostics, setBrowserDiagnostics] = useState<BrowserDiagnosticsBridgeResult | null>(null);
   const [maintenanceDiagnostics, setMaintenanceDiagnostics] = useState<RuntimeMaintenanceDiagnosticsResult | null>(null);
@@ -86,6 +88,22 @@ export default function App() {
     setMaintenanceDiagnostics(result);
     setActionMessage(result.ok ? 'Loaded runtime maintenance diagnostics.' : result.error.message);
     setBusy(false);
+  };
+
+  const refreshDiagnostics = async () => {
+    setDiagnosticsRefreshing(true);
+    setActionMessage('');
+
+    const [browserResult, maintenanceResult] = await Promise.all([
+      desktopApi.getBrowserRecaptureDiagnosticsReport(),
+      desktopApi.getGenerationRunMaintenanceDiagnostics(),
+    ]);
+
+    setBrowserDiagnostics(browserResult);
+    setMaintenanceDiagnostics(maintenanceResult);
+    setDiagnosticsLastRefreshedAt(new Date().toISOString());
+    setActionMessage(formatDiagnosticsRefreshMessage(browserResult, maintenanceResult));
+    setDiagnosticsRefreshing(false);
   };
 
   const copyBrowserDiagnostics = async () => {
@@ -174,9 +192,12 @@ export default function App() {
       <DiagnosticsPage
         browserDiagnostics={browserDiagnostics}
         busy={busy}
+        diagnosticsLastRefreshedAt={diagnosticsLastRefreshedAt}
+        diagnosticsRefreshing={diagnosticsRefreshing}
         maintenanceDiagnostics={maintenanceDiagnostics}
         onCopyBrowserDiagnostics={copyBrowserDiagnostics}
         onLoadBrowserDiagnostics={loadBrowserDiagnostics}
+        onRefreshDiagnostics={refreshDiagnostics}
         onLoadMaintenanceDiagnostics={loadMaintenanceDiagnostics}
         onOpenExtensionHelp={openExtensionHelp}
         runtime={runtime}
@@ -189,4 +210,27 @@ export default function App() {
       ) : null}
     </main>
   );
+}
+
+function formatDiagnosticsRefreshMessage(
+  browserDiagnostics: BrowserDiagnosticsBridgeResult,
+  maintenanceDiagnostics: RuntimeMaintenanceDiagnosticsResult,
+) {
+  if (browserDiagnostics.ok && maintenanceDiagnostics.ok) {
+    return 'Loaded browser and runtime diagnostics.';
+  }
+
+  if (browserDiagnostics.ok && !maintenanceDiagnostics.ok) {
+    return `Loaded browser diagnostics. Runtime maintenance unavailable: ${maintenanceDiagnostics.error.message}`;
+  }
+
+  if (!browserDiagnostics.ok && maintenanceDiagnostics.ok) {
+    return `Loaded runtime maintenance diagnostics. Browser recapture unavailable: ${browserDiagnostics.error.message}`;
+  }
+
+  if (!browserDiagnostics.ok && !maintenanceDiagnostics.ok) {
+    return `Could not load diagnostics. Browser: ${browserDiagnostics.error.message} Runtime: ${maintenanceDiagnostics.error.message}`;
+  }
+
+  return 'Diagnostics refresh finished.';
 }
