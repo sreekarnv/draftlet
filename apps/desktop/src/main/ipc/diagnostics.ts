@@ -6,10 +6,17 @@ import {
   type DesktopExtensionDiagnosticsBridgeResult,
   type BrowserRecaptureDiagnosticsRelayState,
 } from '../../../../../shared/recapture-diagnostics-contract';
+import {
+  GENERATION_RUN_MAINTENANCE_DIAGNOSTICS_PROTOCOL,
+  createGenerationRunMaintenanceDiagnosticsFailure,
+  type GenerationRunMaintenanceDiagnosticsResult,
+  type GenerationRunMaintenanceStatus,
+} from '../../../../../shared/generation-run-maintenance-diagnostics-contract';
 import { SERVER_BASE_URL } from './settings.js';
 
 export function registerDiagnosticsIpc() {
   ipcMain.handle('draftlet:get-browser-recapture-diagnostics-report', () => getBrowserRecaptureDiagnosticsReport());
+  ipcMain.handle('draftlet:get-generation-run-maintenance-diagnostics', () => getGenerationRunMaintenanceDiagnostics());
 }
 
 export async function getBrowserRecaptureDiagnosticsReport(): Promise<DesktopExtensionDiagnosticsBridgeResult> {
@@ -51,6 +58,34 @@ export async function getBrowserRecaptureDiagnosticsReport(): Promise<DesktopExt
     };
   } catch (error) {
     return createRecaptureDiagnosticsBridgeFailure(
+      'transport_unavailable',
+      `Draftlet server is not reachable: ${error instanceof Error ? error.message : String(error)}`,
+      true,
+    );
+  }
+}
+
+export async function getGenerationRunMaintenanceDiagnostics(): Promise<GenerationRunMaintenanceDiagnosticsResult> {
+  try {
+    const response = await fetch(`${SERVER_BASE_URL}/diagnostics/generation-runs/maintenance`, { cache: 'no-store' });
+
+    if (!response.ok) {
+      return createGenerationRunMaintenanceDiagnosticsFailure(
+        'diagnostics_unavailable',
+        `Draftlet server responded with HTTP ${response.status}.`,
+        true,
+      );
+    }
+
+    const status = await response.json() as GenerationRunMaintenanceStatus;
+
+    return {
+      ok: true,
+      protocol: GENERATION_RUN_MAINTENANCE_DIAGNOSTICS_PROTOCOL,
+      status,
+    };
+  } catch (error) {
+    return createGenerationRunMaintenanceDiagnosticsFailure(
       'transport_unavailable',
       `Draftlet server is not reachable: ${error instanceof Error ? error.message : String(error)}`,
       true,

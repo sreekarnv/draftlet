@@ -1,4 +1,5 @@
 import type { DesktopExtensionDiagnosticsBridgeResult } from '../../../../../shared/recapture-diagnostics-contract';
+import type { GenerationRunMaintenanceDiagnosticsResult } from '../../../../../shared/generation-run-maintenance-diagnostics-contract';
 
 export type CommandStatusCode =
   | 'ready'
@@ -42,11 +43,13 @@ export interface DraftletDesktopApi {
   startDraftletServer: () => Promise<CommandStatus>;
   stopDraftletServer: () => Promise<CommandStatus>;
   getBrowserRecaptureDiagnosticsReport: () => Promise<DesktopExtensionDiagnosticsBridgeResult>;
+  getGenerationRunMaintenanceDiagnostics: () => Promise<GenerationRunMaintenanceDiagnosticsResult>;
   openOllamaInstallPage: () => Promise<CommandStatus>;
   openExtensionHelp: () => Promise<CommandStatus>;
 }
 
 export type BrowserDiagnosticsBridgeResult = DesktopExtensionDiagnosticsBridgeResult;
+export type RuntimeMaintenanceDiagnosticsResult = GenerationRunMaintenanceDiagnosticsResult;
 
 declare global {
   interface Window {
