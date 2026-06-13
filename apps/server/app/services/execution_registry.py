@@ -127,11 +127,6 @@ class ReplyExecutionRegistry:
 
         return await self._on_cancel_missing(run_id)
 
-    async def has_live_execution(self, run_id: str) -> bool:
-        async with self._lock:
-            execution = self._executions.get(run_id)
-            return bool(execution and not execution.task.done())
-
     async def _run(self, request: ReplyRequest) -> None:
         run_id = require_run_id(request)
 
