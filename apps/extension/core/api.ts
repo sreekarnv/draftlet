@@ -568,6 +568,7 @@ function mapConversationThreadSnapshot(snapshot: ConversationThreadSnapshotRead)
     thread: mapConversationThread(snapshot.thread),
     turns: snapshot.turns.map(mapTurn),
     variants: snapshot.variants.map(mapDraftVariant),
+    latestRecoverableRun: snapshot.latest_recoverable_run ? mapRecoverableRunProjection(snapshot.latest_recoverable_run) : undefined,
   };
 }
 
@@ -739,6 +740,20 @@ function mapGenerationRun(run: GenerationRunRead): GenerationRun {
   };
 }
 
+function mapRecoverableRunProjection(run: RecoverableRunProjectionRead) {
+  return {
+    runId: run.run_id,
+    turnId: run.turn_id,
+    status: isGenerationRunStatus(run.status) ? run.status : 'interrupted',
+    recoverable: run.recoverable,
+    reason: run.reason ?? undefined,
+    interruptedAt: run.interrupted_at ?? undefined,
+    lastEventAt: run.last_event_at ?? undefined,
+    errorCode: run.error_code ?? undefined,
+    errorMessage: run.error_message ?? undefined,
+  };
+}
+
 function isTone(value: string): value is DraftVariant['tone'] {
   return value === 'professional' || value === 'friendly' || value === 'concise';
 }
@@ -864,6 +879,18 @@ interface GenerationRunRead {
   updated_at: string;
 }
 
+interface RecoverableRunProjectionRead {
+  run_id: string;
+  turn_id: string;
+  status: string;
+  recoverable: boolean;
+  reason: string | null;
+  interrupted_at: string | null;
+  last_event_at: string | null;
+  error_code: string | null;
+  error_message: string | null;
+}
+
 interface GenerationRunExecutionStateRead {
   checked_at: string;
   stale_after_seconds: number;
@@ -904,6 +931,7 @@ interface ConversationThreadSnapshotRead {
   thread: ConversationThreadRead;
   turns: TurnRead[];
   variants: DraftVariantRead[];
+  latest_recoverable_run?: RecoverableRunProjectionRead | null;
 }
 
 

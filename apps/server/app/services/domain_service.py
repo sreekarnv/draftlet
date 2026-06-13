@@ -17,6 +17,7 @@ from app.schemas.domain import (
     GenerationRunHeartbeat,
     GenerationRunReconcileRequest,
     GenerationRunStatusUpdate,
+    RecoverableRunProjection,
     SourceSnapshot,
     TurnCreate,
     TurnStatusUpdate,
@@ -909,7 +910,12 @@ def get_thread_snapshot(session: Session, thread_id: str | None) -> Conversation
 
     turns = list(thread.turns)
     variants = [variant for turn in turns for variant in turn.variants]
-    return ConversationThreadSnapshot(thread=thread, turns=turns, variants=variants)
+    return ConversationThreadSnapshot(
+        thread=thread,
+        turns=turns,
+        variants=variants,
+        latest_recoverable_run=build_latest_recoverable_run_projection(session, thread.thread_id),
+    )
 
 
 def list_recent_domain_history(session: Session, limit: int = 20) -> list[DomainHistoryItem]:
@@ -930,7 +936,12 @@ def list_recent_domain_history(session: Session, limit: int = 20) -> list[Domain
         items.append(
             DomainHistoryItem(
                 session=thread.session,
-                thread=ConversationThreadSnapshot(thread=thread, turns=turns, variants=variants),
+                thread=ConversationThreadSnapshot(
+                    thread=thread,
+                    turns=turns,
+                    variants=variants,
+                    latest_recoverable_run=build_latest_recoverable_run_projection(session, thread.thread_id),
+                ),
             )
         )
 
@@ -946,6 +957,50 @@ def latest_thread_activity(thread: ConversationThread) -> object:
             timestamps.extend([variant.updated_at, variant.created_at])
 
     return max(timestamp for timestamp in timestamps if timestamp is not None)
+
+
+def build_latest_recoverable_run_projection(session: Session, thread_id: str) -> RecoverableRunProjection | None:
+    statement = (
+        select(GenerationRun)
+        .where(GenerationRun.thread_id == thread_id)
+        .options(selectinload(GenerationRun.events))
+    )
+    runs = list(session.scalars(statement))
+
+    if not runs:
+        return None
+
+    latest_run = max(runs, key=latest_generation_run_activity)
+
+    if latest_run.status != "interrupted":
+        return None
+
+    return RecoverableRunProjection(
+        run_id=latest_run.run_id,
+        turn_id=latest_run.turn_id,
+        status=latest_run.status,
+        recoverable=True,
+        reason=latest_run.error_code,
+        interrupted_at=latest_run.interrupted_at,
+        last_event_at=latest_generation_run_event_at(latest_run),
+        error_code=latest_run.error_code,
+        error_message=latest_run.error_message,
+    )
+
+
+def latest_generation_run_activity(run: GenerationRun) -> datetime:
+    candidates = [
+        latest_generation_run_event_at(run),
+        timestamp_for_generation_run_status(run),
+        run.updated_at,
+        run.claimed_at,
+        run.created_at,
+    ]
+    return max(as_utc(timestamp) for timestamp in candidates if timestamp is not None)
+
+
+def latest_generation_run_event_at(run: GenerationRun) -> datetime | None:
+    return max((event.created_at for event in run.events if event.created_at is not None), default=None)
 
 
 def variants_for_thread(session: Session, thread_id: str) -> list[DraftVariant]:

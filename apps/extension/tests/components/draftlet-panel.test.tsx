@@ -113,7 +113,8 @@ describe('DraftletPanel recapture guidance', () => {
       mounted!.controller.setState('error', 'Draft generation was interrupted before completion.');
     });
 
-    expect(container.textContent).toContain('Interrupted after restart');
+    expect(container.textContent).toContain('Interrupted runtime run');
+    expect(container.textContent).toContain('Run generation-2');
     expect(container.textContent).toContain('Retry starts a new run from this thread');
     expect(container.textContent).toContain('will not resume the old stream');
     expect(container.textContent).toContain('Retry from thread');
@@ -148,10 +149,7 @@ function interruptedThreadSnapshot(): ConversationThreadSnapshot {
     },
     turns: [
       turn('turn-1', 'Generate reply drafts', 'completed', '2026-01-01T00:01:00.000Z'),
-      turn('turn-2', 'Generate reply drafts', 'failed', '2026-01-01T00:02:00.000Z', {
-        code: 'generation_interrupted',
-        message: 'Draft generation was interrupted before completion.',
-      }),
+      turn('turn-2', 'Generate reply drafts', 'failed', '2026-01-01T00:02:00.000Z'),
     ],
     variants: [
       {
@@ -166,6 +164,17 @@ function interruptedThreadSnapshot(): ConversationThreadSnapshot {
         updatedAt: '2026-01-01T00:01:10.000Z',
       },
     ],
+    latestRecoverableRun: {
+      runId: 'generation-2',
+      turnId: 'turn-2',
+      status: 'interrupted',
+      recoverable: true,
+      reason: 'generation_interrupted',
+      interruptedAt: '2026-01-01T00:02:30.000Z',
+      lastEventAt: '2026-01-01T00:02:31.000Z',
+      errorCode: 'generation_interrupted',
+      errorMessage: 'Draft generation was interrupted before completion.',
+    },
   };
 }
 

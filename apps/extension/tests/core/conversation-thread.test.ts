@@ -189,6 +189,42 @@ describe('conversation thread store', () => {
     });
     expect(refinement?.snapshot.variants.map((variant) => variant.content)).toEqual(['Prior draft']);
   });
+
+  it('preserves latest recoverable run metadata when hydrating snapshots', () => {
+    const store = createTestStore();
+    const initial = store.ensureThreadForSession({
+      sessionId: 'session-1',
+      context: context('Original message'),
+    });
+    const turnResult = store.createTurn({
+      threadId: initial.thread.threadId,
+      context: context('Original message'),
+      tone: 'friendly',
+    })!;
+    const snapshot = store.updateTurnStatus(turnResult.turn.turnId, 'failed')!;
+
+    const restored = createTestStore();
+    const hydrated = restored.hydrateSnapshot({
+      ...snapshot,
+      latestRecoverableRun: {
+        runId: 'run-1',
+        turnId: turnResult.turn.turnId,
+        status: 'interrupted',
+        recoverable: true,
+        reason: 'generation_interrupted',
+        interruptedAt: '2026-01-01T00:00:10.000Z',
+        lastEventAt: '2026-01-01T00:00:11.000Z',
+        errorCode: 'generation_interrupted',
+        errorMessage: 'Draft generation was interrupted before completion.',
+      },
+    });
+
+    expect(hydrated.latestRecoverableRun).toMatchObject({
+      runId: 'run-1',
+      turnId: turnResult.turn.turnId,
+      recoverable: true,
+    });
+  });
 });
 
 function createTestStore() {

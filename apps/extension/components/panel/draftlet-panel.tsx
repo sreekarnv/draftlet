@@ -2,7 +2,7 @@ import { ExternalLink, FileText, History, RefreshCw, Sparkles, Wand2, X } from '
 import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 
 import { DEFAULT_PANEL_VIEW, DEFAULT_TONE } from '../../core/constants';
-import type { ConversationThreadSnapshot, DomainHistoryItem } from '../../core/messages';
+import type { ConversationThreadSnapshot, DomainHistoryItem, RecoverableRunProjection } from '../../core/messages';
 import type { ConnectionStatus, PanelState, PanelView, Tone } from '../../core/types';
 import type { InsertionTargetViewState, PanelAction, PanelCallbacks, PanelController } from '../../ui/mount-panel';
 import { ReplyCard } from './reply-card';
@@ -391,7 +391,7 @@ function renderThreadWorkspace(
         </p>
       </div>
       <div className="grid gap-4">
-        {model.groups.map((group, index) => renderTurnGroup(group, index, view, callbacks, retryInterruptedTurn))}
+        {model.groups.map((group, index) => renderTurnGroup(group, index, snapshot, view, callbacks, retryInterruptedTurn))}
       </div>
     </section>
   );
@@ -400,13 +400,16 @@ function renderThreadWorkspace(
 function renderTurnGroup(
   group: ThreadTurnGroup,
   index: number,
+  snapshot: ConversationThreadSnapshot,
   view: PanelViewState,
   callbacks: PanelCallbacks,
   retryInterruptedTurn: (turnId: string) => Promise<void>,
 ) {
   const isGenerating = view.state === 'loading' || view.state === 'streaming';
   const waitingForVariants = group.isLatest && isGenerating && group.variants.length === 0;
-  const recoverableInterruption = group.isLatest && isRecoverableInterruptedTurn(group.turn);
+  const projectedRecoverableRun = recoverableRunForTurn(snapshot.latestRecoverableRun, group);
+  const fallbackRecoverableInterruption = !snapshot.latestRecoverableRun && group.isLatest && isRecoverableInterruptedTurn(group.turn);
+  const recoverableInterruption = Boolean(projectedRecoverableRun) || fallbackRecoverableInterruption;
 
   return (
     <section
@@ -437,9 +440,14 @@ function renderTurnGroup(
       </div>
       {recoverableInterruption ? (
         <div className="grid gap-2 rounded-md bg-amber-50 p-3 text-[13px] leading-6 text-amber-950 ring-1 ring-amber-200">
-          <div className="font-semibold">Interrupted after restart</div>
+          <div className="font-semibold">{projectedRecoverableRun ? 'Interrupted runtime run' : 'Interrupted after restart'}</div>
+          {projectedRecoverableRun ? (
+            <div className="break-words text-xs leading-5 text-amber-900">
+              Run {projectedRecoverableRun.runId}{projectedRecoverableRun.interruptedAt ? ` · ${formatDate(projectedRecoverableRun.interruptedAt)}` : ''}
+            </div>
+          ) : null}
           <p className="m-0">
-            {group.turn.generationErrorMessage ?? 'Draft generation stopped before completion.'} Retry starts a new run from this thread; it will not resume the old stream.
+            {projectedRecoverableRun?.errorMessage ?? group.turn.generationErrorMessage ?? 'Draft generation stopped before completion.'} Retry starts a new run from this thread; it will not resume the old stream.
           </p>
           <Button
             className="justify-self-start"
@@ -471,6 +479,17 @@ function renderTurnGroup(
       ) : null}
     </section>
   );
+}
+
+function recoverableRunForTurn(
+  run: RecoverableRunProjection | undefined,
+  group: ThreadTurnGroup,
+): RecoverableRunProjection | undefined {
+  if (!run?.recoverable || run.turnId !== group.turn.turnId || !group.isLatest) {
+    return undefined;
+  }
+
+  return run;
 }
 
 function isRecoverableInterruptedTurn(turn: ThreadTurnGroup['turn']) {

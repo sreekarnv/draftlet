@@ -281,10 +281,23 @@ class DraftVariantRead(BaseModel):
     updated_at: datetime
 
 
+class RecoverableRunProjection(BaseModel):
+    run_id: str
+    turn_id: str
+    status: str
+    recoverable: bool
+    reason: str | None = None
+    interrupted_at: datetime | None = None
+    last_event_at: datetime | None = None
+    error_code: str | None = None
+    error_message: str | None = None
+
+
 class ConversationThreadSnapshot(BaseModel):
     thread: ConversationThreadRead
     turns: list[TurnRead]
     variants: list[DraftVariantRead]
+    latest_recoverable_run: RecoverableRunProjection | None = None
 
 
 class GenerationRunProgressEvent(BaseModel):

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   cancelReplyGenerationRunExecution,
   claimGenerationRun,
+  getConversationThreadSnapshot,
   getGenerationRunExecutionState,
   getGenerationRunProgress,
   heartbeatGenerationRun,
@@ -250,6 +251,40 @@ describe('generation run runtime API', () => {
   });
 });
 
+describe('conversation thread runtime API', () => {
+  it('maps latest recoverable run projection from runtime snapshots', async () => {
+    const fetchMock = vi.fn(async () => Response.json(conversationThreadSnapshotRead({
+      latestRecoverableRun: {
+        run_id: 'generation-2',
+        turn_id: 'turn-2',
+        status: 'interrupted',
+        recoverable: true,
+        reason: 'generation_interrupted',
+        interrupted_at: '2026-06-09T00:00:03.000Z',
+        last_event_at: '2026-06-09T00:00:04.000Z',
+        error_code: 'generation_interrupted',
+        error_message: 'Draft generation was interrupted before completion.',
+      },
+    })));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const snapshot = await getConversationThreadSnapshot('thread-1');
+
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/domain/threads/thread-1'), expect.any(Object));
+    expect(snapshot?.latestRecoverableRun).toEqual({
+      runId: 'generation-2',
+      turnId: 'turn-2',
+      status: 'interrupted',
+      recoverable: true,
+      reason: 'generation_interrupted',
+      interruptedAt: '2026-06-09T00:00:03.000Z',
+      lastEventAt: '2026-06-09T00:00:04.000Z',
+      errorCode: 'generation_interrupted',
+      errorMessage: 'Draft generation was interrupted before completion.',
+    });
+  });
+});
+
 function payload(): ReplyRequestPayload {
   return {
     selected_text: 'Please reply to this.',
@@ -322,54 +357,7 @@ function generationRunProgressRead() {
   return {
     checked_at: '2026-06-09T00:00:02.000Z',
     run: generationRunRead({ status: 'streaming' }),
-    thread: {
-      thread: {
-        thread_id: 'thread-1',
-        session_id: 'session-1',
-        selected_text: 'Please reply to this.',
-        source_url: 'https://example.com/thread',
-        source_domain: 'example.com',
-        page_title: 'Inbox',
-        status: 'active',
-        created_at: '2026-06-09T00:00:00.000Z',
-        updated_at: '2026-06-09T00:00:01.000Z',
-      },
-      turns: [
-        {
-          turn_id: 'turn-1',
-          thread_id: 'thread-1',
-          instruction: 'Generate reply drafts',
-          selected_text: 'Please reply to this.',
-          source_url: 'https://example.com/thread',
-          source_domain: 'example.com',
-          page_title: 'Inbox',
-          tone: 'friendly',
-          generation_status: 'streaming',
-          generation_started_at: '2026-06-09T00:00:00.000Z',
-          generation_completed_at: null,
-          generation_failed_at: null,
-          generation_cancelled_at: null,
-          generation_error_code: null,
-          generation_error_message: null,
-          created_at: '2026-06-09T00:00:00.000Z',
-          updated_at: '2026-06-09T00:00:01.000Z',
-        },
-      ],
-      variants: [
-        {
-          variant_id: 'variant-1',
-          turn_id: 'turn-1',
-          tone: 'friendly',
-          length: null,
-          content: 'Domain draft',
-          rank: 0,
-          status: 'generated',
-          is_current: false,
-          created_at: '2026-06-09T00:00:01.000Z',
-          updated_at: '2026-06-09T00:00:01.000Z',
-        },
-      ],
-    },
+    thread: conversationThreadSnapshotRead(),
     events: [
       {
         sequence: 101,
@@ -384,5 +372,61 @@ function generationRunProgressRead() {
       },
     ],
     replay_cursor: 101,
+  };
+}
+
+function conversationThreadSnapshotRead({
+  latestRecoverableRun = null,
+}: {
+  latestRecoverableRun?: unknown;
+} = {}) {
+  return {
+    thread: {
+      thread_id: 'thread-1',
+      session_id: 'session-1',
+      selected_text: 'Please reply to this.',
+      source_url: 'https://example.com/thread',
+      source_domain: 'example.com',
+      page_title: 'Inbox',
+      status: 'active',
+      created_at: '2026-06-09T00:00:00.000Z',
+      updated_at: '2026-06-09T00:00:01.000Z',
+    },
+    turns: [
+      {
+        turn_id: 'turn-1',
+        thread_id: 'thread-1',
+        instruction: 'Generate reply drafts',
+        selected_text: 'Please reply to this.',
+        source_url: 'https://example.com/thread',
+        source_domain: 'example.com',
+        page_title: 'Inbox',
+        tone: 'friendly',
+        generation_status: 'streaming',
+        generation_started_at: '2026-06-09T00:00:00.000Z',
+        generation_completed_at: null,
+        generation_failed_at: null,
+        generation_cancelled_at: null,
+        generation_error_code: null,
+        generation_error_message: null,
+        created_at: '2026-06-09T00:00:00.000Z',
+        updated_at: '2026-06-09T00:00:01.000Z',
+      },
+    ],
+    variants: [
+      {
+        variant_id: 'variant-1',
+        turn_id: 'turn-1',
+        tone: 'friendly',
+        length: null,
+        content: 'Domain draft',
+        rank: 0,
+        status: 'generated',
+        is_current: false,
+        created_at: '2026-06-09T00:00:01.000Z',
+        updated_at: '2026-06-09T00:00:01.000Z',
+      },
+    ],
+    latest_recoverable_run: latestRecoverableRun,
   };
 }

@@ -201,6 +201,11 @@ function applyPanelStateFromThread(snapshot: ConversationThreadSnapshot) {
     return;
   }
 
+  if (snapshot.latestRecoverableRun?.recoverable && snapshot.latestRecoverableRun.turnId === latestTurn.turnId) {
+    panel.setState('error', snapshot.latestRecoverableRun.errorMessage ?? 'Draft generation was interrupted before completion.');
+    return;
+  }
+
   if (latestTurn.generationStatus === 'completed') {
     const hasVariants = snapshot.variants.some((variant) => variant.turnId === latestTurn.turnId);
     panel.setState(hasVariants ? 'success' : 'error', hasVariants ? '' : 'No replies returned.');

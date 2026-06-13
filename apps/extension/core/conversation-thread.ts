@@ -60,6 +60,7 @@ export function createConversationThreadStore({
   const turnIdsByThreadId = new Map<string, string[]>();
   const variantsById = new Map<string, DraftVariant>();
   const variantIdsByTurnId = new Map<string, string[]>();
+  const latestRecoverableRunByThreadId = new Map<string, ConversationThreadSnapshot['latestRecoverableRun']>();
 
   const timestamp = () => now().toISOString();
 
@@ -124,6 +125,7 @@ export function createConversationThreadStore({
         updatedAt: createdAt,
       };
       turnsById.set(turn.turnId, turn);
+      latestRecoverableRunByThreadId.delete(threadId);
 
       const turnIds = [...(turnIdsByThreadId.get(threadId) ?? []), turn.turnId];
       turnIdsByThreadId.set(threadId, turnIds);
@@ -221,11 +223,17 @@ export function createConversationThreadStore({
       const updatedAt = timestamp();
       turnsById.set(turnId, applyTurnLifecycle(turn, { status, error }, updatedAt));
       touchThread(turn.threadId, updatedAt);
+      latestRecoverableRunByThreadId.delete(turn.threadId);
       return snapshot(turn.threadId);
     },
 
     hydrateSnapshot(snapshotValue) {
       threadsById.set(snapshotValue.thread.threadId, snapshotValue.thread);
+      if (snapshotValue.latestRecoverableRun) {
+        latestRecoverableRunByThreadId.set(snapshotValue.thread.threadId, snapshotValue.latestRecoverableRun);
+      } else {
+        latestRecoverableRunByThreadId.delete(snapshotValue.thread.threadId);
+      }
       threadIdBySessionId.set(snapshotValue.thread.sessionId, snapshotValue.thread.threadId);
       turnIdsByThreadId.set(
         snapshotValue.thread.threadId,
@@ -323,6 +331,7 @@ export function createConversationThreadStore({
       thread,
       turns,
       variants,
+      latestRecoverableRun: latestRecoverableRunByThreadId.get(threadId),
     };
   }
 }
