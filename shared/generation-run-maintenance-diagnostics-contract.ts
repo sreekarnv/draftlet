@@ -21,6 +21,8 @@ export interface GenerationRunMaintenanceStatus {
   checkedAt: string;
   processLocal: boolean;
   recentLimit: number;
+  retentionDays: number;
+  maxStoredOutcomes: number;
   latestStartup?: GenerationRunMaintenanceOutcome | null;
   latestStaleReconciliation?: GenerationRunMaintenanceOutcome | null;
   latestReplayPrune?: GenerationRunMaintenanceOutcome | null;

@@ -34,6 +34,16 @@ curl http://127.0.0.1:47632/health
 
 If another process is using port `47632`, stop that process or adjust local development setup. The desktop app only stops a process when `/health` identifies it as Draftlet.
 
+## Runtime Maintenance Diagnostics
+
+The desktop diagnostics page can load and copy a bounded runtime maintenance snapshot from:
+
+```bash
+curl http://127.0.0.1:47632/diagnostics/generation-runs/maintenance
+```
+
+These diagnostics are stored in the runtime database and retained for up to 30 days or 100 maintenance outcomes, whichever bound is reached first. The endpoint returns the latest startup maintenance, stale-run reconciliation, replay pruning, and the latest 20 retained outcomes.
+
 ## Extension Cannot Connect
 
 Confirm the server is healthy, then reload the extension and the webpage. The extension expects the server at `http://127.0.0.1:47632`.

@@ -47,14 +47,17 @@ def maintain_generation_runs_on_startup() -> None:
                 retention_days=DEFAULT_GENERATION_RUN_EVENT_RETENTION_DAYS,
                 replay_limit=DEFAULT_GENERATION_RUN_EVENT_REPLAY_LIMIT,
                 prune_batch_size=DEFAULT_GENERATION_RUN_EVENT_PRUNE_BATCH_SIZE,
+                session=session,
             )
         except Exception as error:
+            session.rollback()
             record_generation_run_maintenance_outcome(
                 "startup_maintenance",
                 status="error",
                 source="startup",
                 error_code=type(error).__name__,
                 error_message=str(error),
+                session=session,
             )
             raise
 

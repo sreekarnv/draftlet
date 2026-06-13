@@ -44,8 +44,8 @@ export function RuntimeMaintenanceDiagnosticsCard({
         {diagnostics?.ok ? (
           <>
             <div>Checked {formatDateTime(diagnostics.status.checkedAt)}.</div>
-            <div>Recent outcomes are process-local and reset when the Draftlet runtime restarts.</div>
-            {hasMaintenance ? null : <div>No generation-run maintenance outcomes have been recorded in this runtime process yet.</div>}
+            <div>{maintenanceRetentionLabel(diagnostics.status)}</div>
+            {hasMaintenance ? null : <div>No generation-run maintenance outcomes are retained yet.</div>}
           </>
         ) : (
           <div>{diagnostics?.error.message ?? 'Load runtime maintenance diagnostics to inspect recent cleanup and recovery outcomes.'}</div>
@@ -135,6 +135,22 @@ function summaryForOutcome(outcome: {
 
   const source = outcome.source ? ` via ${outcome.source}` : '';
   return `${parts.join(', ') || 'No changes'}${source}.`;
+}
+
+function maintenanceRetentionLabel(status: {
+  maxStoredOutcomes?: number;
+  processLocal: boolean;
+  retentionDays?: number;
+}) {
+  if (status.processLocal) {
+    return 'Recent outcomes are process-local and reset when the Draftlet runtime restarts.';
+  }
+
+  if (status.retentionDays && status.maxStoredOutcomes) {
+    return `Recent outcomes are retained for up to ${status.retentionDays} days or ${status.maxStoredOutcomes} records.`;
+  }
+
+  return 'Recent outcomes are retained by the Draftlet runtime with bounded storage.';
 }
 
 function labelForOperation(operation: string) {

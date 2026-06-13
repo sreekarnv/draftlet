@@ -130,3 +130,22 @@ class GenerationRunEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     run: Mapped["GenerationRun"] = relationship(back_populates="events")
+
+
+class GenerationRunMaintenanceOutcomeRecord(Base):
+    __tablename__ = "generation_run_maintenance_outcomes"
+
+    outcome_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    operation: Mapped[str] = mapped_column(String(80), index=True)
+    status: Mapped[str] = mapped_column(String(40))
+    source: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    reconciled_run_count: Mapped[int] = mapped_column(Integer, default=0)
+    reconciled_run_ids: Mapped[str] = mapped_column(Text, default="[]")
+    pruned_event_count: Mapped[int] = mapped_column(Integer, default=0)
+    stale_after_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    retention_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    replay_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    prune_batch_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -54,8 +54,10 @@ class GenerationRunMaintenanceOutcome(BaseModel):
 
 class GenerationRunMaintenanceStatus(BaseModel):
     checkedAt: datetime
-    processLocal: bool = True
+    processLocal: bool = False
     recentLimit: int
+    retentionDays: int
+    maxStoredOutcomes: int
     latestStartup: GenerationRunMaintenanceOutcome | None = None
     latestStaleReconciliation: GenerationRunMaintenanceOutcome | None = None
     latestReplayPrune: GenerationRunMaintenanceOutcome | None = None
