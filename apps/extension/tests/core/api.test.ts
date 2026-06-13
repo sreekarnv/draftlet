@@ -8,6 +8,7 @@ import {
   heartbeatGenerationRun,
   putWorkspaceSession,
   reconcileGenerationRuns,
+  startReplyGenerationRunExecution,
   streamReplyGenerationRunEvents,
   streamReplies,
 } from '../../core/api';
@@ -122,6 +123,19 @@ describe('workspace session runtime API', () => {
 });
 
 describe('generation run runtime API', () => {
+  it('starts a runtime-owned reply execution by run id', async () => {
+    const fetchMock = vi.fn(async () => Response.json({ run_id: 'generation-1', started: true, live: true }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await startReplyGenerationRunExecution('generation-1', payload());
+
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/replies/generation-1/start'), expect.objectContaining({
+      method: 'POST',
+      body: expect.stringContaining('"run_id":"generation-1"'),
+    }));
+    expect(result).toEqual({ runId: 'generation-1', started: true, live: true });
+  });
+
   it('cancels a runtime-owned reply execution by run id', async () => {
     const fetchMock = vi.fn(async () => Response.json({ cancelled: true }));
     vi.stubGlobal('fetch', fetchMock);

@@ -174,7 +174,9 @@ curl http://127.0.0.1:11434/api/tags
 ## API
 
 - `GET /health` identifies and checks the Draftlet server
-- `POST /replies` streams generated replies as SSE
+- `POST /replies/{run_id}/start` starts a runtime-owned reply generation run
+- `GET /replies/{run_id}/events` streams live/replayed run progress as SSE
+- `POST /replies` streams generated replies as SSE for transitional compatibility
 - `GET /domain/history` returns recent persisted Draftlet workspace threads
 - `GET /preferences` lists saved preferences
 - `PUT /preferences` upserts a preference

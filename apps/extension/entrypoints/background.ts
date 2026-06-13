@@ -17,8 +17,8 @@ import {
   putTurn,
   putWorkspaceSession,
   reconcileGenerationRuns,
+  startReplyGenerationRunExecution,
   streamReplyGenerationRunEvents,
-  streamReplies,
 } from '../core/api';
 import { DEFAULT_TONE } from '../core/constants';
 import {
@@ -26,9 +26,6 @@ import {
   ACTIVATE_RECAPTURE_TAB,
   CANCEL_DRAFT_GENERATION,
   CONVERSATION_THREAD_UPDATED,
-  DRAFT_GENERATION_COMPLETED,
-  DRAFT_GENERATION_FAILED,
-  DRAFT_GENERATION_STARTED,
   GET_CURRENT_WORKSPACE_SESSION,
   GET_INSERTION_TARGET_STATUS,
   GET_DOMAIN_HISTORY,
@@ -601,33 +598,6 @@ async function runDraftGeneration(
     return;
   }
 
-  await finalizeGenerationRunStatus(generationId, turn.turnId, 'streaming');
-  const streamingProgress = await hydrateAndEmitRunProgress(sessionId, generationId, thread.threadId);
-  replayCursor = Math.max(replayCursor, streamingProgress?.replayCursor ?? 0);
-  const streamingSession = streamingProgress
-    ? sessions.getBySessionId(sessionId)
-    : await hydrateWorkspaceSessionFromRuntime(sessionId, sessions.getBySessionId(sessionId) ?? undefined);
-  const streamingSnapshot = streamingProgress?.thread
-    ?? await hydrateAndEmitThreadSnapshot(sessionId, thread.threadId)
-    ?? threads.updateTurnStatus(turn.turnId, 'streaming');
-  const streamingTurn = streamingSnapshot ? findTurn(streamingSnapshot, turn.turnId) : null;
-
-  if (streamingSession) {
-    void emitWorkspaceSessionUpdated(streamingSession);
-  }
-
-  if (streamingSnapshot) {
-    void emitConversationThreadUpdated(sessionId, streamingSnapshot);
-  }
-
-  await emitDraftletMessage({
-    type: DRAFT_GENERATION_STARTED,
-    sessionId,
-    generationId,
-    thread: streamingSnapshot?.thread ?? thread,
-    turn: streamingTurn ?? { ...turn, generationStatus: 'streaming' },
-  });
-
   try {
     const connected = await checkServerHealth();
 
@@ -642,7 +612,8 @@ async function runDraftGeneration(
       return;
     }
 
-    await streamReplies(
+    const start = await startReplyGenerationRunExecution(
+      generationId,
       {
         selected_text: context.selectedText,
         tone: context.tone ?? DEFAULT_TONE,
@@ -656,54 +627,23 @@ async function runDraftGeneration(
         instruction: turn.instruction,
         generation_mode: mode,
       },
-      {
-        signal,
-        onReply(reply) {
-          if (!isLiveGenerationStream(sessionId, generationId)) {
-            return;
-          }
-
-          if (reply.sequence !== undefined) {
-            replayCursor = Math.max(replayCursor, reply.sequence);
-          }
-
-          void hydrateAndEmitRunProgress(sessionId, generationId, thread.threadId).then((progress) => {
-            replayCursor = Math.max(replayCursor, progress?.replayCursor ?? 0);
-          });
-        },
-        onControl(event) {
-          if (event.sequence !== undefined) {
-            replayCursor = Math.max(replayCursor, event.sequence);
-          }
-        },
-      },
     );
+
+    if (start.runId !== generationId) {
+      throw new Error('Runtime started a different generation run than requested.');
+    }
+
+    const startingProgress = await hydrateAndEmitRunProgress(sessionId, generationId, thread.threadId);
+    replayCursor = Math.max(replayCursor, startingProgress?.replayCursor ?? 0);
+
+    replayCursor = await streamRuntimeRunEvents(sessionId, generationId, thread.threadId, replayCursor, signal);
 
     if (!isLiveGenerationStream(sessionId, generationId)) {
       return;
     }
 
-    await finalizeGenerationRunStatus(generationId, turn.turnId, 'completed');
     const completedProgress = await hydrateAndEmitRunProgress(sessionId, generationId, thread.threadId, replayCursor);
     replayCursor = Math.max(replayCursor, completedProgress?.replayCursor ?? 0);
-    const completedSnapshot = completedProgress?.thread
-      ?? await hydrateAndEmitThreadSnapshot(sessionId, thread.threadId)
-      ?? threads.updateTurnStatus(turn.turnId, 'completed');
-    const completedTurn = completedSnapshot ? findTurn(completedSnapshot, turn.turnId) : null;
-    const completedVariants = completedSnapshot ? findVariantsForTurn(completedSnapshot, turn.turnId) : [];
-
-    if (completedSnapshot) {
-      void emitConversationThreadUpdated(sessionId, completedSnapshot);
-    }
-
-    await emitDraftletMessage({
-      type: DRAFT_GENERATION_COMPLETED,
-      sessionId,
-      generationId,
-      thread: completedSnapshot?.thread ?? thread,
-      turn: completedTurn ?? { ...turn, generationStatus: 'completed' },
-      variants: completedVariants,
-    });
 
   } catch (error) {
     if (signal.aborted) {
@@ -754,15 +694,6 @@ async function emitGenerationFailed(
   if (!runtimeFailedSnapshot && failedSnapshot) {
     void emitConversationThreadUpdated(sessionId, failedSnapshot);
   }
-
-  await emitDraftletMessage({
-    type: DRAFT_GENERATION_FAILED,
-    sessionId,
-    generationId,
-    threadId,
-    turnId,
-    error,
-  });
 }
 
 async function handleDraftVariantState(
@@ -1546,6 +1477,45 @@ async function hydrateAndEmitRunProgress(
   return progress;
 }
 
+async function streamRuntimeRunEvents(
+  sessionId: string,
+  runId: string,
+  threadId: string | undefined,
+  afterSequence: number,
+  signal: AbortSignal,
+): Promise<number> {
+  let replayCursor = afterSequence;
+
+  await streamReplyGenerationRunEvents(runId, {
+    signal,
+    afterSequence,
+    onReply(reply) {
+      if (!isLiveGenerationStream(sessionId, runId)) {
+        return;
+      }
+
+      if (reply.sequence !== undefined) {
+        replayCursor = Math.max(replayCursor, reply.sequence);
+      }
+
+      void hydrateAndEmitRunProgress(sessionId, runId, threadId, replayCursor).then((progress) => {
+        replayCursor = Math.max(replayCursor, progress?.replayCursor ?? 0);
+      });
+    },
+    onControl(event) {
+      if (event.sequence !== undefined) {
+        replayCursor = Math.max(replayCursor, event.sequence);
+      }
+
+      void hydrateAndEmitRunProgress(sessionId, runId, threadId, replayCursor).then((progress) => {
+        replayCursor = Math.max(replayCursor, progress?.replayCursor ?? 0);
+      });
+    },
+  });
+
+  return replayCursor;
+}
+
 async function subscribeToRuntimeRunEvents(
   sessionId: string,
   runId: string,
@@ -1561,28 +1531,7 @@ async function subscribeToRuntimeRunEvents(
   let replayCursor = afterSequence;
 
   try {
-    await streamReplyGenerationRunEvents(runId, {
-      signal: abortController.signal,
-      afterSequence,
-      onReply(reply) {
-        if (!isLiveGenerationStream(sessionId, runId)) {
-          return;
-        }
-
-        if (reply.sequence !== undefined) {
-          replayCursor = Math.max(replayCursor, reply.sequence);
-        }
-
-        void hydrateAndEmitRunProgress(sessionId, runId, threadId).then((progress) => {
-          replayCursor = Math.max(replayCursor, progress?.replayCursor ?? 0);
-        });
-      },
-      onControl(event) {
-        if (event.sequence !== undefined) {
-          replayCursor = Math.max(replayCursor, event.sequence);
-        }
-      },
-    });
+    replayCursor = await streamRuntimeRunEvents(sessionId, runId, threadId, afterSequence, abortController.signal);
   } catch (error) {
     if (abortController.signal.aborted) {
       return;
@@ -1701,10 +1650,6 @@ function recordRecaptureDiagnostic(input: Omit<RecaptureDiagnosticEntry, 'id' | 
 
 function findTurn(snapshot: ConversationThreadSnapshot, turnId: string): Turn | null {
   return snapshot.turns.find((turn) => turn.turnId === turnId) ?? null;
-}
-
-function findVariantsForTurn(snapshot: ConversationThreadSnapshot, turnId: string) {
-  return snapshot.variants.filter((variant) => variant.turnId === turnId);
 }
 
 function normalizeInstruction(instruction: string | undefined, mode: GenerationMode): string | undefined {
