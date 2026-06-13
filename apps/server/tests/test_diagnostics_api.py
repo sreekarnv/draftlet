@@ -3,13 +3,22 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from pydantic import ValidationError
 
-from app.api.diagnostics import get_browser_recapture_diagnostics, put_browser_recapture_diagnostics
+from app.api.diagnostics import (
+    get_browser_recapture_diagnostics,
+    get_generation_run_maintenance_diagnostics,
+    put_browser_recapture_diagnostics,
+)
+from app.main import app
 from app.schemas.diagnostics import RecaptureDiagnosticsReport
 from app.services.diagnostics_service import (
     BROWSER_RECAPTURE_DIAGNOSTICS_STALE_AFTER_SECONDS,
+    GENERATION_RUN_MAINTENANCE_RECENT_LIMIT,
+    clear_generation_run_maintenance_status,
     clear_latest_browser_recapture_report,
+    get_generation_run_maintenance_status,
     get_browser_recapture_diagnostics_state,
     get_latest_browser_recapture_report,
+    record_generation_run_maintenance_outcome,
 )
 
 
@@ -99,3 +108,67 @@ def test_browser_recapture_diagnostics_rejects_unbounded_fields() -> None:
                 ],
             },
         )
+
+
+def test_generation_run_maintenance_diagnostics_route_is_registered() -> None:
+    assert any(
+        route.path == "/diagnostics/generation-runs/maintenance" and "GET" in route.methods
+        for route in app.routes
+        if hasattr(route, "methods")
+    )
+
+
+def test_generation_run_maintenance_diagnostics_keeps_bounded_process_local_status() -> None:
+    clear_generation_run_maintenance_status()
+
+    record_generation_run_maintenance_outcome(
+        "stale_reconciliation",
+        source="domain_reconcile_endpoint",
+        reconciled_run_ids=["run-1", "run-2"],
+        stale_after_seconds=0,
+    )
+    record_generation_run_maintenance_outcome(
+        "replay_prune",
+        source="startup",
+        pruned_event_count=5,
+        retention_days=14,
+        replay_limit=100,
+        prune_batch_size=200,
+    )
+    record_generation_run_maintenance_outcome(
+        "startup_maintenance",
+        source="startup",
+        reconciled_run_ids=["run-1"],
+        pruned_event_count=5,
+        stale_after_seconds=0,
+        retention_days=14,
+        replay_limit=100,
+        prune_batch_size=200,
+    )
+
+    status = get_generation_run_maintenance_diagnostics()
+
+    assert status.processLocal is True
+    assert status.recentLimit == GENERATION_RUN_MAINTENANCE_RECENT_LIMIT
+    assert status.latestStartup.reconciledRunCount == 1
+    assert status.latestStartup.prunedEventCount == 5
+    assert status.latestStaleReconciliation.reconciledRunIds == ["run-1", "run-2"]
+    assert status.latestReplayPrune.prunedEventCount == 5
+    assert [event.operation for event in status.recent] == [
+        "stale_reconciliation",
+        "replay_prune",
+        "startup_maintenance",
+    ]
+
+
+def test_generation_run_maintenance_diagnostics_bounds_recent_outcomes() -> None:
+    clear_generation_run_maintenance_status()
+
+    for index in range(GENERATION_RUN_MAINTENANCE_RECENT_LIMIT + 3):
+        record_generation_run_maintenance_outcome("replay_prune", source=f"source-{index}", pruned_event_count=index)
+
+    status = get_generation_run_maintenance_status()
+
+    assert len(status.recent) == GENERATION_RUN_MAINTENANCE_RECENT_LIMIT
+    assert status.recent[0].source == "source-3"
+    assert status.latestReplayPrune.prunedEventCount == GENERATION_RUN_MAINTENANCE_RECENT_LIMIT + 2
