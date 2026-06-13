@@ -1,4 +1,7 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from app.db.session import get_session
 
 from app.schemas.diagnostics import (
     BrowserRecaptureDiagnosticsState,
@@ -26,5 +29,7 @@ def put_browser_recapture_diagnostics(report: RecaptureDiagnosticsReport) -> Rec
 
 
 @router.get("/generation-runs/maintenance", response_model=GenerationRunMaintenanceStatus)
-def get_generation_run_maintenance_diagnostics() -> GenerationRunMaintenanceStatus:
-    return get_generation_run_maintenance_status()
+def get_generation_run_maintenance_diagnostics(
+    session: Session = Depends(get_session),
+) -> GenerationRunMaintenanceStatus:
+    return get_generation_run_maintenance_status(session)

@@ -1,4 +1,11 @@
-from datetime import UTC, datetime
+import json
+from datetime import UTC, datetime, timedelta
+
+from sqlalchemy import delete, select
+from sqlalchemy.orm import Session
+
+from app.core.database import SessionLocal
+from app.db.models import GenerationRunMaintenanceOutcomeRecord
 
 from app.schemas.diagnostics import (
     BrowserRecaptureDiagnosticsState,
@@ -10,12 +17,13 @@ from app.schemas.diagnostics import (
 
 BROWSER_RECAPTURE_DIAGNOSTICS_STALE_AFTER_SECONDS = 15 * 60
 GENERATION_RUN_MAINTENANCE_RECENT_LIMIT = 20
+GENERATION_RUN_MAINTENANCE_RETENTION_DAYS = 30
+GENERATION_RUN_MAINTENANCE_MAX_STORED_OUTCOMES = 100
+GENERATION_RUN_MAINTENANCE_RECONCILED_RUN_ID_LIMIT = 20
 
 
 _latest_browser_recapture_report: RecaptureDiagnosticsReport | None = None
 _latest_browser_recapture_received_at: datetime | None = None
-_generation_run_maintenance_events: list[GenerationRunMaintenanceOutcome] = []
-_next_generation_run_maintenance_event_id = 1
 
 
 def get_latest_browser_recapture_report() -> RecaptureDiagnosticsReport | None:
@@ -73,53 +81,168 @@ def record_generation_run_maintenance_outcome(
     prune_batch_size: int | None = None,
     error_code: str | None = None,
     error_message: str | None = None,
+    session: Session | None = None,
 ) -> GenerationRunMaintenanceOutcome:
-    global _generation_run_maintenance_events, _next_generation_run_maintenance_event_id
-
-    bounded_run_ids = (reconciled_run_ids or [])[:20]
-    outcome = GenerationRunMaintenanceOutcome(
-        id=_next_generation_run_maintenance_event_id,
+    bounded_run_ids = (reconciled_run_ids or [])[:GENERATION_RUN_MAINTENANCE_RECONCILED_RUN_ID_LIMIT]
+    record = GenerationRunMaintenanceOutcomeRecord(
         operation=operation,
         status=status,
         source=source,
         at=datetime.now(UTC),
-        reconciledRunCount=len(reconciled_run_ids or []),
-        reconciledRunIds=bounded_run_ids,
-        prunedEventCount=pruned_event_count,
-        staleAfterSeconds=stale_after_seconds,
-        retentionDays=retention_days,
-        replayLimit=replay_limit,
-        pruneBatchSize=prune_batch_size,
-        errorCode=error_code,
-        errorMessage=error_message,
+        reconciled_run_count=len(reconciled_run_ids or []),
+        reconciled_run_ids=json.dumps(bounded_run_ids),
+        pruned_event_count=pruned_event_count,
+        stale_after_seconds=stale_after_seconds,
+        retention_days=retention_days,
+        replay_limit=replay_limit,
+        prune_batch_size=prune_batch_size,
+        error_code=error_code,
+        error_message=error_message,
     )
-    _next_generation_run_maintenance_event_id += 1
-    _generation_run_maintenance_events.append(outcome)
-    _generation_run_maintenance_events = _generation_run_maintenance_events[-GENERATION_RUN_MAINTENANCE_RECENT_LIMIT:]
-    return outcome
+
+    if session is not None:
+        session.add(record)
+        session.commit()
+        session.refresh(record)
+        prune_generation_run_maintenance_outcomes(session)
+        return generation_run_maintenance_record_to_outcome(record)
+
+    with SessionLocal() as local_session:
+        local_session.add(record)
+        local_session.commit()
+        local_session.refresh(record)
+        prune_generation_run_maintenance_outcomes(local_session)
+        return generation_run_maintenance_record_to_outcome(record)
 
 
-def get_generation_run_maintenance_status(now: datetime | None = None) -> GenerationRunMaintenanceStatus:
-    recent = list(_generation_run_maintenance_events)
+def get_generation_run_maintenance_status(
+    session: Session | None = None,
+    now: datetime | None = None,
+) -> GenerationRunMaintenanceStatus:
+    if session is not None:
+        return build_generation_run_maintenance_status(session, now)
+
+    with SessionLocal() as local_session:
+        return build_generation_run_maintenance_status(local_session, now)
+
+
+def build_generation_run_maintenance_status(
+    session: Session,
+    now: datetime | None = None,
+) -> GenerationRunMaintenanceStatus:
+    checked_at = now or datetime.now(UTC)
+    prune_generation_run_maintenance_outcomes(session, checked_at)
+    recent = list_generation_run_maintenance_outcomes(session, limit=GENERATION_RUN_MAINTENANCE_RECENT_LIMIT)
 
     return GenerationRunMaintenanceStatus(
-        checkedAt=now or datetime.now(UTC),
+        checkedAt=checked_at,
+        processLocal=False,
         recentLimit=GENERATION_RUN_MAINTENANCE_RECENT_LIMIT,
-        latestStartup=latest_generation_run_maintenance_outcome(recent, "startup_maintenance"),
-        latestStaleReconciliation=latest_generation_run_maintenance_outcome(recent, "stale_reconciliation"),
-        latestReplayPrune=latest_generation_run_maintenance_outcome(recent, "replay_prune"),
+        retentionDays=GENERATION_RUN_MAINTENANCE_RETENTION_DAYS,
+        maxStoredOutcomes=GENERATION_RUN_MAINTENANCE_MAX_STORED_OUTCOMES,
+        latestStartup=get_latest_generation_run_maintenance_outcome(session, "startup_maintenance"),
+        latestStaleReconciliation=get_latest_generation_run_maintenance_outcome(session, "stale_reconciliation"),
+        latestReplayPrune=get_latest_generation_run_maintenance_outcome(session, "replay_prune"),
         recent=recent,
     )
 
 
-def latest_generation_run_maintenance_outcome(
-    events: list[GenerationRunMaintenanceOutcome],
+def get_latest_generation_run_maintenance_outcome(
+    session: Session,
     operation: str,
 ) -> GenerationRunMaintenanceOutcome | None:
-    return next((event for event in reversed(events) if event.operation == operation), None)
+    record = session.scalar(
+        select(GenerationRunMaintenanceOutcomeRecord)
+        .where(GenerationRunMaintenanceOutcomeRecord.operation == operation)
+        .order_by(GenerationRunMaintenanceOutcomeRecord.at.desc(), GenerationRunMaintenanceOutcomeRecord.outcome_id.desc())
+        .limit(1)
+    )
+
+    return generation_run_maintenance_record_to_outcome(record) if record else None
 
 
-def clear_generation_run_maintenance_status() -> None:
-    global _generation_run_maintenance_events, _next_generation_run_maintenance_event_id
-    _generation_run_maintenance_events = []
-    _next_generation_run_maintenance_event_id = 1
+def list_generation_run_maintenance_outcomes(
+    session: Session,
+    limit: int,
+) -> list[GenerationRunMaintenanceOutcome]:
+    records = list(
+        session.scalars(
+            select(GenerationRunMaintenanceOutcomeRecord)
+            .order_by(GenerationRunMaintenanceOutcomeRecord.at.desc(), GenerationRunMaintenanceOutcomeRecord.outcome_id.desc())
+            .limit(limit)
+        )
+    )
+    return [generation_run_maintenance_record_to_outcome(record) for record in reversed(records)]
+
+
+def prune_generation_run_maintenance_outcomes(
+    session: Session,
+    now: datetime | None = None,
+) -> None:
+    checked_at = now or datetime.now(UTC)
+    cutoff = checked_at - timedelta(days=GENERATION_RUN_MAINTENANCE_RETENTION_DAYS)
+    session.execute(
+        delete(GenerationRunMaintenanceOutcomeRecord)
+        .where(GenerationRunMaintenanceOutcomeRecord.at < cutoff)
+        .execution_options(synchronize_session=False)
+    )
+
+    overflow_ids = list(
+        session.scalars(
+            select(GenerationRunMaintenanceOutcomeRecord.outcome_id)
+            .order_by(GenerationRunMaintenanceOutcomeRecord.at.desc(), GenerationRunMaintenanceOutcomeRecord.outcome_id.desc())
+            .offset(GENERATION_RUN_MAINTENANCE_MAX_STORED_OUTCOMES)
+        )
+    )
+
+    if overflow_ids:
+        session.execute(
+            delete(GenerationRunMaintenanceOutcomeRecord)
+            .where(GenerationRunMaintenanceOutcomeRecord.outcome_id.in_(overflow_ids))
+            .execution_options(synchronize_session=False)
+        )
+
+    session.commit()
+
+
+def generation_run_maintenance_record_to_outcome(
+    record: GenerationRunMaintenanceOutcomeRecord,
+) -> GenerationRunMaintenanceOutcome:
+    return GenerationRunMaintenanceOutcome(
+        id=record.outcome_id,
+        operation=record.operation,
+        status=record.status,
+        source=record.source,
+        at=record.at,
+        reconciledRunCount=record.reconciled_run_count,
+        reconciledRunIds=parse_reconciled_run_ids(record.reconciled_run_ids),
+        prunedEventCount=record.pruned_event_count,
+        staleAfterSeconds=record.stale_after_seconds,
+        retentionDays=record.retention_days,
+        replayLimit=record.replay_limit,
+        pruneBatchSize=record.prune_batch_size,
+        errorCode=record.error_code,
+        errorMessage=record.error_message,
+    )
+
+
+def parse_reconciled_run_ids(value: str) -> list[str]:
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        return []
+
+    if not isinstance(parsed, list):
+        return []
+
+    return [item for item in parsed if isinstance(item, str)][:GENERATION_RUN_MAINTENANCE_RECONCILED_RUN_ID_LIMIT]
+
+
+def clear_generation_run_maintenance_status(session: Session | None = None) -> None:
+    if session is not None:
+        session.execute(delete(GenerationRunMaintenanceOutcomeRecord))
+        session.commit()
+        return
+
+    with SessionLocal() as local_session:
+        clear_generation_run_maintenance_status(local_session)

@@ -545,6 +545,7 @@ def prune_terminal_generation_run_events(
         retention_days=older_than_days,
         replay_limit=DEFAULT_GENERATION_RUN_EVENT_REPLAY_LIMIT,
         prune_batch_size=max_runs,
+        session=session,
     )
     return pruned_count
 
@@ -646,6 +647,7 @@ def reconcile_stale_generation_runs(
         source=maintenance_source,
         reconciled_run_ids=[run.run_id for run in reconciled],
         stale_after_seconds=payload.stale_after_seconds,
+        session=session,
     )
     return reconciled
 

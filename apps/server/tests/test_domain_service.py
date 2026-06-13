@@ -47,7 +47,8 @@ class DomainServiceTest(unittest.TestCase):
         engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
         Base.metadata.create_all(engine)
         self.Session = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-        clear_generation_run_maintenance_status()
+        with self.Session() as session:
+            clear_generation_run_maintenance_status(session)
 
     def test_persists_session_thread_turn_and_variant_snapshot(self) -> None:
         with self.Session() as session:
@@ -501,7 +502,7 @@ class DomainServiceTest(unittest.TestCase):
 
             pruned = prune_terminal_generation_run_events(session, older_than_days=14, max_runs=20)
             old_progress = get_generation_run_progress_snapshot(session, "run-old")
-            maintenance = get_generation_run_maintenance_status()
+            maintenance = get_generation_run_maintenance_status(session)
 
             self.assertEqual(pruned, 2)
             self.assertEqual(list_generation_run_events(session, "run-old"), [])
@@ -563,7 +564,7 @@ class DomainServiceTest(unittest.TestCase):
                 GenerationRunReconcileRequest(session_id=workspace.session_id, stale_after_seconds=0),
             )
             snapshot = get_session_snapshot(session, workspace.session_id)
-            maintenance = get_generation_run_maintenance_status()
+            maintenance = get_generation_run_maintenance_status(session)
 
             self.assertEqual([run.run_id for run in reconciled], ["run-1"])
             self.assertEqual(reconciled[0].status, "interrupted")
