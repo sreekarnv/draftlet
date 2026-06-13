@@ -79,6 +79,9 @@ const mountedPanel = mountDraftletPanel(root, {
   onGenerate() {
     void generateReplies();
   },
+  onRetryInterruptedTurn(turnId) {
+    return retryInterruptedTurn(turnId);
+  },
   onRefine(instruction) {
     void refineReplies(instruction);
   },
@@ -352,9 +355,30 @@ async function restoreDomainHistoryItem(item: DomainHistoryItem) {
 }
 
 async function generateReplies() {
+  const result = await startDraftGenerationFromCurrentSession();
+
+  if (!result.ok && result.message) {
+    panel.setState('error', result.message);
+  }
+}
+
+async function retryInterruptedTurn(_turnId: string) {
+  return startDraftGenerationFromCurrentSession({
+    missingContextMessage: 'Restore the thread context before retrying this draft.',
+    startErrorMessage: 'Could not retry this draft generation.',
+    successMessage: 'Started a new run from this thread.',
+  });
+}
+
+async function startDraftGenerationFromCurrentSession(options: {
+  missingContextMessage?: string;
+  startErrorMessage?: string;
+  successMessage?: string;
+} = {}) {
   if (!currentSession?.latestContext.selectedText) {
-    panel.setState('error', 'Select text on a page before generating replies.');
-    return;
+    const message = options.missingContextMessage ?? 'Select text on a page before generating replies.';
+    panel.setState('error', message);
+    return { ok: false, message };
   }
 
   await cancelActiveGeneration();
@@ -369,8 +393,9 @@ async function generateReplies() {
     } satisfies DraftletMessage) as StartDraftGenerationResult;
 
     if (!response.started || !response.generationId || !response.sessionId) {
-      panel.setState('error', response.error?.message ?? 'Could not start draft generation.');
-      return;
+      const message = response.error?.message ?? options.startErrorMessage ?? 'Could not start draft generation.';
+      panel.setState('error', message);
+      return { ok: false, message };
     }
 
     currentSession = currentSession ? {
@@ -379,12 +404,12 @@ async function generateReplies() {
       activeTurnId: response.turnId ?? currentSession.activeTurnId,
       activeRunId: response.generationId,
     } : currentSession;
+    return { ok: true, message: options.successMessage ?? 'Started draft generation.' };
   } catch (error) {
     panel.setConnectionStatus('disconnected');
-    panel.setState(
-      'error',
-      error instanceof Error ? error.message : 'Could not reach the Draftlet extension coordinator.',
-    );
+    const message = error instanceof Error ? error.message : 'Could not reach the Draftlet extension coordinator.';
+    panel.setState('error', message);
+    return { ok: false, message };
   }
 }
 

@@ -68,6 +68,7 @@ export interface PanelCallbacks {
   onToneChange?: (tone: Tone) => void;
   onViewChange?: (activeView: PanelView) => void;
   onGenerate: () => void;
+  onRetryInterruptedTurn?: (turnId: string) => Promise<VariantActionResult>;
   onRefine?: (instruction: string) => void;
   onLoadHistory?: () => Promise<DomainHistoryItem[]>;
   onRestoreHistoryItem?: (item: DomainHistoryItem) => Promise<VariantActionResult>;
