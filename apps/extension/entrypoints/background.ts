@@ -63,6 +63,7 @@ import {
   type StartDraftGenerationResult,
   type Turn,
   type WorkspaceRestoreSource,
+  type WorkspaceRestoreState,
   type WorkspaceSession,
   type WorkspaceSessionResult,
 } from '../core/messages';
@@ -92,6 +93,7 @@ type InsertionTabResolution =
 const sessions = createWorkspaceSessionStore();
 const threads = createConversationThreadStore();
 const recaptureDiagnostics = createRecaptureDiagnosticsLog();
+const restoreDiagnosticKeyBySessionId = new Map<string, string>();
 // Browser-local fetch/SSE handles only. Runtime GenerationRun state and durable replay remain the recovery source.
 const localGenerationTransportByRunId = new Map<string, LocalGenerationTransportHandle>();
 const GENERATION_RUN_STALE_AFTER_SECONDS = 30;
@@ -315,6 +317,7 @@ async function handleRestoreDomainThread(sessionId: string, threadId: string): P
       thread: threadSnapshot,
       source: 'history',
     });
+    recordRestoreStateDiagnostic(restoredSession, restoreState);
     restoredSession = {
       ...restoredSession,
       restoreState,
@@ -1305,7 +1308,7 @@ async function restoreRuntimeSnapshot(session: WorkspaceSession): Promise<Worksp
     const snapshot = await getWorkspaceSessionSnapshot(session.sessionId);
 
     if (!snapshot) {
-      const fallbackSession = attachWorkspaceRestoreState(session, null, 'current_tab');
+      const fallbackSession = attachAndRecordWorkspaceRestoreState(session, null, 'current_tab');
       sessions.hydrateSession(fallbackSession);
       return { session: fallbackSession, restoreState: fallbackSession.restoreState };
     }
@@ -1373,7 +1376,7 @@ async function restoreRuntimeSnapshot(session: WorkspaceSession): Promise<Worksp
       }
     }
 
-    restoredSession = attachWorkspaceRestoreState(restoredSession, restoredThread, 'current_tab');
+    restoredSession = attachAndRecordWorkspaceRestoreState(restoredSession, restoredThread, 'current_tab');
     sessions.hydrateSession(restoredSession);
 
     if (restoredThread) {
@@ -1387,7 +1390,7 @@ async function restoreRuntimeSnapshot(session: WorkspaceSession): Promise<Worksp
       restoreState: restoredSession.restoreState,
     };
   } catch {
-    const fallbackSession = attachWorkspaceRestoreState(session, null, 'current_tab');
+    const fallbackSession = attachAndRecordWorkspaceRestoreState(session, null, 'current_tab');
     sessions.hydrateSession(fallbackSession);
     return { session: fallbackSession, restoreState: fallbackSession.restoreState };
   }
@@ -1830,7 +1833,57 @@ function withCurrentRestoreState(session: WorkspaceSession, source: WorkspaceRes
   const thread = session.activeThreadId
     ? threads.getSnapshot(session.activeThreadId)
     : threads.getSnapshotForSession(session.sessionId);
-  return attachWorkspaceRestoreState(session, thread, source);
+  return attachAndRecordWorkspaceRestoreState(session, thread, source);
+}
+
+function attachAndRecordWorkspaceRestoreState(
+  session: WorkspaceSession,
+  thread: ConversationThreadSnapshot | null | undefined,
+  source: WorkspaceRestoreSource,
+): WorkspaceSession {
+  const restoredSession = attachWorkspaceRestoreState(session, thread, source);
+
+  if (restoredSession.restoreState) {
+    recordRestoreStateDiagnostic(restoredSession, restoredSession.restoreState);
+  }
+
+  return restoredSession;
+}
+
+function recordRestoreStateDiagnostic(
+  session: WorkspaceSession,
+  restoreState: WorkspaceRestoreState,
+): void {
+  const primaryIssue = restoreState.issues.find((issue) => issue.severity === 'error' || issue.severity === 'warning')
+    ?? restoreState.issues[0];
+  const key = [
+    restoreState.source,
+    restoreState.status,
+    restoreState.summary,
+    restoreState.activeThreadId,
+    restoreState.activeTurnId,
+    restoreState.activeRunId,
+    restoreState.issues.map((issue) => `${issue.code}:${issue.severity}:${issue.threadId ?? ''}:${issue.turnId ?? ''}:${issue.runId ?? ''}`).join('|'),
+  ].join('::');
+
+  if (restoreDiagnosticKeyBySessionId.get(session.sessionId) === key) {
+    return;
+  }
+
+  restoreDiagnosticKeyBySessionId.set(session.sessionId, key);
+  recordRecaptureDiagnostic({
+    event: 'restore_state_projected',
+    level: restoreState.status === 'conflict'
+      ? 'error'
+      : restoreState.status === 'needs_action'
+        ? 'warning'
+        : 'info',
+    sessionId: session.sessionId,
+    tabId: session.tabId >= 0 ? session.tabId : undefined,
+    status: restoreState.status,
+    reason: primaryIssue?.code,
+    message: restoreState.summary,
+  });
 }
 
 function createGenerationId(): string {

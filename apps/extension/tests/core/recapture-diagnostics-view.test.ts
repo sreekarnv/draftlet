@@ -19,6 +19,7 @@ import {
 describe('recapture diagnostics view helpers', () => {
   it('formats diagnostic labels for compact surfaces', () => {
     expect(recaptureDiagnosticEventLabel({ event: 'content_recapture_failed' })).toBe('Page unreachable');
+    expect(recaptureDiagnosticEventLabel({ event: 'restore_state_projected' })).toBe('Restore state');
     expect(recaptureDiagnosticEventLabel({ event: 'tab_activation_completed' })).toBe('Tab opened');
     expect(recaptureDiagnosticLevelLabel('warning')).toBe('Warning');
     expect(recaptureDiagnosticLevelLabel('debug')).toBe('Debug');

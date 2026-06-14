@@ -176,7 +176,8 @@ The first desktop-extension diagnostics transport is a bounded runtime relay:
 - extension background owns the recapture diagnostics log
 - extension background publishes a privacy-bounded report to `/diagnostics/browser-recapture` when recapture or insertion-target revalidation diagnostics change
 - extension popup can still ask background to publish/copy the same bounded report for manual debugging
-- runtime stores only the latest report in memory, records when it was received, and clears it after the bounded freshness window
+- runtime stores browser restore/recapture diagnostics durably in a bounded SQLite-backed report/event table
+- runtime keeps the latest report readable after process restart, marks it stale after the bounded freshness window, and prunes old reports by retention age and max stored report count
 - desktop reads the latest report through its normal main-process IPC and the runtime endpoint
 - desktop can display the report or an expired-report state, but cannot mutate browser recapture state
 
@@ -208,11 +209,11 @@ The report also includes a bounded summary envelope with:
 - `latestAttempt`
 - `latestOutcome`
 
-Relay freshness metadata may include `receivedAt`, `stale`, and `staleAfterSeconds`. These fields describe the runtime-held report envelope, not live browser state.
+Relay freshness and retention metadata may include `receivedAt`, `stale`, `staleAfterSeconds`, `retentionDays`, `maxStoredReports`, and `maxEntriesPerReport`. These fields describe the runtime-held report envelope, not live browser state.
 
 The bridge response must not include selected text, generated draft text, full page content, DOM selectors, cookies, tokens, local runtime secrets, or raw exception objects.
 
-The relay is intentionally non-durable. A future implementation can replace it with native messaging or another explicit channel, but it must keep the same privacy-bounded request/response contract or version it deliberately.
+The relay remains extension-backed at publish time: if the extension cannot reach the runtime, publication is still best-effort. Once the runtime receives a report, it is durable until bounded retention pruning removes it. A future implementation can replace the publish transport with native messaging or another explicit channel, but it must keep the same privacy-bounded request/response contract or version it deliberately.
 
 ## Error Shape
 

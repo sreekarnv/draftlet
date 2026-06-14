@@ -4,6 +4,7 @@ import type {
   RecaptureDiagnosticLevel,
   RecaptureInsertionTargetFailureReason,
   RecaptureInsertionTargetOutcome,
+  WorkspaceRestoreStatus,
 } from './messages';
 import type { InsertionTargetStatus } from './types';
 import type {
@@ -22,7 +23,7 @@ interface AppendRecaptureDiagnosticInput {
   level: RecaptureDiagnosticLevel;
   sessionId: string;
   tabId?: number;
-  status?: InsertionTargetStatus;
+  status?: InsertionTargetStatus | WorkspaceRestoreStatus;
   outcome?: RecaptureInsertionTargetOutcome;
   reason?: RecaptureInsertionTargetFailureReason | string;
   message: string;

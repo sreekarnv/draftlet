@@ -149,3 +149,46 @@ class GenerationRunMaintenanceOutcomeRecord(Base):
     prune_batch_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class BrowserRecaptureDiagnosticsReportRecord(Base):
+    __tablename__ = "browser_recapture_diagnostics_reports"
+
+    report_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    kind: Mapped[str] = mapped_column(String(80))
+    exported_at: Mapped[str] = mapped_column(String(80))
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    last_updated_at: Mapped[str] = mapped_column(String(80))
+    entry_count: Mapped[int] = mapped_column(Integer, default=0)
+    current_target_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    latest_attempt_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    latest_outcome_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    events: Mapped[list["BrowserRecaptureDiagnosticEventRecord"]] = relationship(
+        back_populates="report",
+        cascade="all, delete-orphan",
+        order_by="BrowserRecaptureDiagnosticEventRecord.event_record_id",
+    )
+
+
+class BrowserRecaptureDiagnosticEventRecord(Base):
+    __tablename__ = "browser_recapture_diagnostic_events"
+
+    event_record_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    report_id: Mapped[int] = mapped_column(
+        ForeignKey("browser_recapture_diagnostics_reports.report_id", ondelete="CASCADE"),
+        index=True,
+    )
+    source_entry_id: Mapped[int] = mapped_column(Integer)
+    event: Mapped[str] = mapped_column(String(120), index=True)
+    level: Mapped[str] = mapped_column(String(40))
+    session_id: Mapped[str] = mapped_column(String(120), index=True)
+    tab_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    outcome: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    reason: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    message: Mapped[str] = mapped_column(Text)
+    at: Mapped[str] = mapped_column(String(80), index=True)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    report: Mapped["BrowserRecaptureDiagnosticsReportRecord"] = relationship(back_populates="events")

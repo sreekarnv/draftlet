@@ -19,13 +19,18 @@ router = APIRouter(prefix="/diagnostics", tags=["diagnostics"])
 
 
 @router.get("/browser-recapture", response_model=BrowserRecaptureDiagnosticsState)
-def get_browser_recapture_diagnostics() -> BrowserRecaptureDiagnosticsState:
-    return get_browser_recapture_diagnostics_state()
+def get_browser_recapture_diagnostics(
+    session: Session = Depends(get_session),
+) -> BrowserRecaptureDiagnosticsState:
+    return get_browser_recapture_diagnostics_state(session)
 
 
 @router.put("/browser-recapture", response_model=RecaptureDiagnosticsReport)
-def put_browser_recapture_diagnostics(report: RecaptureDiagnosticsReport) -> RecaptureDiagnosticsReport:
-    return put_latest_browser_recapture_report(report)
+def put_browser_recapture_diagnostics(
+    report: RecaptureDiagnosticsReport,
+    session: Session = Depends(get_session),
+) -> RecaptureDiagnosticsReport:
+    return put_latest_browser_recapture_report(report, session)
 
 
 @router.get("/generation-runs/maintenance", response_model=GenerationRunMaintenanceStatus)

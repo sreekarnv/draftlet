@@ -67,6 +67,9 @@ class BrowserRecaptureDiagnosticsState(BaseModel):
     receivedAt: str | None = None
     stale: bool = False
     staleAfterSeconds: int
+    retentionDays: int | None = Field(default=None, ge=0)
+    maxStoredReports: int | None = Field(default=None, ge=0)
+    maxEntriesPerReport: int | None = Field(default=None, ge=0)
 
 
 class GenerationRunMaintenanceOutcome(BaseModel):
