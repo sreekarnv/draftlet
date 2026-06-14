@@ -267,6 +267,28 @@ class GenerationRunLiveFeedAttachment(BaseModel):
     reason: str | None = Field(default=None, max_length=120)
 
 
+class GenerationRunRestoreCandidate(BaseModel):
+    run_id: str
+    session_id: str
+    thread_id: str
+    turn_id: str
+    status: str
+    lease_owner: str
+    restore_mode: Literal["live_attached", "replay_only", "stale"]
+    live_attached: bool
+    replay_available: bool
+    subscriber_count: int = Field(default=0, ge=0)
+    recoverable: bool
+    stale: bool
+    interrupted: bool
+    reason: str | None = Field(default=None, max_length=120)
+    claimed_at: datetime
+    heartbeat_at: datetime | None = None
+    interrupted_at: datetime | None = None
+    last_activity_at: datetime | None = None
+    updated_at: datetime
+
+
 class GenerationRunExecutionState(BaseModel):
     checked_at: datetime
     stale_after_seconds: int
@@ -274,6 +296,7 @@ class GenerationRunExecutionState(BaseModel):
     live: list[GenerationRunRead]
     stale: list[GenerationRunRead]
     feed_attachments: dict[str, GenerationRunLiveFeedAttachment] = Field(default_factory=dict)
+    restore_candidates: list[GenerationRunRestoreCandidate] = Field(default_factory=list)
 
 
 class DraftVariantRead(BaseModel):

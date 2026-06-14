@@ -8,6 +8,7 @@ import type {
   ConversationThreadSnapshot,
   GenerationRun,
   GenerationRunExecutionState,
+  GenerationRunRestoreCandidate,
   WorkspaceSession,
 } from '../../core/messages';
 
@@ -62,24 +63,20 @@ describe('generation run recovery decisions', () => {
       session: workspaceSession({ activeTurnId: undefined }),
       thread: threadSnapshot(),
       executionState: executionState({
-        active: [staleHeartbeatRun, liveFeedRun],
-        live: [staleHeartbeatRun, liveFeedRun],
-        feedAttachments: {
-          [staleHeartbeatRun.runId]: {
-            mode: 'stale',
+        restoreCandidates: [
+          restoreCandidate(staleHeartbeatRun, {
+            restoreMode: 'stale',
             liveAttached: false,
             replayAvailable: true,
-            subscriberCount: 0,
             reason: 'active_run_without_live_producer',
-          },
-          [liveFeedRun.runId]: {
-            mode: 'live_attached',
+          }),
+          restoreCandidate(liveFeedRun, {
+            restoreMode: 'live_attached',
             liveAttached: true,
             replayAvailable: true,
-            subscriberCount: 0,
             reason: 'producer_attached',
-          },
-        },
+          }),
+        ],
       }),
     })).toMatchObject({
       kind: 'reattach_live',
@@ -95,17 +92,14 @@ describe('generation run recovery decisions', () => {
       session: workspaceSession({ activeRunId: run.runId }),
       thread: threadSnapshot(),
       executionState: executionState({
-        active: [run],
-        live: [run],
-        feedAttachments: {
-          [run.runId]: {
-            mode: 'replay_only',
+        restoreCandidates: [
+          restoreCandidate(run, {
+            restoreMode: 'replay_only',
             liveAttached: false,
             replayAvailable: true,
-            subscriberCount: 0,
             reason: 'no_live_producer',
-          },
-        },
+          }),
+        ],
       }),
     })).toMatchObject({
       kind: 'reconcile_stale',
@@ -121,17 +115,14 @@ describe('generation run recovery decisions', () => {
       session: workspaceSession({ activeRunId: run.runId }),
       thread: threadSnapshot(),
       executionState: executionState({
-        active: [run],
-        live: [run],
-        feedAttachments: {
-          [run.runId]: {
-            mode: 'stale',
+        restoreCandidates: [
+          restoreCandidate(run, {
+            restoreMode: 'stale',
             liveAttached: false,
             replayAvailable: false,
-            subscriberCount: 0,
             reason: 'active_run_without_live_producer',
-          },
-        },
+          }),
+        ],
       }),
     })).toMatchObject({
       kind: 'reconcile_stale',
@@ -279,12 +270,40 @@ function generationRun(overrides: Partial<GenerationRun> = {}): GenerationRun {
   };
 }
 
+function restoreCandidate(
+  run: GenerationRun,
+  overrides: Partial<GenerationRunRestoreCandidate> = {},
+): GenerationRunRestoreCandidate {
+  return {
+    runId: run.runId,
+    sessionId: run.sessionId,
+    threadId: run.threadId,
+    turnId: run.turnId,
+    status: run.status,
+    leaseOwner: run.leaseOwner,
+    restoreMode: 'live_attached',
+    liveAttached: true,
+    replayAvailable: true,
+    subscriberCount: 0,
+    recoverable: true,
+    stale: false,
+    interrupted: false,
+    claimedAt: run.claimedAt,
+    heartbeatAt: run.heartbeatAt,
+    interruptedAt: run.interruptedAt,
+    lastActivityAt: run.heartbeatAt ?? run.claimedAt,
+    updatedAt: run.updatedAt,
+    ...overrides,
+  };
+}
+
 function executionState({
   active = [],
   live = [],
   stale = [],
   feedAttachments = {},
-}: Partial<Pick<GenerationRunExecutionState, 'active' | 'live' | 'stale' | 'feedAttachments'>>): GenerationRunExecutionState {
+  restoreCandidates = [],
+}: Partial<Pick<GenerationRunExecutionState, 'active' | 'live' | 'stale' | 'feedAttachments' | 'restoreCandidates'>>): GenerationRunExecutionState {
   return {
     checkedAt: '2026-01-01T00:00:00.000Z',
     staleAfterSeconds: 30,
@@ -292,5 +311,6 @@ function executionState({
     live,
     stale,
     feedAttachments,
+    restoreCandidates,
   };
 }

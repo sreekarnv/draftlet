@@ -10,6 +10,7 @@ import type {
   GenerationRunExecutionState,
   GenerationRunLiveFeedAttachment,
   GenerationRunProgressSnapshot,
+  GenerationRunRestoreCandidate,
   GenerationRunStatus,
   SourceSnapshot,
   Turn,
@@ -319,6 +320,7 @@ export async function getGenerationRunExecutionState(filters: {
     live: response.live.map(mapGenerationRun),
     stale: response.stale.map(mapGenerationRun),
     feedAttachments: mapGenerationRunFeedAttachments(response.feed_attachments),
+    restoreCandidates: (response.restore_candidates ?? []).map(mapGenerationRunRestoreCandidate),
   };
 }
 
@@ -623,6 +625,30 @@ function mapGenerationRunFeedAttachments(
       mapGenerationRunLiveFeedAttachment(attachment),
     ]),
   );
+}
+
+function mapGenerationRunRestoreCandidate(candidate: GenerationRunRestoreCandidateRead): GenerationRunRestoreCandidate {
+  return {
+    runId: candidate.run_id,
+    sessionId: candidate.session_id,
+    threadId: candidate.thread_id,
+    turnId: candidate.turn_id,
+    status: isGenerationRunStatus(candidate.status) ? candidate.status : 'active',
+    leaseOwner: candidate.lease_owner,
+    restoreMode: isGenerationRunLiveFeedAttachmentMode(candidate.restore_mode) ? candidate.restore_mode : 'stale',
+    liveAttached: candidate.live_attached,
+    replayAvailable: candidate.replay_available,
+    subscriberCount: candidate.subscriber_count,
+    recoverable: candidate.recoverable,
+    stale: candidate.stale,
+    interrupted: candidate.interrupted,
+    reason: candidate.reason ?? undefined,
+    claimedAt: candidate.claimed_at,
+    heartbeatAt: candidate.heartbeat_at ?? undefined,
+    interruptedAt: candidate.interrupted_at ?? undefined,
+    lastActivityAt: candidate.last_activity_at ?? undefined,
+    updatedAt: candidate.updated_at,
+  };
 }
 
 function mapWorkspaceSession(
@@ -935,6 +961,7 @@ interface GenerationRunExecutionStateRead {
   live: GenerationRunRead[];
   stale: GenerationRunRead[];
   feed_attachments?: Record<string, GenerationRunLiveFeedAttachmentRead> | null;
+  restore_candidates?: GenerationRunRestoreCandidateRead[] | null;
 }
 
 interface GenerationRunProgressEventRead {
@@ -955,6 +982,28 @@ interface GenerationRunLiveFeedAttachmentRead {
   replay_available: boolean;
   subscriber_count: number;
   reason: string | null;
+}
+
+interface GenerationRunRestoreCandidateRead {
+  run_id: string;
+  session_id: string;
+  thread_id: string;
+  turn_id: string;
+  status: string;
+  lease_owner: string;
+  restore_mode: string;
+  live_attached: boolean;
+  replay_available: boolean;
+  subscriber_count: number;
+  recoverable: boolean;
+  stale: boolean;
+  interrupted: boolean;
+  reason: string | null;
+  claimed_at: string;
+  heartbeat_at: string | null;
+  interrupted_at: string | null;
+  last_activity_at: string | null;
+  updated_at: string;
 }
 
 interface GenerationRunProgressSnapshotRead {

@@ -92,3 +92,16 @@ def test_execution_state_includes_live_feed_attachment_truth(monkeypatch) -> Non
     assert attachment.live_attached is True
     assert attachment.replay_available is True
     assert attachment.subscriber_count == 2
+    assert len(state.restore_candidates) == 1
+    candidate = state.restore_candidates[0]
+    assert candidate.run_id == "run-1"
+    assert candidate.thread_id == "thread-1"
+    assert candidate.turn_id == "turn-1"
+    assert candidate.status == "active"
+    assert candidate.restore_mode == "live_attached"
+    assert candidate.live_attached is True
+    assert candidate.replay_available is True
+    assert candidate.subscriber_count == 2
+    assert candidate.recoverable is True
+    assert candidate.stale is False
+    assert candidate.interrupted is False

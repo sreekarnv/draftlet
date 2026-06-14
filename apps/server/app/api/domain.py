@@ -17,6 +17,7 @@ from app.schemas.domain import (
     GenerationRunProgressSnapshot,
     GenerationRunRead,
     GenerationRunReconcileRequest,
+    GenerationRunRestoreCandidate,
     GenerationRunStatusUpdate,
     TurnCreate,
     TurnRead,
@@ -197,17 +198,22 @@ async def get_generation_run_execution_state(
         stale_after_seconds=stale_after_seconds,
     )
     feed_attachments: dict[str, GenerationRunLiveFeedAttachment] = {}
+    stale_run_ids = {run.run_id for run in state.stale}
+    restore_candidates: list[GenerationRunRestoreCandidate] = []
 
     for run in state.active:
         feed = await inspect_reply_execution_feed(run.run_id)
-        feed_attachments[run.run_id] = build_live_feed_attachment(
+        attachment = build_live_feed_attachment(
             run_status=run.status,
             registry_live=feed.live,
             replay_available=feed.replay_available,
             subscriber_count=feed.subscriber_count,
         )
+        feed_attachments[run.run_id] = attachment
+        restore_candidates.append(build_restore_candidate(run, attachment, stale=run.run_id in stale_run_ids))
 
     state.feed_attachments = feed_attachments
+    state.restore_candidates = restore_candidates
     return state
 
 
@@ -263,6 +269,46 @@ def build_live_feed_attachment(
         replay_available=replay_available,
         subscriber_count=subscriber_count,
         reason="no_live_producer",
+    )
+
+
+def build_restore_candidate(
+    run: GenerationRunRead,
+    attachment: GenerationRunLiveFeedAttachment,
+    stale: bool,
+) -> GenerationRunRestoreCandidate:
+    interrupted = run.status == "interrupted"
+    last_activity_at = (
+        run.heartbeat_at
+        or run.interrupted_at
+        or run.completed_at
+        or run.cancelled_at
+        or run.failed_at
+        or run.released_at
+        or run.claimed_at
+        or run.updated_at
+    )
+
+    return GenerationRunRestoreCandidate(
+        run_id=run.run_id,
+        session_id=run.session_id,
+        thread_id=run.thread_id,
+        turn_id=run.turn_id,
+        status=run.status,
+        lease_owner=run.lease_owner,
+        restore_mode=attachment.mode,
+        live_attached=attachment.live_attached,
+        replay_available=attachment.replay_available,
+        subscriber_count=attachment.subscriber_count,
+        recoverable=attachment.live_attached or attachment.replay_available or stale or interrupted,
+        stale=stale or attachment.mode == "stale",
+        interrupted=interrupted,
+        reason=attachment.reason,
+        claimed_at=run.claimed_at,
+        heartbeat_at=run.heartbeat_at,
+        interrupted_at=run.interrupted_at,
+        last_activity_at=last_activity_at,
+        updated_at=run.updated_at,
     )
 
 
