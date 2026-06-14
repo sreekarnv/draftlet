@@ -70,11 +70,15 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
-# Local-dev integration: allow browser extension/content-script calls for now.
-# Tighten origins when extension IDs and deployment shape are finalized.
+# Local-dev CORS: the extension service worker and any local Vite/desktop
+# tooling call this server from known loopback origins. The allowlist is
+# configurable through `DRAFTLET_CORS_ALLOW_ORIGINS` and
+# `DRAFTLET_CORS_ALLOW_ORIGIN_REGEX` (see `app.core.config`). See
+# `docs/setup.md` for the chrome-extension origin trade-off.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_allow_origins,
+    allow_origin_regex=settings.cors_allow_origin_regex,
     allow_methods=["*"],
     allow_headers=["*"],
 )
