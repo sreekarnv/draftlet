@@ -35,6 +35,9 @@ export type BrowserRecaptureDiagnosticsExportSection =
       received_at?: string;
       stale?: boolean;
       stale_after_seconds?: number;
+      retention_days?: number;
+      max_stored_reports?: number;
+      max_entries_per_report?: number;
       report: Extract<BrowserDiagnosticsBridgeResult, { ok: true }>['report'];
     }
   | {
@@ -42,6 +45,9 @@ export type BrowserRecaptureDiagnosticsExportSection =
       received_at?: string;
       stale?: boolean;
       stale_after_seconds?: number;
+      retention_days?: number;
+      max_stored_reports?: number;
+      max_entries_per_report?: number;
       error: Extract<BrowserDiagnosticsBridgeResult, { ok: false }>['error'];
     }
   | {
@@ -127,6 +133,9 @@ function buildBrowserRecaptureDiagnosticsSection(
       received_at: diagnostics.receivedAt,
       stale: diagnostics.stale,
       stale_after_seconds: diagnostics.staleAfterSeconds,
+      retention_days: diagnostics.retentionDays,
+      max_stored_reports: diagnostics.maxStoredReports,
+      max_entries_per_report: diagnostics.maxEntriesPerReport,
       report: diagnostics.report,
     };
   }
@@ -136,6 +145,9 @@ function buildBrowserRecaptureDiagnosticsSection(
     received_at: diagnostics.receivedAt,
     stale: diagnostics.stale,
     stale_after_seconds: diagnostics.staleAfterSeconds,
+    retention_days: diagnostics.retentionDays,
+    max_stored_reports: diagnostics.maxStoredReports,
+    max_entries_per_report: diagnostics.maxEntriesPerReport,
     error: diagnostics.error,
   };
 }

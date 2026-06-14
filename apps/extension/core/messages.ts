@@ -273,6 +273,7 @@ export interface RecaptureStatusTrailItem {
 
 export type RecaptureDiagnosticEvent =
   | 'recapture_requested'
+  | 'restore_state_projected'
   | 'target_revalidation_requested'
   | 'target_revalidation_completed'
   | 'target_revalidation_failed'
@@ -293,7 +294,7 @@ export interface RecaptureDiagnosticEntry {
   level: RecaptureDiagnosticLevel;
   sessionId: string;
   tabId?: number;
-  status?: InsertionTargetStatus;
+  status?: InsertionTargetStatus | WorkspaceRestoreStatus;
   outcome?: RecaptureInsertionTargetOutcome;
   reason?: RecaptureInsertionTargetFailureReason | string;
   message: string;

@@ -79,6 +79,9 @@ export interface BrowserRecaptureDiagnosticsRelayState {
   receivedAt?: string;
   stale: boolean;
   staleAfterSeconds: number;
+  retentionDays?: number;
+  maxStoredReports?: number;
+  maxEntriesPerReport?: number;
 }
 
 export interface DesktopExtensionDiagnosticsBridgeRequest {
@@ -96,6 +99,9 @@ export type DesktopExtensionDiagnosticsBridgeResult =
       receivedAt?: string;
       stale?: boolean;
       staleAfterSeconds?: number;
+      retentionDays?: number;
+      maxStoredReports?: number;
+      maxEntriesPerReport?: number;
     }
   | {
       ok: false;
@@ -103,6 +109,9 @@ export type DesktopExtensionDiagnosticsBridgeResult =
       receivedAt?: string;
       stale?: boolean;
       staleAfterSeconds?: number;
+      retentionDays?: number;
+      maxStoredReports?: number;
+      maxEntriesPerReport?: number;
       error: {
         code:
           | 'transport_unavailable'
@@ -157,6 +166,9 @@ export function createRecaptureDiagnosticsBridgeSuccess(
     receivedAt?: string;
     stale?: boolean;
     staleAfterSeconds?: number;
+    retentionDays?: number;
+    maxStoredReports?: number;
+    maxEntriesPerReport?: number;
   } = {},
 ): DesktopExtensionDiagnosticsBridgeResult {
   return {
@@ -175,6 +187,9 @@ export function createRecaptureDiagnosticsBridgeFailure(
     receivedAt?: string;
     stale?: boolean;
     staleAfterSeconds?: number;
+    retentionDays?: number;
+    maxStoredReports?: number;
+    maxEntriesPerReport?: number;
   } = {},
 ): DesktopExtensionDiagnosticsBridgeResult {
   return {

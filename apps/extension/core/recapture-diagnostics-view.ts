@@ -28,6 +28,10 @@ export function recaptureDiagnosticEventLabel(entry: Pick<RecaptureDiagnosticEnt
     return 'Recapture requested';
   }
 
+  if (entry.event === 'restore_state_projected') {
+    return 'Restore state';
+  }
+
   if (entry.event === 'target_revalidation_requested') {
     return 'Target check requested';
   }

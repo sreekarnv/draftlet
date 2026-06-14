@@ -11,11 +11,17 @@ from app.api.diagnostics import (
     put_browser_recapture_diagnostics,
 )
 from app.db.base import Base
-from app.db.models import GenerationRunMaintenanceOutcomeRecord
+from app.db.models import (
+    BrowserRecaptureDiagnosticEventRecord,
+    BrowserRecaptureDiagnosticsReportRecord,
+    GenerationRunMaintenanceOutcomeRecord,
+)
 from app.main import app
 from app.schemas.diagnostics import RecaptureDiagnosticsReport
 from app.services.diagnostics_service import (
     BROWSER_RECAPTURE_DIAGNOSTICS_STALE_AFTER_SECONDS,
+    BROWSER_RECAPTURE_DIAGNOSTICS_MAX_STORED_REPORTS,
+    BROWSER_RECAPTURE_DIAGNOSTICS_RETENTION_DAYS,
     GENERATION_RUN_MAINTENANCE_MAX_STORED_OUTCOMES,
     GENERATION_RUN_MAINTENANCE_RECENT_LIMIT,
     GENERATION_RUN_MAINTENANCE_RETENTION_DAYS,
@@ -24,6 +30,7 @@ from app.services.diagnostics_service import (
     get_generation_run_maintenance_status,
     get_browser_recapture_diagnostics_state,
     get_latest_browser_recapture_report,
+    put_latest_browser_recapture_report,
     record_generation_run_maintenance_outcome,
 )
 
@@ -34,16 +41,23 @@ def create_test_sessionmaker():
     return sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
-def test_browser_recapture_diagnostics_route_stores_bounded_report_in_memory() -> None:
-    clear_latest_browser_recapture_report()
-    report = {
+def browser_recapture_report(
+    *,
+    exported_at: str = "2026-01-01T00:00:01.000Z",
+    entry_id: int = 1,
+    event: str = "content_recapture_completed",
+    session_id: str = "session-1",
+    status: str = "needs_focus",
+    message: str = "Focus a compose field and retry.",
+) -> dict:
+    return {
         "kind": "draftlet.recapture-diagnostics",
-        "exportedAt": "2026-01-01T00:00:01.000Z",
+        "exportedAt": exported_at,
         "summary": {
             "lastUpdatedAt": "2026-01-01T00:00:00.000Z",
             "entryCount": 1,
             "currentTarget": {
-                "sessionId": "session-1",
+                "sessionId": session_id,
                 "tabId": 42,
                 "status": "needs_focus",
                 "reason": "no_focused_compose_target",
@@ -51,93 +65,145 @@ def test_browser_recapture_diagnostics_route_stores_bounded_report_in_memory() -
                 "updatedAt": "2026-01-01T00:00:00.000Z",
             },
             "latestAttempt": {
-                "event": "content_recapture_completed",
-                "sessionId": "session-1",
+                "event": event,
+                "sessionId": session_id,
                 "tabId": 42,
-                "status": "needs_focus",
+                "status": status,
                 "outcome": "needs_focused_compose",
                 "reason": "no_focused_compose",
-                "message": "Focus a compose field and retry.",
+                "message": message,
                 "at": "2026-01-01T00:00:00.000Z",
             },
             "latestOutcome": {
-                "event": "content_recapture_completed",
-                "sessionId": "session-1",
+                "event": event,
+                "sessionId": session_id,
                 "tabId": 42,
-                "status": "needs_focus",
+                "status": status,
                 "outcome": "needs_focused_compose",
                 "reason": "no_focused_compose",
-                "message": "Focus a compose field and retry.",
+                "message": message,
                 "at": "2026-01-01T00:00:00.000Z",
             },
         },
         "entries": [
             {
-                "id": 1,
-                "event": "content_recapture_completed",
+                "id": entry_id,
+                "event": event,
                 "level": "info",
-                "sessionId": "session-1",
+                "sessionId": session_id,
                 "tabId": 42,
-                "status": "needs_focus",
+                "status": status,
                 "outcome": "needs_focused_compose",
                 "reason": "no_focused_compose",
-                "message": "Focus a compose field and retry.",
+                "message": message,
                 "at": "2026-01-01T00:00:00.000Z",
             }
         ],
     }
+
+
+def test_browser_recapture_diagnostics_route_stores_bounded_report_durably() -> None:
+    Session = create_test_sessionmaker()
+    report = browser_recapture_report()
     parsed = RecaptureDiagnosticsReport.model_validate(report)
 
-    stored = put_browser_recapture_diagnostics(parsed)
-    state = get_browser_recapture_diagnostics()
+    with Session() as session:
+        clear_latest_browser_recapture_report(session)
+        stored = put_browser_recapture_diagnostics(parsed, session=session)
+        state = get_browser_recapture_diagnostics(session=session)
+        report_count = session.query(BrowserRecaptureDiagnosticsReportRecord).count()
+        event_count = session.query(BrowserRecaptureDiagnosticEventRecord).count()
 
     assert stored.model_dump(exclude_none=True) == report
-    assert get_latest_browser_recapture_report() == stored
+    with Session() as session:
+        assert get_latest_browser_recapture_report(session) == stored
     assert state.report == stored
     assert state.receivedAt is not None
     assert state.stale is False
     assert state.staleAfterSeconds == BROWSER_RECAPTURE_DIAGNOSTICS_STALE_AFTER_SECONDS
+    assert state.retentionDays == BROWSER_RECAPTURE_DIAGNOSTICS_RETENTION_DAYS
+    assert state.maxStoredReports == BROWSER_RECAPTURE_DIAGNOSTICS_MAX_STORED_REPORTS
+    assert report_count == 1
+    assert event_count == 1
 
 
-def test_browser_recapture_diagnostics_clears_stale_report() -> None:
-    clear_latest_browser_recapture_report()
-    report = RecaptureDiagnosticsReport.model_validate(
-        {
-            "kind": "draftlet.recapture-diagnostics",
-            "exportedAt": "2026-01-01T00:00:01.000Z",
-            "summary": {
-                "lastUpdatedAt": "2026-01-01T00:00:00.000Z",
-                "entryCount": 1,
-            },
-            "entries": [
-                {
-                    "id": 1,
-                    "event": "content_recapture_completed",
-                    "level": "info",
-                    "sessionId": "session-1",
-                    "message": "Focus a compose field and retry.",
-                    "at": "2026-01-01T00:00:00.000Z",
-                }
-            ],
-        },
-    )
+def test_browser_recapture_diagnostics_marks_stale_report_without_losing_durable_data() -> None:
+    Session = create_test_sessionmaker()
+    report = RecaptureDiagnosticsReport.model_validate(browser_recapture_report())
 
-    stored = put_browser_recapture_diagnostics(report)
-    fresh_state = get_browser_recapture_diagnostics_state()
-    expired_state = get_browser_recapture_diagnostics_state(
-        datetime.now(UTC) + timedelta(seconds=BROWSER_RECAPTURE_DIAGNOSTICS_STALE_AFTER_SECONDS + 1),
-    )
+    with Session() as session:
+        clear_latest_browser_recapture_report(session)
+        stored = put_latest_browser_recapture_report(report, session)
+        fresh_state = get_browser_recapture_diagnostics_state(session)
+        expired_state = get_browser_recapture_diagnostics_state(
+            session,
+            datetime.now(UTC) + timedelta(seconds=BROWSER_RECAPTURE_DIAGNOSTICS_STALE_AFTER_SECONDS + 1),
+        )
 
     assert fresh_state.report == stored
-    assert expired_state.report is None
+    assert expired_state.report == stored
     assert expired_state.receivedAt == fresh_state.receivedAt
     assert expired_state.stale is True
-    assert get_latest_browser_recapture_report() is None
+    with Session() as session:
+        assert get_latest_browser_recapture_report(session) == stored
+
+
+def test_browser_recapture_diagnostics_bounds_retained_reports() -> None:
+    Session = create_test_sessionmaker()
+
+    with Session() as session:
+        clear_latest_browser_recapture_report(session)
+
+        for index in range(BROWSER_RECAPTURE_DIAGNOSTICS_MAX_STORED_REPORTS + 3):
+            put_latest_browser_recapture_report(
+                RecaptureDiagnosticsReport.model_validate(
+                    browser_recapture_report(
+                        exported_at=f"2026-01-01T00:00:{index:02d}.000Z",
+                        entry_id=index + 1,
+                        session_id=f"session-{index}",
+                    )
+                ),
+                session,
+            )
+
+        state = get_browser_recapture_diagnostics_state(session)
+        retained_report_ids = list(session.scalars(select(BrowserRecaptureDiagnosticsReportRecord.report_id)))
+        retained_event_ids = list(session.scalars(select(BrowserRecaptureDiagnosticEventRecord.event_record_id)))
+
+    assert len(retained_report_ids) == BROWSER_RECAPTURE_DIAGNOSTICS_MAX_STORED_REPORTS
+    assert len(retained_event_ids) == BROWSER_RECAPTURE_DIAGNOSTICS_MAX_STORED_REPORTS
+    assert state.report.entries[0].id == BROWSER_RECAPTURE_DIAGNOSTICS_MAX_STORED_REPORTS + 3
+
+
+def test_browser_recapture_diagnostics_prunes_expired_reports() -> None:
+    Session = create_test_sessionmaker()
+
+    with Session() as session:
+        clear_latest_browser_recapture_report(session)
+        old = put_latest_browser_recapture_report(
+            RecaptureDiagnosticsReport.model_validate(browser_recapture_report(session_id="old")),
+            session,
+        )
+        fresh = put_latest_browser_recapture_report(
+            RecaptureDiagnosticsReport.model_validate(browser_recapture_report(session_id="fresh", exported_at="2026-01-01T00:00:02.000Z")),
+            session,
+        )
+        old_record = session.scalar(
+            select(BrowserRecaptureDiagnosticsReportRecord)
+            .where(BrowserRecaptureDiagnosticsReportRecord.exported_at == old.exportedAt)
+        )
+        old_record.received_at = datetime.now(UTC) - timedelta(days=BROWSER_RECAPTURE_DIAGNOSTICS_RETENTION_DAYS + 1)
+        session.add(old_record)
+        session.commit()
+
+        state = get_browser_recapture_diagnostics_state(session)
+        retained_sessions = list(session.scalars(select(BrowserRecaptureDiagnosticEventRecord.session_id)))
+
+    assert state.report.exportedAt == fresh.exportedAt
+    assert retained_sessions == ["fresh"]
 
 
 def test_browser_recapture_diagnostics_rejects_unbounded_fields() -> None:
-    clear_latest_browser_recapture_report()
-
     with pytest.raises(ValidationError):
         RecaptureDiagnosticsReport.model_validate(
             {

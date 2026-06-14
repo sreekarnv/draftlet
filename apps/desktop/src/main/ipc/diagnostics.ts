@@ -44,6 +44,9 @@ export async function getBrowserRecaptureDiagnosticsReport(): Promise<DesktopExt
           receivedAt: data.receivedAt,
           stale: data.stale,
           staleAfterSeconds: data.staleAfterSeconds,
+          retentionDays: data.retentionDays,
+          maxStoredReports: data.maxStoredReports,
+          maxEntriesPerReport: data.maxEntriesPerReport,
         },
       );
     }
@@ -55,6 +58,9 @@ export async function getBrowserRecaptureDiagnosticsReport(): Promise<DesktopExt
       receivedAt: data.receivedAt,
       stale: data.stale,
       staleAfterSeconds: data.staleAfterSeconds,
+      retentionDays: data.retentionDays,
+      maxStoredReports: data.maxStoredReports,
+      maxEntriesPerReport: data.maxEntriesPerReport,
     };
   } catch (error) {
     return createRecaptureDiagnosticsBridgeFailure(
