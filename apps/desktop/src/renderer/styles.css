@@ -1,4 +1,5 @@
 @import "tailwindcss" source(".");
+@source "../../../../packages/shared/src";
 
 * {
   box-sizing: border-box;
