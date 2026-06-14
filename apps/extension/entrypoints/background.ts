@@ -69,6 +69,7 @@ import {
 } from '../core/messages';
 import { createConversationThreadStore } from '../core/conversation-thread';
 import { buildRecaptureDiagnosticsReportSummary, createRecaptureDiagnosticsLog } from '../core/recapture-diagnostics';
+import { createRecaptureDiagnosticsPublishRetryQueue } from '../core/recapture-diagnostics-publish-retry';
 import { createRecaptureDiagnosticsReport } from '../core/recapture-diagnostics-view';
 import { attachWorkspaceRestoreState, buildWorkspaceRestoreState } from '../core/restore-conflict';
 import { findPlausibleTabCandidates, isPlausibleSessionTab, type PlausibleTabCandidate } from '../core/tab-disambiguation';
@@ -93,9 +94,11 @@ type InsertionTabResolution =
 const sessions = createWorkspaceSessionStore();
 const threads = createConversationThreadStore();
 const recaptureDiagnostics = createRecaptureDiagnosticsLog();
+const recaptureDiagnosticsPublishRetry = createRecaptureDiagnosticsPublishRetryQueue();
 const restoreDiagnosticKeyBySessionId = new Map<string, string>();
 // Browser-local fetch/SSE handles only. Runtime GenerationRun state and durable replay remain the recovery source.
 const localGenerationTransportByRunId = new Map<string, LocalGenerationTransportHandle>();
+let recaptureDiagnosticsPublishRetryInFlight = false;
 const GENERATION_RUN_STALE_AFTER_SECONDS = 30;
 
 export default defineBackground(() => {
@@ -245,6 +248,9 @@ async function handleGetCurrentWorkspaceSession(tabId?: number): Promise<Workspa
 
 async function handleGetRuntimeStatus(): Promise<RuntimeStatusResult> {
   const connected = await checkServerHealth();
+  if (connected) {
+    void retryPendingRecaptureDiagnosticsPublish('runtime_status_recovered');
+  }
   return { status: connected ? 'connected' : 'disconnected' };
 }
 
@@ -266,6 +272,9 @@ async function handleGetDomainHistory(limit = 20): Promise<DomainHistoryResult> 
 function handleGetRecaptureDiagnostics(sessionId?: string, limit = 50): RecaptureDiagnosticsResult {
   return {
     entries: recaptureDiagnostics.list({ sessionId, limit }),
+    publish: recaptureDiagnosticsPublishRetry.getState({
+      inFlight: recaptureDiagnosticsPublishRetryInFlight,
+    }),
   };
 }
 
@@ -613,6 +622,8 @@ async function runDraftGeneration(
       );
       return;
     }
+
+    void retryPendingRecaptureDiagnosticsPublish('draft_generation_health_check');
 
     const start = await startReplyGenerationRunExecution(
       generationId,
@@ -1729,17 +1740,19 @@ async function publishLatestRecaptureDiagnosticsReport(
   sessionId?: string,
   limit = 50,
 ): Promise<PublishRecaptureDiagnosticsReportResult> {
+  const exportedAt = new Date().toISOString();
+  const entries = recaptureDiagnostics.list({ sessionId, limit });
+  const reportSessionId = sessionId ?? entries.at(-1)?.sessionId;
+  const summary = buildRecaptureDiagnosticsReportSummary({
+    entries,
+    currentTarget: reportSessionId ? currentTargetSummary(reportSessionId) : undefined,
+    exportedAt,
+  });
+  const report = createRecaptureDiagnosticsReport(entries, exportedAt, summary);
+
   try {
-    const exportedAt = new Date().toISOString();
-    const entries = recaptureDiagnostics.list({ sessionId, limit });
-    const reportSessionId = sessionId ?? entries.at(-1)?.sessionId;
-    const summary = buildRecaptureDiagnosticsReportSummary({
-      entries,
-      currentTarget: reportSessionId ? currentTargetSummary(reportSessionId) : undefined,
-      exportedAt,
-    });
-    const report = createRecaptureDiagnosticsReport(entries, exportedAt, summary);
     const published = await publishBrowserRecaptureDiagnosticsReport(report);
+    recaptureDiagnosticsPublishRetry.recordSuccess(published);
 
     return {
       ok: true,
@@ -1747,12 +1760,56 @@ async function publishLatestRecaptureDiagnosticsReport(
       report: published,
     };
   } catch (error) {
+    const message = browserDiagnosticsPublishFailureMessage(error);
+    recaptureDiagnosticsPublishRetry.recordFailure(report, message);
+
     return createRecaptureDiagnosticsBridgeFailure(
       'diagnostics_unavailable',
-      error instanceof Error ? error.message : 'Could not publish browser recapture diagnostics.',
+      message,
       true,
     );
   }
+}
+
+async function retryPendingRecaptureDiagnosticsPublish(trigger: string): Promise<void> {
+  if (recaptureDiagnosticsPublishRetryInFlight) {
+    return;
+  }
+
+  const report = recaptureDiagnosticsPublishRetry.nextPendingReport();
+
+  if (!report) {
+    return;
+  }
+
+  recaptureDiagnosticsPublishRetryInFlight = true;
+
+  try {
+    const published = await publishBrowserRecaptureDiagnosticsReport(report);
+    recaptureDiagnosticsPublishRetry.recordSuccess(published);
+    console.debug('[Draftlet recapture]', {
+      event: 'browser_diagnostics_publish_retry_completed',
+      trigger,
+      exportedAt: report.exportedAt,
+      entryCount: report.entries.length,
+    });
+  } catch (error) {
+    const message = browserDiagnosticsPublishFailureMessage(error);
+    recaptureDiagnosticsPublishRetry.recordFailure(report, message);
+    console.debug('[Draftlet recapture]', {
+      event: 'browser_diagnostics_publish_retry_failed',
+      trigger,
+      exportedAt: report.exportedAt,
+      entryCount: report.entries.length,
+      message,
+    });
+  } finally {
+    recaptureDiagnosticsPublishRetryInFlight = false;
+  }
+}
+
+function browserDiagnosticsPublishFailureMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Could not publish browser recapture diagnostics.';
 }
 
 function currentTargetSummary(sessionId: string): BrowserRecaptureTargetSummary | undefined {
