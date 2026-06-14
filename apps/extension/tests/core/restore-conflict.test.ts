@@ -70,6 +70,30 @@ describe('workspace restore conflict projection', () => {
       severity: 'error',
     });
   });
+
+  it('describes active run restore as replay reattach', () => {
+    const state = buildWorkspaceRestoreState({
+      session: {
+        ...workspaceSession(),
+        activeRunId: 'generation-live',
+        insertionTargetStatus: 'live',
+      },
+      thread: {
+        ...interruptedThreadSnapshot(),
+        latestRecoverableRun: undefined,
+      },
+      source: 'current_tab',
+    });
+
+    expect(state.status).toBe('restored');
+    expect(state.summary).toBe('Reattached to active draft generation and replaying progress.');
+    expect(state.primaryAction).toMatchObject({
+      kind: 'wait_for_active_run',
+      label: 'Reattached',
+      message: 'Draftlet is following durable run progress; it is not resuming model tokens mid-stream.',
+    });
+    expect(state.issues.map((issue) => issue.code)).toContain('active_run_restored');
+  });
 });
 
 function workspaceSession(): WorkspaceSession {
