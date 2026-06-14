@@ -1,3 +1,5 @@
+from typing import Literal
+
 from app.schemas.domain import ConversationThreadSnapshot
 from app.schemas.reply_request import ReplyRequest
 
@@ -6,10 +8,22 @@ DELIMITER = "---"
 MAX_CONTEXT_CHARS = 3000
 MAX_VARIANT_CHARS = 1800
 
+SHORT_SOURCE_CHARS = 400
+MEDIUM_SOURCE_CHARS = 1500
+
+SourceLength = Literal["short", "medium", "long"]
+
 
 def build_reply_prompt(request: ReplyRequest, thread_snapshot: ConversationThreadSnapshot | None = None) -> str:
     if request.generation_mode == "refinement":
         return build_refinement_prompt(request, thread_snapshot)
+
+    source = request.selected_text
+    extras = [
+        build_source_depth_instruction(source),
+        build_tone_instruction(request.tone, source),
+    ]
+    extras = [line for line in extras if line]
 
     return "\n".join(
         [
@@ -23,9 +37,11 @@ def build_reply_prompt(request: ReplyRequest, thread_snapshot: ConversationThrea
             "- Do not include a preamble.",
             "- Do not explain your choices.",
             "- Return only the reply text and delimiters.",
+            "- Do not invent facts, dates, names, or commitments that are not in the source text.",
+            *extras,
             "",
             "Source text to reply to:",
-            request.selected_text,
+            source,
         ]
     )
 
@@ -36,6 +52,12 @@ def build_refinement_prompt(request: ReplyRequest, thread_snapshot: Conversation
         f"Draft {index + 1}:\n{truncate(variant.content, MAX_VARIANT_CHARS)}"
         for index, variant in enumerate(latest_variants)
     )
+    source = source_text(thread_snapshot, request)
+    extras = [
+        build_source_depth_instruction(source),
+        build_tone_instruction(request.tone, source),
+    ]
+    extras = [line for line in extras if line]
 
     parts = [
         "You are Draftlet, a local assistant that refines draft replies.",
@@ -46,16 +68,18 @@ def build_refinement_prompt(request: ReplyRequest, thread_snapshot: Conversation
         "Rules:",
         "- Follow the user's follow-up instruction.",
         "- Preserve factual meaning from the original source and prior drafts.",
+        "- Do not invent facts, dates, names, or commitments that are not in the source text.",
         "- Do not number the replies.",
         "- Do not include a preamble.",
         "- Do not explain your choices.",
         "- Return only the reply text and delimiters.",
+        *extras,
         "",
         "Follow-up instruction:",
         request.instruction or "Refine the prior drafts.",
         "",
         "Original source text:",
-        truncate(source_text(thread_snapshot, request), MAX_CONTEXT_CHARS),
+        truncate(source, MAX_CONTEXT_CHARS),
     ]
 
     if prior_variant_text:
@@ -66,6 +90,48 @@ def build_refinement_prompt(request: ReplyRequest, thread_snapshot: Conversation
         ])
 
     return "\n".join(parts)
+
+
+def classify_source_length(source_text: str) -> SourceLength:
+    length = len(source_text)
+
+    if length <= SHORT_SOURCE_CHARS:
+        return "short"
+
+    if length <= MEDIUM_SOURCE_CHARS:
+        return "medium"
+
+    return "long"
+
+
+def build_source_depth_instruction(source_text: str) -> str:
+    length = classify_source_length(source_text)
+
+    if length == "short":
+        return ""
+
+    if length == "medium":
+        return "- Address the main request or question in the source text; cover all key points rather than stopping at a generic acknowledgement."
+
+    return "\n".join(
+        [
+            "- Identify the sender's main intent, obligations, questions, deadlines, and constraints before drafting.",
+            "- Respond to every explicit ask, question, deadline, and required action item in the source text.",
+            "- Preserve important factual details such as dates, names, numbers, and commitments from the source.",
+            "- Do not collapse the source into a one-line acknowledgement or generic reply.",
+            "- Use 2-5 short paragraphs when the source contains multiple distinct points or asks.",
+        ]
+    )
+
+
+def build_tone_instruction(tone: str, source_text: str) -> str:
+    if tone != "concise":
+        return ""
+
+    if classify_source_length(source_text) == "short":
+        return ""
+
+    return "- 'Concise' means compact but complete; cover every required point without adding filler or omitting important details."
 
 
 def preferred_refinement_variants(thread_snapshot: ConversationThreadSnapshot | None, current_turn_id: str | None):
