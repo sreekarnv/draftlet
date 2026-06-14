@@ -685,7 +685,7 @@ export async function activateRecaptureTab(state: SidePanelState, panel: PanelCo
   }
 }
 
-function appendTrail(
+export function appendTrail(
   trail: RecaptureStatusTrailItem[],
   event: RecaptureStatusTrailEvent,
   level: RecaptureStatusTrailLevel,
@@ -704,7 +704,7 @@ function appendTrail(
   ].slice(-MAX_RECAPTURE_TRAIL_ITEMS);
 }
 
-function trailEventForRecapture(response: RecaptureInsertionTargetResult): RecaptureStatusTrailEvent {
+export function trailEventForRecapture(response: RecaptureInsertionTargetResult): RecaptureStatusTrailEvent {
   if (response.outcome === 'recapture_succeeded') {
     return 'recapture_succeeded';
   }
@@ -716,7 +716,7 @@ function trailEventForRecapture(response: RecaptureInsertionTargetResult): Recap
   return 'recapture_failed';
 }
 
-function trailLevelForRecapture(response: RecaptureInsertionTargetResult): RecaptureStatusTrailLevel {
+export function trailLevelForRecapture(response: RecaptureInsertionTargetResult): RecaptureStatusTrailLevel {
   if (response.outcome === 'recapture_succeeded') {
     return 'success';
   }

@@ -176,6 +176,7 @@ export async function streamRuntimeRunEvents(
   signal: AbortSignal,
 ): Promise<number> {
   let replayCursor = afterSequence;
+  const pendingHydrations: Promise<unknown>[] = [];
 
   await streamReplyGenerationRunEvents(runId, {
     signal,
@@ -189,21 +190,26 @@ export async function streamRuntimeRunEvents(
         replayCursor = Math.max(replayCursor, reply.sequence);
       }
 
-      void hydrateAndEmitRunProgress(sessionId, runId, threadId, replayCursor).then((progress) => {
-        replayCursor = Math.max(replayCursor, progress?.replayCursor ?? 0);
-      });
+      pendingHydrations.push(
+        hydrateAndEmitRunProgress(sessionId, runId, threadId, replayCursor).then((progress) => {
+          replayCursor = Math.max(replayCursor, progress?.replayCursor ?? 0);
+        }),
+      );
     },
     onControl(event) {
       if (event.sequence !== undefined) {
         replayCursor = Math.max(replayCursor, event.sequence);
       }
 
-      void hydrateAndEmitRunProgress(sessionId, runId, threadId, replayCursor).then((progress) => {
-        replayCursor = Math.max(replayCursor, progress?.replayCursor ?? 0);
-      });
+      pendingHydrations.push(
+        hydrateAndEmitRunProgress(sessionId, runId, threadId, replayCursor).then((progress) => {
+          replayCursor = Math.max(replayCursor, progress?.replayCursor ?? 0);
+        }),
+      );
     },
   });
 
+  await Promise.allSettled(pendingHydrations);
   return replayCursor;
 }
 
