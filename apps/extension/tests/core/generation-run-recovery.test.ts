@@ -186,22 +186,22 @@ describe('generation run recovery decisions', () => {
   it('treats terminal hydrated runs as snapshot-only recovery', () => {
     const run = generationRun({ runId: 'run-complete', status: 'completed' });
 
-    expect(classifyHydratedRunRecovery(run, executionState({
-      restoreCandidates: [restoreCandidate(run, { restoreMode: 'live_attached', liveAttached: true })],
-    }))).toMatchObject({
+    expect(classifyHydratedRunRecovery(run)).toMatchObject({
       kind: 'terminal_snapshot',
       run: { runId: 'run-complete' },
     });
   });
 
-  it('does not reattach active runs that restore_candidates classifies as stale', () => {
+  it('does not reattach active runs when progress confirms a stale feed', () => {
     const run = generationRun({ runId: 'run-stale', status: 'streaming' });
 
-    expect(classifyHydratedRunRecovery(run, executionState({
-      restoreCandidates: [
-        restoreCandidate(run, { restoreMode: 'stale', liveAttached: false, replayAvailable: false }),
-      ],
-    }))).toMatchObject({
+    expect(classifyHydratedRunRecovery(run, {
+      mode: 'stale',
+      liveAttached: false,
+      replayAvailable: false,
+      subscriberCount: 0,
+      reason: 'active_run_without_live_producer',
+    })).toMatchObject({
       kind: 'reconcile_stale',
       run: { runId: 'run-stale' },
     });
@@ -210,7 +210,7 @@ describe('generation run recovery decisions', () => {
   it('reattaches hydrated active runs only when the runtime feed is live-attached', () => {
     const run = generationRun({ runId: 'run-live', status: 'streaming' });
 
-    expect(classifyHydratedRunRecovery(run, executionState({}), {
+    expect(classifyHydratedRunRecovery(run, {
       mode: 'live_attached',
       liveAttached: true,
       replayAvailable: true,
@@ -222,10 +222,19 @@ describe('generation run recovery decisions', () => {
     });
   });
 
+  it('does not reattach hydrated active runs when progress omits live feed attachment', () => {
+    const run = generationRun({ runId: 'run-live-without-confirmation', status: 'streaming' });
+
+    expect(classifyHydratedRunRecovery(run)).toMatchObject({
+      kind: 'reconcile_stale',
+      run: { runId: 'run-live-without-confirmation' },
+    });
+  });
+
   it('reconciles hydrated active runs when runtime feed is replay-only despite live execution state', () => {
     const run = generationRun({ runId: 'run-replay-only', status: 'streaming' });
 
-    expect(classifyHydratedRunRecovery(run, executionState({}), {
+    expect(classifyHydratedRunRecovery(run, {
       mode: 'replay_only',
       liveAttached: false,
       replayAvailable: true,
@@ -240,7 +249,7 @@ describe('generation run recovery decisions', () => {
   it('reconciles hydrated active runs when runtime feed is explicitly stale', () => {
     const run = generationRun({ runId: 'run-stale-feed', status: 'active' });
 
-    expect(classifyHydratedRunRecovery(run, executionState({}), {
+    expect(classifyHydratedRunRecovery(run, {
       mode: 'stale',
       liveAttached: false,
       replayAvailable: false,

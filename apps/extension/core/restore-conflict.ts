@@ -12,9 +12,11 @@ interface BuildWorkspaceRestoreStateInput {
   session: WorkspaceSession;
   thread?: ConversationThreadSnapshot | null;
   source: WorkspaceRestoreSource;
+  recoveryIssues?: WorkspaceRestoreIssue[];
 }
 
 export function buildWorkspaceRestoreState({
+  recoveryIssues = [],
   session,
   thread,
   source,
@@ -64,11 +66,11 @@ export function buildWorkspaceRestoreState({
     });
   }
 
-  if (session.activeRunId) {
+  if (session.activeRunId && !hasRunRecoveryOverride(recoveryIssues, session.activeRunId)) {
     issues.push({
       code: 'active_run_restored',
       severity: 'info',
-      message: 'Reattached to an active runtime run and replaying durable progress.',
+      message: 'Reattached to a live runtime run and replaying durable progress.',
       action: {
         kind: 'wait_for_active_run',
         label: 'Reattached',
@@ -80,17 +82,18 @@ export function buildWorkspaceRestoreState({
     });
   }
 
+  issues.push(...recoveryIssues);
   appendTargetIssue(issues, targetStatus, candidateCount);
 
-  if (recoverableRun) {
+  if (recoverableRun && !hasExplicitRetryGuidance(issues, recoverableRun.turnId)) {
     issues.push({
       code: 'interrupted_run_retryable',
       severity: 'warning',
-      message: 'The latest run was interrupted but can be retried from this thread.',
+      message: 'The latest run was interrupted. Retry starts a new run from this thread.',
       action: {
         kind: 'retry_interrupted_run',
         label: 'Retry from thread',
-        message: 'Start a new run from the restored thread.',
+        message: 'Start a new run from the restored thread; Draftlet will not resume old model tokens.',
         turnId: recoverableRun.turnId,
       },
       runId: recoverableRun.runId,
@@ -119,11 +122,60 @@ export function attachWorkspaceRestoreState(
   session: WorkspaceSession,
   thread: ConversationThreadSnapshot | null | undefined,
   source: WorkspaceRestoreSource,
+  recoveryIssues?: WorkspaceRestoreIssue[],
 ): WorkspaceSession {
-  const restoreState = buildWorkspaceRestoreState({ session, thread, source });
+  const restoreState = buildWorkspaceRestoreState({ session, thread, source, recoveryIssues });
   return {
     ...session,
     restoreState,
+  };
+}
+
+export type RunRecoveryIssueKind = 'progress_unavailable' | 'replay_only_reconciled' | 'stale_reconciled';
+
+export function buildRunRecoveryIssue(
+  kind: RunRecoveryIssueKind,
+  refs: { runId: string; threadId?: string; turnId?: string },
+): WorkspaceRestoreIssue {
+  const action = refs.turnId ? {
+    kind: 'retry_interrupted_run' as const,
+    label: 'Retry from thread',
+    message: 'Start a new run from the restored thread; Draftlet will not resume old model tokens.',
+    turnId: refs.turnId,
+  } : undefined;
+
+  if (kind === 'progress_unavailable') {
+    return {
+      code: 'active_run_recovery_failed',
+      severity: 'warning',
+      message: 'Draftlet could not load saved progress for this run. Retry starts a new run from the restored thread.',
+      action,
+      runId: refs.runId,
+      threadId: refs.threadId,
+      turnId: refs.turnId,
+    };
+  }
+
+  if (kind === 'replay_only_reconciled') {
+    return {
+      code: 'active_run_replay_only',
+      severity: 'warning',
+      message: 'Draftlet restored saved progress, but no live producer was attached. Retry starts a new run from this thread.',
+      action,
+      runId: refs.runId,
+      threadId: refs.threadId,
+      turnId: refs.turnId,
+    };
+  }
+
+  return {
+    code: 'active_run_reconciled',
+    severity: 'warning',
+    message: 'The selected run was no longer live. Draftlet marked it interrupted; retry starts a new run from this thread.',
+    action,
+    runId: refs.runId,
+    threadId: refs.threadId,
+    turnId: refs.turnId,
   };
 }
 
@@ -214,6 +266,9 @@ function appendTargetIssue(
 function choosePrimaryIssue(issues: WorkspaceRestoreIssue[]): WorkspaceRestoreIssue | undefined {
   const precedence: WorkspaceRestoreIssue['code'][] = [
     'active_context_mismatch',
+    'active_run_recovery_failed',
+    'active_run_replay_only',
+    'active_run_reconciled',
     'tab_choice_required',
     'target_needs_focus',
     'target_stale',
@@ -226,6 +281,19 @@ function choosePrimaryIssue(issues: WorkspaceRestoreIssue[]): WorkspaceRestoreIs
   return precedence
     .map((code) => issues.find((issue) => issue.code === code))
     .find((issue): issue is WorkspaceRestoreIssue => Boolean(issue));
+}
+
+function hasRunRecoveryOverride(issues: WorkspaceRestoreIssue[], runId: string): boolean {
+  return issues.some((issue) => (
+    (issue.code === 'active_run_recovery_failed'
+      || issue.code === 'active_run_replay_only'
+      || issue.code === 'active_run_reconciled')
+    && issue.runId === runId
+  ));
+}
+
+function hasExplicitRetryGuidance(issues: WorkspaceRestoreIssue[], turnId: string): boolean {
+  return issues.some((issue) => issue.action?.kind === 'retry_interrupted_run' && issue.action.turnId === turnId);
 }
 
 function statusForIssues(issues: WorkspaceRestoreIssue[]): WorkspaceRestoreState['status'] {
@@ -269,6 +337,18 @@ function summaryForState(
 
   if (primaryIssue?.code === 'active_run_restored') {
     return 'Reattached to active draft generation and replaying progress.';
+  }
+
+  if (primaryIssue?.code === 'active_run_recovery_failed') {
+    return 'Could not recover saved run progress; retry starts a new run.';
+  }
+
+  if (primaryIssue?.code === 'active_run_replay_only') {
+    return 'Restored saved progress only; retry starts a new run.';
+  }
+
+  if (primaryIssue?.code === 'active_run_reconciled') {
+    return 'Recovered stale run state; retry starts a new run.';
   }
 
   if (primaryIssue?.code === 'interrupted_run_retryable') {

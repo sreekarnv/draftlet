@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildWorkspaceRestoreState } from '../../core/restore-conflict';
+import { buildRunRecoveryIssue, buildWorkspaceRestoreState } from '../../core/restore-conflict';
 import type { ConversationThreadSnapshot, WorkspaceSession } from '../../core/messages';
 
 describe('workspace restore conflict projection', () => {
@@ -93,6 +93,90 @@ describe('workspace restore conflict projection', () => {
       message: 'Draftlet is following durable run progress; it is not resuming model tokens mid-stream.',
     });
     expect(state.issues.map((issue) => issue.code)).toContain('active_run_restored');
+  });
+
+  it('prioritizes progress failure retry guidance over target recovery', () => {
+    const state = buildWorkspaceRestoreState({
+      session: {
+        ...workspaceSession(),
+        activeRunId: 'generation-missing-progress',
+      },
+      thread: interruptedThreadSnapshot(),
+      source: 'current_tab',
+      recoveryIssues: [
+        buildRunRecoveryIssue('progress_unavailable', {
+          runId: 'generation-missing-progress',
+          threadId: 'thread-1',
+          turnId: 'turn-2',
+        }),
+      ],
+    });
+
+    expect(state.status).toBe('needs_action');
+    expect(state.summary).toBe('Could not recover saved run progress; retry starts a new run.');
+    expect(state.primaryAction).toMatchObject({
+      kind: 'retry_interrupted_run',
+      label: 'Retry from thread',
+      turnId: 'turn-2',
+    });
+    expect(state.issues.map((issue) => issue.code)).toContain('active_run_recovery_failed');
+    expect(state.issues.map((issue) => issue.code)).not.toContain('active_run_restored');
+  });
+
+  it('describes replay-only recovery as saved progress without model resume', () => {
+    const state = buildWorkspaceRestoreState({
+      session: {
+        ...workspaceSession(),
+        insertionTargetStatus: 'live',
+      },
+      thread: interruptedThreadSnapshot(),
+      source: 'current_tab',
+      recoveryIssues: [
+        buildRunRecoveryIssue('replay_only_reconciled', {
+          runId: 'generation-2',
+          threadId: 'thread-1',
+          turnId: 'turn-2',
+        }),
+      ],
+    });
+
+    expect(state.summary).toBe('Restored saved progress only; retry starts a new run.');
+    expect(state.primaryAction).toMatchObject({
+      kind: 'retry_interrupted_run',
+      turnId: 'turn-2',
+    });
+    expect(state.issues[2]).toMatchObject({
+      code: 'active_run_replay_only',
+      message: 'Draftlet restored saved progress, but no live producer was attached. Retry starts a new run from this thread.',
+    });
+  });
+
+  it('describes confirmed stale run reconciliation clearly', () => {
+    const state = buildWorkspaceRestoreState({
+      session: {
+        ...workspaceSession(),
+        insertionTargetStatus: 'live',
+      },
+      thread: interruptedThreadSnapshot(),
+      source: 'current_tab',
+      recoveryIssues: [
+        buildRunRecoveryIssue('stale_reconciled', {
+          runId: 'generation-2',
+          threadId: 'thread-1',
+          turnId: 'turn-2',
+        }),
+      ],
+    });
+
+    expect(state.summary).toBe('Recovered stale run state; retry starts a new run.');
+    expect(state.primaryAction).toMatchObject({
+      kind: 'retry_interrupted_run',
+      turnId: 'turn-2',
+    });
+    expect(state.issues[2]).toMatchObject({
+      code: 'active_run_reconciled',
+      message: 'The selected run was no longer live. Draftlet marked it interrupted; retry starts a new run from this thread.',
+    });
   });
 });
 
