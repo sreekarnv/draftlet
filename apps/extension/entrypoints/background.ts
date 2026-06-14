@@ -1569,20 +1569,12 @@ async function getLiveRuntimeGenerationConflict(sessionId: string) {
   const liveAttachedCandidate = executionState.restoreCandidates.find((candidate) => (
     candidate.restoreMode === 'live_attached' && candidate.liveAttached
   ));
-  const liveAttachedRun = liveAttachedCandidate
-    ? executionState.active.find((run) => run.runId === liveAttachedCandidate.runId)
-    : executionState.live.find((run) => {
-      const attachment = executionState.feedAttachments[run.runId];
-      return attachment?.mode === 'live_attached' && attachment.liveAttached;
-    });
 
-  if (liveAttachedRun) {
-    return liveAttachedRun;
+  if (liveAttachedCandidate) {
+    return liveAttachedCandidate;
   }
 
-  return executionState.restoreCandidates.length > 0 || Object.keys(executionState.feedAttachments).length > 0
-    ? null
-    : executionState.live[0] ?? null;
+  return null;
 }
 
 function cancelLocalGenerationTransport(runId: string): void {

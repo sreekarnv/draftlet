@@ -201,18 +201,6 @@ describe('generation run runtime API', () => {
     const fetchMock = vi.fn(async () => Response.json({
       checked_at: '2026-06-09T00:00:02.000Z',
       stale_after_seconds: 30,
-      active: [generationRunRead({ status: 'streaming' })],
-      live: [generationRunRead({ status: 'streaming' })],
-      stale: [],
-      feed_attachments: {
-        'generation-1': {
-          mode: 'live_attached',
-          live_attached: true,
-          replay_available: true,
-          subscriber_count: 1,
-          reason: 'producer_attached',
-        },
-      },
       restore_candidates: [{
         run_id: 'generation-1',
         session_id: 'session-1',
@@ -243,17 +231,6 @@ describe('generation run runtime API', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/domain/generation-runs/execution-state?'), expect.any(Object));
-    expect(state.live[0]).toMatchObject({
-      runId: 'generation-1',
-      status: 'streaming',
-    });
-    expect(state.feedAttachments['generation-1']).toMatchObject({
-      mode: 'live_attached',
-      liveAttached: true,
-      replayAvailable: true,
-      subscriberCount: 1,
-      reason: 'producer_attached',
-    });
     expect(state.restoreCandidates[0]).toMatchObject({
       runId: 'generation-1',
       sessionId: 'session-1',
@@ -265,7 +242,7 @@ describe('generation run runtime API', () => {
       replayAvailable: true,
       stale: false,
     });
-    expect(state.stale).toEqual([]);
+    expect(state.restoreCandidates).toHaveLength(1);
   });
 
   it('queries runtime generation progress snapshots', async () => {

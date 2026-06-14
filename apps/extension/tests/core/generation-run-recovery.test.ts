@@ -13,13 +13,15 @@ import type {
 } from '../../core/messages';
 
 describe('generation run recovery decisions', () => {
-  it('reattaches an active session run when runtime marks it live', () => {
+  it('reattaches an active session run when restore_candidates marks it live-attached', () => {
     const run = generationRun({ runId: 'run-live', status: 'streaming' });
 
     expect(chooseRestoredRunRecoveryDecision({
       session: workspaceSession({ activeRunId: run.runId }),
       thread: threadSnapshot(),
-      executionState: executionState({ live: [run] }),
+      executionState: executionState({
+        restoreCandidates: [restoreCandidate(run, { restoreMode: 'live_attached', liveAttached: true })],
+      }),
     })).toMatchObject({
       kind: 'reattach_live',
       run: { runId: 'run-live' },
@@ -27,13 +29,17 @@ describe('generation run recovery decisions', () => {
     });
   });
 
-  it('reconciles an active session run when runtime marks it stale', () => {
+  it('reconciles an active session run when restore_candidates marks it stale', () => {
     const run = generationRun({ runId: 'run-stale', status: 'streaming' });
 
     expect(chooseRestoredRunRecoveryDecision({
       session: workspaceSession({ activeRunId: run.runId }),
       thread: threadSnapshot(),
-      executionState: executionState({ stale: [run] }),
+      executionState: executionState({
+        restoreCandidates: [
+          restoreCandidate(run, { restoreMode: 'stale', liveAttached: false, replayAvailable: false }),
+        ],
+      }),
     })).toMatchObject({
       kind: 'reconcile_stale',
       run: { runId: 'run-stale' },
@@ -41,13 +47,15 @@ describe('generation run recovery decisions', () => {
     });
   });
 
-  it('finds a relevant live run from execution state when activeRunId is missing', () => {
+  it('finds a relevant live-attached restore candidate when activeRunId is missing', () => {
     const run = generationRun({ runId: 'run-live', status: 'active' });
 
     expect(chooseRestoredRunRecoveryDecision({
       session: workspaceSession(),
       thread: threadSnapshot(),
-      executionState: executionState({ live: [run] }),
+      executionState: executionState({
+        restoreCandidates: [restoreCandidate(run, { restoreMode: 'live_attached', liveAttached: true })],
+      }),
     })).toMatchObject({
       kind: 'reattach_live',
       run: { runId: 'run-live' },
@@ -55,7 +63,7 @@ describe('generation run recovery decisions', () => {
     });
   });
 
-  it('prefers a feed-attached candidate over heartbeat-live candidates during discovery', () => {
+  it('prefers a live-attached restore candidate over stale candidates during discovery', () => {
     const staleHeartbeatRun = generationRun({ runId: 'run-stale-heartbeat', status: 'streaming' });
     const liveFeedRun = generationRun({ runId: 'run-live-feed', status: 'streaming', turnId: 'turn-2' });
 
@@ -108,7 +116,7 @@ describe('generation run recovery decisions', () => {
     });
   });
 
-  it('uses stale feed truth over heartbeat-live hints during discovery', () => {
+  it('uses stale restore candidate truth during discovery', () => {
     const run = generationRun({ runId: 'run-stale-feed', status: 'streaming' });
 
     expect(chooseRestoredRunRecoveryDecision({
@@ -129,6 +137,30 @@ describe('generation run recovery decisions', () => {
       run: { runId: 'run-stale-feed' },
       source: 'active_run_id',
     });
+  });
+
+  it('hydrates activeRunId instead of parsing legacy execution-state candidate fields', () => {
+    const run = generationRun({ runId: 'run-legacy-live', status: 'streaming' });
+
+    expect(chooseRestoredRunRecoveryDecision({
+      session: workspaceSession({ activeRunId: run.runId }),
+      thread: threadSnapshot(),
+      executionState: legacyOnlyExecutionState(run),
+    })).toEqual({
+      kind: 'hydrate_active',
+      runId: 'run-legacy-live',
+      source: 'active_run_id',
+    });
+  });
+
+  it('ignores legacy execution-state discovery fields when restore_candidates is absent', () => {
+    const run = generationRun({ runId: 'run-legacy-live', status: 'streaming' });
+
+    expect(chooseRestoredRunRecoveryDecision({
+      session: workspaceSession({ activeTurnId: undefined }),
+      thread: threadSnapshot(),
+      executionState: legacyOnlyExecutionState(run),
+    })).toEqual({ kind: 'none' });
   });
 
   it('falls back to interrupted retryable state from the thread projection', () => {
@@ -154,16 +186,22 @@ describe('generation run recovery decisions', () => {
   it('treats terminal hydrated runs as snapshot-only recovery', () => {
     const run = generationRun({ runId: 'run-complete', status: 'completed' });
 
-    expect(classifyHydratedRunRecovery(run, executionState({ live: [run] }))).toMatchObject({
+    expect(classifyHydratedRunRecovery(run, executionState({
+      restoreCandidates: [restoreCandidate(run, { restoreMode: 'live_attached', liveAttached: true })],
+    }))).toMatchObject({
       kind: 'terminal_snapshot',
       run: { runId: 'run-complete' },
     });
   });
 
-  it('does not reattach active runs that execution state already classifies as stale', () => {
+  it('does not reattach active runs that restore_candidates classifies as stale', () => {
     const run = generationRun({ runId: 'run-stale', status: 'streaming' });
 
-    expect(classifyHydratedRunRecovery(run, executionState({ stale: [run] }))).toMatchObject({
+    expect(classifyHydratedRunRecovery(run, executionState({
+      restoreCandidates: [
+        restoreCandidate(run, { restoreMode: 'stale', liveAttached: false, replayAvailable: false }),
+      ],
+    }))).toMatchObject({
       kind: 'reconcile_stale',
       run: { runId: 'run-stale' },
     });
@@ -172,7 +210,7 @@ describe('generation run recovery decisions', () => {
   it('reattaches hydrated active runs only when the runtime feed is live-attached', () => {
     const run = generationRun({ runId: 'run-live', status: 'streaming' });
 
-    expect(classifyHydratedRunRecovery(run, executionState({ stale: [run] }), {
+    expect(classifyHydratedRunRecovery(run, executionState({}), {
       mode: 'live_attached',
       liveAttached: true,
       replayAvailable: true,
@@ -187,7 +225,7 @@ describe('generation run recovery decisions', () => {
   it('reconciles hydrated active runs when runtime feed is replay-only despite live execution state', () => {
     const run = generationRun({ runId: 'run-replay-only', status: 'streaming' });
 
-    expect(classifyHydratedRunRecovery(run, executionState({ live: [run] }), {
+    expect(classifyHydratedRunRecovery(run, executionState({}), {
       mode: 'replay_only',
       liveAttached: false,
       replayAvailable: true,
@@ -202,7 +240,7 @@ describe('generation run recovery decisions', () => {
   it('reconciles hydrated active runs when runtime feed is explicitly stale', () => {
     const run = generationRun({ runId: 'run-stale-feed', status: 'active' });
 
-    expect(classifyHydratedRunRecovery(run, executionState({ live: [run] }), {
+    expect(classifyHydratedRunRecovery(run, executionState({}), {
       mode: 'stale',
       liveAttached: false,
       replayAvailable: false,
@@ -298,19 +336,29 @@ function restoreCandidate(
 }
 
 function executionState({
-  active = [],
-  live = [],
-  stale = [],
-  feedAttachments = {},
   restoreCandidates = [],
-}: Partial<Pick<GenerationRunExecutionState, 'active' | 'live' | 'stale' | 'feedAttachments' | 'restoreCandidates'>>): GenerationRunExecutionState {
+}: Partial<Pick<GenerationRunExecutionState, 'restoreCandidates'>>): GenerationRunExecutionState {
   return {
     checkedAt: '2026-01-01T00:00:00.000Z',
     staleAfterSeconds: 30,
-    active,
-    live,
-    stale,
-    feedAttachments,
     restoreCandidates,
   };
+}
+
+function legacyOnlyExecutionState(run: GenerationRun): GenerationRunExecutionState {
+  return {
+    ...executionState({}),
+    active: [run],
+    live: [run],
+    stale: [],
+    feedAttachments: {
+      [run.runId]: {
+        mode: 'live_attached',
+        liveAttached: true,
+        replayAvailable: true,
+        subscriberCount: 0,
+        reason: 'producer_attached',
+      },
+    },
+  } as unknown as GenerationRunExecutionState;
 }

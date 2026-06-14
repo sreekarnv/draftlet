@@ -258,10 +258,6 @@ export interface GenerationRunProgressSnapshot {
 export interface GenerationRunExecutionState {
   checkedAt: string;
   staleAfterSeconds: number;
-  active: GenerationRun[];
-  live: GenerationRun[];
-  stale: GenerationRun[];
-  feedAttachments: Record<string, GenerationRunLiveFeedAttachment>;
   restoreCandidates: GenerationRunRestoreCandidate[];
 }
 
