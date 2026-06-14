@@ -318,6 +318,7 @@ export async function getGenerationRunExecutionState(filters: {
     active: response.active.map(mapGenerationRun),
     live: response.live.map(mapGenerationRun),
     stale: response.stale.map(mapGenerationRun),
+    feedAttachments: mapGenerationRunFeedAttachments(response.feed_attachments),
   };
 }
 
@@ -607,6 +608,21 @@ function mapGenerationRunLiveFeedAttachment(
     subscriberCount: attachment.subscriber_count,
     reason: attachment.reason ?? undefined,
   };
+}
+
+function mapGenerationRunFeedAttachments(
+  attachments?: Record<string, GenerationRunLiveFeedAttachmentRead> | null,
+): Record<string, GenerationRunLiveFeedAttachment> {
+  if (!attachments) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(attachments).map(([runId, attachment]) => [
+      runId,
+      mapGenerationRunLiveFeedAttachment(attachment),
+    ]),
+  );
 }
 
 function mapWorkspaceSession(
@@ -918,6 +934,7 @@ interface GenerationRunExecutionStateRead {
   active: GenerationRunRead[];
   live: GenerationRunRead[];
   stale: GenerationRunRead[];
+  feed_attachments?: Record<string, GenerationRunLiveFeedAttachmentRead> | null;
 }
 
 interface GenerationRunProgressEventRead {

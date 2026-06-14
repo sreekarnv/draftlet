@@ -1562,7 +1562,20 @@ async function getLiveRuntimeGenerationConflict(sessionId: string) {
     staleAfterSeconds: GENERATION_RUN_STALE_AFTER_SECONDS,
   }).catch(() => null);
 
-  return executionState?.live[0] ?? null;
+  if (!executionState) {
+    return null;
+  }
+
+  const liveAttachedRun = executionState.live.find((run) => {
+    const attachment = executionState.feedAttachments[run.runId];
+    return attachment?.mode === 'live_attached' && attachment.liveAttached;
+  });
+
+  if (liveAttachedRun) {
+    return liveAttachedRun;
+  }
+
+  return Object.keys(executionState.feedAttachments).length > 0 ? null : executionState.live[0] ?? null;
 }
 
 function cancelLocalGenerationTransport(runId: string): void {

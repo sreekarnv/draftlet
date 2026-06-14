@@ -33,6 +33,15 @@ export function chooseRestoredRunRecoveryDecision({
   executionState,
 }: ChooseRestoredRunRecoveryInput): RestoredRunRecoveryDecision {
   if (session.activeRunId) {
+    const activeCandidate = findExecutionStateRun(executionState, session.activeRunId);
+    const feedDecision = activeCandidate
+      ? decisionFromFeedAttachment(activeCandidate, executionState, 'active_run_id')
+      : null;
+
+    if (feedDecision) {
+      return feedDecision;
+    }
+
     const liveRun = executionState?.live.find((run) => run.runId === session.activeRunId);
 
     if (liveRun) {
@@ -52,6 +61,12 @@ export function chooseRestoredRunRecoveryDecision({
     }
 
     return { kind: 'hydrate_active', runId: session.activeRunId, source: 'active_run_id' };
+  }
+
+  const feedRankedCandidate = chooseFeedRankedRelevantCandidate(session, thread, executionState);
+
+  if (feedRankedCandidate) {
+    return feedRankedCandidate;
   }
 
   const relevantLiveRun = executionState?.live.find((run) => isRelevantRun(session, thread, run));
@@ -142,4 +157,78 @@ function isRelevantRun(
   }
 
   return true;
+}
+
+function findExecutionStateRun(
+  executionState: GenerationRunExecutionState | null | undefined,
+  runId: string,
+): GenerationRun | undefined {
+  return executionState?.active.find((run) => run.runId === runId)
+    ?? executionState?.live.find((run) => run.runId === runId)
+    ?? executionState?.stale.find((run) => run.runId === runId);
+}
+
+function chooseFeedRankedRelevantCandidate(
+  session: WorkspaceSession,
+  thread: ConversationThreadSnapshot | null | undefined,
+  executionState: GenerationRunExecutionState | null | undefined,
+): RestoredRunRecoveryDecision | null {
+  if (!executionState) {
+    return null;
+  }
+
+  const candidates = executionState.active
+    .filter((run) => isRelevantRun(session, thread, run))
+    .map((run) => ({
+      run,
+      attachment: executionState.feedAttachments[run.runId],
+    }))
+    .filter((candidate) => Boolean(candidate.attachment))
+    .sort((left, right) => feedAttachmentRank(left.attachment) - feedAttachmentRank(right.attachment));
+
+  const candidate = candidates[0];
+
+  if (!candidate) {
+    return null;
+  }
+
+  return decisionFromFeedAttachment(candidate.run, executionState, 'execution_state');
+}
+
+function decisionFromFeedAttachment(
+  run: GenerationRun,
+  executionState: GenerationRunExecutionState | null | undefined,
+  source: RestoredRunRecoverySource,
+): Extract<RestoredRunRecoveryDecision, { kind: 'reattach_live' | 'reconcile_stale' }> | null {
+  const attachment = executionState?.feedAttachments[run.runId];
+
+  if (!attachment) {
+    return null;
+  }
+
+  if (attachment.mode === 'live_attached' && attachment.liveAttached) {
+    return { kind: 'reattach_live', run, source };
+  }
+
+  if (attachment.mode === 'replay_only' || attachment.mode === 'stale') {
+    return { kind: 'reconcile_stale', run, source };
+  }
+
+  return null;
+}
+
+function feedAttachmentRank(attachment: GenerationRunLiveFeedAttachment | undefined): number {
+  if (attachment?.mode === 'live_attached' && attachment.liveAttached) {
+    return 0;
+  }
+
+  if (attachment?.mode === 'replay_only') {
+    return 1;
+  }
+
+  if (attachment?.mode === 'stale') {
+    return 2;
+  }
+
+  return 3;
 }

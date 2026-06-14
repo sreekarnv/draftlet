@@ -54,6 +54,92 @@ describe('generation run recovery decisions', () => {
     });
   });
 
+  it('prefers a feed-attached candidate over heartbeat-live candidates during discovery', () => {
+    const staleHeartbeatRun = generationRun({ runId: 'run-stale-heartbeat', status: 'streaming' });
+    const liveFeedRun = generationRun({ runId: 'run-live-feed', status: 'streaming', turnId: 'turn-2' });
+
+    expect(chooseRestoredRunRecoveryDecision({
+      session: workspaceSession({ activeTurnId: undefined }),
+      thread: threadSnapshot(),
+      executionState: executionState({
+        active: [staleHeartbeatRun, liveFeedRun],
+        live: [staleHeartbeatRun, liveFeedRun],
+        feedAttachments: {
+          [staleHeartbeatRun.runId]: {
+            mode: 'stale',
+            liveAttached: false,
+            replayAvailable: true,
+            subscriberCount: 0,
+            reason: 'active_run_without_live_producer',
+          },
+          [liveFeedRun.runId]: {
+            mode: 'live_attached',
+            liveAttached: true,
+            replayAvailable: true,
+            subscriberCount: 0,
+            reason: 'producer_attached',
+          },
+        },
+      }),
+    })).toMatchObject({
+      kind: 'reattach_live',
+      run: { runId: 'run-live-feed' },
+      source: 'execution_state',
+    });
+  });
+
+  it('treats replay-only discovery candidates as stale recovery instead of live reattach', () => {
+    const run = generationRun({ runId: 'run-replay-only', status: 'streaming' });
+
+    expect(chooseRestoredRunRecoveryDecision({
+      session: workspaceSession({ activeRunId: run.runId }),
+      thread: threadSnapshot(),
+      executionState: executionState({
+        active: [run],
+        live: [run],
+        feedAttachments: {
+          [run.runId]: {
+            mode: 'replay_only',
+            liveAttached: false,
+            replayAvailable: true,
+            subscriberCount: 0,
+            reason: 'no_live_producer',
+          },
+        },
+      }),
+    })).toMatchObject({
+      kind: 'reconcile_stale',
+      run: { runId: 'run-replay-only' },
+      source: 'active_run_id',
+    });
+  });
+
+  it('uses stale feed truth over heartbeat-live hints during discovery', () => {
+    const run = generationRun({ runId: 'run-stale-feed', status: 'streaming' });
+
+    expect(chooseRestoredRunRecoveryDecision({
+      session: workspaceSession({ activeRunId: run.runId }),
+      thread: threadSnapshot(),
+      executionState: executionState({
+        active: [run],
+        live: [run],
+        feedAttachments: {
+          [run.runId]: {
+            mode: 'stale',
+            liveAttached: false,
+            replayAvailable: false,
+            subscriberCount: 0,
+            reason: 'active_run_without_live_producer',
+          },
+        },
+      }),
+    })).toMatchObject({
+      kind: 'reconcile_stale',
+      run: { runId: 'run-stale-feed' },
+      source: 'active_run_id',
+    });
+  });
+
   it('falls back to interrupted retryable state from the thread projection', () => {
     expect(chooseRestoredRunRecoveryDecision({
       session: workspaceSession(),
@@ -197,12 +283,14 @@ function executionState({
   active = [],
   live = [],
   stale = [],
-}: Partial<Pick<GenerationRunExecutionState, 'active' | 'live' | 'stale'>>): GenerationRunExecutionState {
+  feedAttachments = {},
+}: Partial<Pick<GenerationRunExecutionState, 'active' | 'live' | 'stale' | 'feedAttachments'>>): GenerationRunExecutionState {
   return {
     checkedAt: '2026-01-01T00:00:00.000Z',
     staleAfterSeconds: 30,
     active,
     live,
     stale,
+    feedAttachments,
   };
 }
