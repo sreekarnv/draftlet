@@ -31,7 +31,8 @@ export async function getBrowserRecaptureDiagnosticsReport(): Promise<DesktopExt
       );
     }
 
-    const data = await response.json() as BrowserRecaptureDiagnosticsRelayState;
+    const raw = (await response.json()) as unknown;
+    const data = mapBrowserRecaptureDiagnosticsResponse(raw);
 
     if (!data.report) {
       return createRecaptureDiagnosticsBridgeFailure(
@@ -83,7 +84,8 @@ export async function getGenerationRunMaintenanceDiagnostics(): Promise<Generati
       );
     }
 
-    const status = await response.json() as GenerationRunMaintenanceStatus;
+    const raw = (await response.json()) as unknown;
+    const status = mapGenerationRunMaintenanceDiagnosticsResponse(raw);
 
     return {
       ok: true,
@@ -97,4 +99,38 @@ export async function getGenerationRunMaintenanceDiagnostics(): Promise<Generati
       true,
     );
   }
+}
+
+export function mapBrowserRecaptureDiagnosticsResponse(
+  raw: unknown,
+): BrowserRecaptureDiagnosticsRelayState {
+  const mapped = snakeToCamelDeep(raw) as BrowserRecaptureDiagnosticsRelayState;
+  return mapped;
+}
+
+export function mapGenerationRunMaintenanceDiagnosticsResponse(
+  raw: unknown,
+): GenerationRunMaintenanceStatus {
+  const mapped = snakeToCamelDeep(raw) as GenerationRunMaintenanceStatus;
+  return mapped;
+}
+
+function snakeToCamelDeep(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((entry) => snakeToCamelDeep(entry));
+  }
+
+  if (value && typeof value === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+      result[snakeToCamelKey(key)] = snakeToCamelDeep(entry);
+    }
+    return result;
+  }
+
+  return value;
+}
+
+function snakeToCamelKey(key: string): string {
+  return key.replace(/_([a-z0-9])/g, (_match, ch: string) => ch.toUpperCase());
 }
