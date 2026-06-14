@@ -1,6 +1,9 @@
 import type { ComposeTargetRef, ConnectionStatus, InsertionResult, InsertionTargetStatus, PanelView, Tone } from './types';
 import type { PlausibleTabCandidate } from './tab-disambiguation';
+import type { BrowserDiagnosticsPublishReliabilityState } from './recapture-diagnostics-publish-retry';
 import type { DesktopExtensionDiagnosticsBridgeResult } from '../../../shared/recapture-diagnostics-contract';
+
+export type { BrowserDiagnosticsPublishReliabilityState } from './recapture-diagnostics-publish-retry';
 
 export const LAUNCH_SIDE_PANEL = 'draftlet:launch-side-panel';
 export const GET_CURRENT_WORKSPACE_SESSION = 'draftlet:get-current-workspace-session';
@@ -345,6 +348,7 @@ export interface DomainHistoryResult {
 
 export interface RecaptureDiagnosticsResult {
   entries: RecaptureDiagnosticEntry[];
+  publish: BrowserDiagnosticsPublishReliabilityState;
 }
 
 export type PublishRecaptureDiagnosticsReportResult = DesktopExtensionDiagnosticsBridgeResult;

@@ -2,6 +2,7 @@ import {
   GET_RECAPTURE_DIAGNOSTICS,
   GET_RUNTIME_STATUS,
   PUBLISH_RECAPTURE_DIAGNOSTICS_REPORT,
+  type BrowserDiagnosticsPublishReliabilityState,
   type DraftletMessage,
   type PublishRecaptureDiagnosticsReportResult,
   type RecaptureDiagnosticEntry,
@@ -43,6 +44,7 @@ root.innerHTML = `
           <button class="secondary-button" id="copy-diagnostics" type="button">Copy</button>
         </div>
       </div>
+      <div id="publish-state" class="publish-state"></div>
       <div id="diagnostics-list" class="diagnostics-list">Loading...</div>
       <div id="copy-status" class="copy-status" role="status"></div>
     </section>
@@ -50,6 +52,7 @@ root.innerHTML = `
 `;
 
 const runtimeStatus = requireElement('runtime-status');
+const publishState = requireElement('publish-state');
 const diagnosticsList = requireElement('diagnostics-list');
 const refreshButton = requireElement('refresh') as HTMLButtonElement;
 const publishButton = requireElement('publish-diagnostics') as HTMLButtonElement;
@@ -88,6 +91,7 @@ async function refreshPopup() {
   runtimeStatus.textContent = runtime.status === 'connected' ? 'Connected' : 'Disconnected';
   runtimeStatus.className = `pill ${runtime.status === 'connected' ? 'success' : 'failed'}`;
   latestDiagnostics = diagnostics.entries;
+  renderPublishState(diagnostics.publish);
   renderDiagnostics(diagnostics.entries);
   refreshButton.disabled = false;
   publishButton.disabled = diagnostics.entries.length === 0;
@@ -126,8 +130,10 @@ async function publishDiagnostics() {
     copyStatus.textContent = result.ok
       ? 'Sent diagnostics to desktop.'
       : result.error.message;
+    await refreshDiagnosticsState();
   } catch {
     copyStatus.textContent = 'Could not send diagnostics to desktop.';
+    await refreshDiagnosticsState();
   } finally {
     publishButton.disabled = latestDiagnostics.length === 0;
   }
@@ -161,8 +167,53 @@ async function loadRecaptureDiagnostics(): Promise<RecaptureDiagnosticsResult> {
           at: new Date().toISOString(),
         },
       ],
+      publish: {
+        queued: false,
+        retryPending: false,
+        inFlight: false,
+        retryCount: 0,
+        maxRetryAttempts: 3,
+        lastFailedAt: new Date().toISOString(),
+        lastFailureReason: 'Could not read diagnostics publish state.',
+      },
     };
   }
+}
+
+async function refreshDiagnosticsState() {
+  const diagnostics = await loadRecaptureDiagnostics();
+  latestDiagnostics = diagnostics.entries;
+  renderPublishState(diagnostics.publish);
+  renderDiagnostics(diagnostics.entries);
+}
+
+function renderPublishState(state: BrowserDiagnosticsPublishReliabilityState | null | undefined) {
+  if (!state) {
+    publishState.textContent = '';
+    publishState.className = 'publish-state';
+    return;
+  }
+
+  if (state.queued) {
+    const retryLabel = state.inFlight
+      ? 'retrying now'
+      : state.retryPending
+        ? `retry pending (${state.retryCount}/${state.maxRetryAttempts})`
+        : 'retry limit reached';
+    const reason = state.lastFailureReason ? `: ${state.lastFailureReason}` : '';
+    publishState.textContent = `Browser diagnostics publish pending, ${retryLabel}${reason}`;
+    publishState.className = 'publish-state warning';
+    return;
+  }
+
+  if (state.lastFailureReason && state.lastFailedAt) {
+    publishState.textContent = `Last publish failure ${formatDiagnosticTime(state.lastFailedAt)}: ${state.lastFailureReason}`;
+    publishState.className = 'publish-state failed';
+    return;
+  }
+
+  publishState.textContent = '';
+  publishState.className = 'publish-state';
 }
 
 function renderDiagnostics(entries: RecaptureDiagnosticEntry[]) {
@@ -401,10 +452,33 @@ function installStyles() {
     .level,
     .hint,
     .empty,
+    .publish-state,
     .copy-status {
       color: #64748b;
       font-size: 11px;
       line-height: 16px;
+    }
+
+    .publish-state {
+      display: none;
+      border-radius: 6px;
+      padding: 6px 8px;
+      background: #f8fafc;
+    }
+
+    .publish-state.warning,
+    .publish-state.failed {
+      display: block;
+    }
+
+    .publish-state.warning {
+      background: #fffbeb;
+      color: #92400e;
+    }
+
+    .publish-state.failed {
+      background: #fef2f2;
+      color: #991b1b;
     }
 
     .level {
