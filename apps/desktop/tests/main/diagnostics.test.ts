@@ -164,10 +164,15 @@ describe('getGenerationRunMaintenanceDiagnostics', () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.protocol).toBe('draftlet.generation-run-maintenance-diagnostics.v1');
-      // NOTE: same snake_case bug as above. The status object is passed through
-      // without mapping, so the camelCase fields expected by
-      // GenerationRunMaintenanceStatus end up undefined.
-      expect(result.status.terminalRuns).toBeUndefined();
+      // NOTE: the production handler reads the raw snake_case body as
+      // `GenerationRunMaintenanceStatus` and passes it through unchanged. The
+      // contract fields (processLocal, terminalRuns, etc.) are therefore not
+      // populated. We assert the raw key on the status object to lock the
+      // current (buggy) behavior without requiring the contract to grow new
+      // fields; a snake→camel mapper should be added in a follow-up branch.
+      const statusRecord = result.status as unknown as Record<string, unknown>;
+      expect(statusRecord.process_local).toBe(false);
+      expect(statusRecord.terminal_runs).toBe(5);
     } else {
       throw new Error('Expected ok result.');
     }

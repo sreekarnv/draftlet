@@ -65,12 +65,10 @@ function loadedMaintenanceResult(): RuntimeMaintenanceDiagnosticsResult {
     status: {
       checkedAt: '2026-01-01T00:00:00.000Z',
       processLocal: false,
-      interruptedRuns: 0,
-      terminalRuns: 5,
-      replayRetentionDays: 14,
-      replayMaxRows: 100,
-      staleAfterSeconds: 30,
-      notes: [],
+      recentLimit: 5,
+      retentionDays: 14,
+      maxStoredOutcomes: 50,
+      recent: [],
     },
   };
 }
