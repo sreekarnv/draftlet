@@ -316,10 +316,6 @@ export async function getGenerationRunExecutionState(filters: {
   return {
     checkedAt: response.checked_at,
     staleAfterSeconds: response.stale_after_seconds,
-    active: response.active.map(mapGenerationRun),
-    live: response.live.map(mapGenerationRun),
-    stale: response.stale.map(mapGenerationRun),
-    feedAttachments: mapGenerationRunFeedAttachments(response.feed_attachments),
     restoreCandidates: (response.restore_candidates ?? []).map(mapGenerationRunRestoreCandidate),
   };
 }
@@ -610,21 +606,6 @@ function mapGenerationRunLiveFeedAttachment(
     subscriberCount: attachment.subscriber_count,
     reason: attachment.reason ?? undefined,
   };
-}
-
-function mapGenerationRunFeedAttachments(
-  attachments?: Record<string, GenerationRunLiveFeedAttachmentRead> | null,
-): Record<string, GenerationRunLiveFeedAttachment> {
-  if (!attachments) {
-    return {};
-  }
-
-  return Object.fromEntries(
-    Object.entries(attachments).map(([runId, attachment]) => [
-      runId,
-      mapGenerationRunLiveFeedAttachment(attachment),
-    ]),
-  );
 }
 
 function mapGenerationRunRestoreCandidate(candidate: GenerationRunRestoreCandidateRead): GenerationRunRestoreCandidate {
@@ -957,10 +938,6 @@ interface RecoverableRunProjectionRead {
 interface GenerationRunExecutionStateRead {
   checked_at: string;
   stale_after_seconds: number;
-  active: GenerationRunRead[];
-  live: GenerationRunRead[];
-  stale: GenerationRunRead[];
-  feed_attachments?: Record<string, GenerationRunLiveFeedAttachmentRead> | null;
   restore_candidates?: GenerationRunRestoreCandidateRead[] | null;
 }
 

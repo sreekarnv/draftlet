@@ -43,33 +43,6 @@ export function chooseRestoredRunRecoveryDecision({
       return restoreCandidateDecision;
     }
 
-    const activeCandidate = findExecutionStateRun(executionState, session.activeRunId);
-    const feedDecision = activeCandidate
-      ? decisionFromFeedAttachment(activeCandidate, executionState, 'active_run_id')
-      : null;
-
-    if (feedDecision) {
-      return feedDecision;
-    }
-
-    const liveRun = executionState?.live.find((run) => run.runId === session.activeRunId);
-
-    if (liveRun) {
-      return { kind: 'reattach_live', run: liveRun, source: 'active_run_id' };
-    }
-
-    const staleRun = executionState?.stale.find((run) => run.runId === session.activeRunId);
-
-    if (staleRun) {
-      return { kind: 'reconcile_stale', run: staleRun, source: 'active_run_id' };
-    }
-
-    const activeRun = executionState?.active.find((run) => run.runId === session.activeRunId);
-
-    if (activeRun) {
-      return { kind: 'reconcile_stale', run: activeRun, source: 'active_run_id' };
-    }
-
     return { kind: 'hydrate_active', runId: session.activeRunId, source: 'active_run_id' };
   }
 
@@ -81,24 +54,6 @@ export function chooseRestoredRunRecoveryDecision({
     if (decision) {
       return decision;
     }
-  }
-
-  const feedRankedCandidate = chooseFeedRankedRelevantCandidate(session, thread, executionState);
-
-  if (feedRankedCandidate) {
-    return feedRankedCandidate;
-  }
-
-  const relevantLiveRun = executionState?.live.find((run) => isRelevantRun(session, thread, run));
-
-  if (relevantLiveRun) {
-    return { kind: 'reattach_live', run: relevantLiveRun, source: 'execution_state' };
-  }
-
-  const relevantStaleRun = executionState?.stale.find((run) => isRelevantRun(session, thread, run));
-
-  if (relevantStaleRun) {
-    return { kind: 'reconcile_stale', run: relevantStaleRun, source: 'execution_state' };
   }
 
   const recoverableRun = thread?.latestRecoverableRun;
@@ -146,14 +101,6 @@ export function classifyHydratedRunRecovery(
     return { kind: 'reconcile_stale', run };
   }
 
-  if (executionState?.stale.some((candidate) => candidate.runId === run.runId)) {
-    return { kind: 'reconcile_stale', run };
-  }
-
-  if (executionState?.live.some((candidate) => candidate.runId === run.runId)) {
-    return { kind: 'reattach_live', run };
-  }
-
   if (executionState) {
     return { kind: 'reconcile_stale', run };
   }
@@ -163,39 +110,6 @@ export function classifyHydratedRunRecovery(
 
 export function isTerminalGenerationRunStatus(status: GenerationRunStatus): boolean {
   return status === 'completed' || status === 'failed' || status === 'cancelled' || status === 'interrupted';
-}
-
-function isRelevantRun(
-  session: WorkspaceSession,
-  thread: ConversationThreadSnapshot | null | undefined,
-  run: GenerationRun,
-): boolean {
-  if (run.sessionId !== session.sessionId) {
-    return false;
-  }
-
-  if (session.activeThreadId && run.threadId !== session.activeThreadId) {
-    return false;
-  }
-
-  if (thread && run.threadId !== thread.thread.threadId) {
-    return false;
-  }
-
-  if (session.activeTurnId && run.turnId !== session.activeTurnId) {
-    return false;
-  }
-
-  return true;
-}
-
-function findExecutionStateRun(
-  executionState: GenerationRunExecutionState | null | undefined,
-  runId: string,
-): GenerationRun | undefined {
-  return executionState?.active.find((run) => run.runId === runId)
-    ?? executionState?.live.find((run) => run.runId === runId)
-    ?? executionState?.stale.find((run) => run.runId === runId);
 }
 
 function findRestoreCandidate(
@@ -251,33 +165,6 @@ function isRelevantRestoreCandidate(
   return true;
 }
 
-function chooseFeedRankedRelevantCandidate(
-  session: WorkspaceSession,
-  thread: ConversationThreadSnapshot | null | undefined,
-  executionState: GenerationRunExecutionState | null | undefined,
-): RestoredRunRecoveryDecision | null {
-  if (!executionState) {
-    return null;
-  }
-
-  const candidates = executionState.active
-    .filter((run) => isRelevantRun(session, thread, run))
-    .map((run) => ({
-      run,
-      attachment: executionState.feedAttachments[run.runId],
-    }))
-    .filter((candidate) => Boolean(candidate.attachment))
-    .sort((left, right) => feedAttachmentRank(left.attachment) - feedAttachmentRank(right.attachment));
-
-  const candidate = candidates[0];
-
-  if (!candidate) {
-    return null;
-  }
-
-  return decisionFromFeedAttachment(candidate.run, executionState, 'execution_state');
-}
-
 function decisionFromRestoreCandidate(
   candidate: GenerationRunRestoreCandidate,
   source: RestoredRunRecoverySource,
@@ -293,44 +180,6 @@ function decisionFromRestoreCandidate(
   }
 
   return null;
-}
-
-function decisionFromFeedAttachment(
-  run: GenerationRun,
-  executionState: GenerationRunExecutionState | null | undefined,
-  source: RestoredRunRecoverySource,
-): Extract<RestoredRunRecoveryDecision, { kind: 'reattach_live' | 'reconcile_stale' }> | null {
-  const attachment = executionState?.feedAttachments[run.runId];
-
-  if (!attachment) {
-    return null;
-  }
-
-  if (attachment.mode === 'live_attached' && attachment.liveAttached) {
-    return { kind: 'reattach_live', run, source };
-  }
-
-  if (attachment.mode === 'replay_only' || attachment.mode === 'stale') {
-    return { kind: 'reconcile_stale', run, source };
-  }
-
-  return null;
-}
-
-function feedAttachmentRank(attachment: GenerationRunLiveFeedAttachment | undefined): number {
-  if (attachment?.mode === 'live_attached' && attachment.liveAttached) {
-    return 0;
-  }
-
-  if (attachment?.mode === 'replay_only') {
-    return 1;
-  }
-
-  if (attachment?.mode === 'stale') {
-    return 2;
-  }
-
-  return 3;
 }
 
 function restoreCandidateRank(candidate: GenerationRunRestoreCandidate): number {
