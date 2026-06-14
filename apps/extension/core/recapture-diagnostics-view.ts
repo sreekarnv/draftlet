@@ -3,10 +3,10 @@ import {
   serializeRecaptureDiagnosticsReport,
   type RecaptureDiagnosticsReport,
   type RecaptureDiagnosticsReportSummary,
-} from '../../../shared/recapture-diagnostics-contract';
+} from '@draftlet/shared/contracts';
 import type { RecaptureDiagnosticEntry, RecaptureDiagnosticLevel } from './messages';
 
-export type { RecaptureDiagnosticsReport } from '../../../shared/recapture-diagnostics-contract';
+export type { RecaptureDiagnosticsReport } from '@draftlet/shared/contracts';
 
 export function createRecaptureDiagnosticsReport(
   entries: RecaptureDiagnosticEntry[],

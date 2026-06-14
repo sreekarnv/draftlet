@@ -139,28 +139,18 @@ describe('generation run recovery decisions', () => {
     });
   });
 
-  it('hydrates activeRunId instead of parsing legacy execution-state candidate fields', () => {
-    const run = generationRun({ runId: 'run-legacy-live', status: 'streaming' });
+  it('hydrates activeRunId when only session state is available', () => {
+    const run = generationRun({ runId: 'run-active-only', status: 'streaming' });
 
     expect(chooseRestoredRunRecoveryDecision({
       session: workspaceSession({ activeRunId: run.runId }),
       thread: threadSnapshot(),
-      executionState: legacyOnlyExecutionState(run),
+      executionState: executionState({}),
     })).toEqual({
       kind: 'hydrate_active',
-      runId: 'run-legacy-live',
+      runId: 'run-active-only',
       source: 'active_run_id',
     });
-  });
-
-  it('ignores legacy execution-state discovery fields when restore_candidates is absent', () => {
-    const run = generationRun({ runId: 'run-legacy-live', status: 'streaming' });
-
-    expect(chooseRestoredRunRecoveryDecision({
-      session: workspaceSession({ activeTurnId: undefined }),
-      thread: threadSnapshot(),
-      executionState: legacyOnlyExecutionState(run),
-    })).toEqual({ kind: 'none' });
   });
 
   it('falls back to interrupted retryable state from the thread projection', () => {
@@ -352,22 +342,4 @@ function executionState({
     staleAfterSeconds: 30,
     restoreCandidates,
   };
-}
-
-function legacyOnlyExecutionState(run: GenerationRun): GenerationRunExecutionState {
-  return {
-    ...executionState({}),
-    active: [run],
-    live: [run],
-    stale: [],
-    feedAttachments: {
-      [run.runId]: {
-        mode: 'live_attached',
-        liveAttached: true,
-        replayAvailable: true,
-        subscriberCount: 0,
-        reason: 'producer_attached',
-      },
-    },
-  } as unknown as GenerationRunExecutionState;
 }

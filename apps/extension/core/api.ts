@@ -1,6 +1,6 @@
 import { SERVER_BASE_URL } from './constants';
 import { streamSse, type SseMessage } from './sse-client';
-import type { RecaptureDiagnosticsReport } from '../../../shared/recapture-diagnostics-contract';
+import type { RecaptureDiagnosticsReport } from '@draftlet/shared/contracts';
 import type {
   ConversationThread,
   ConversationThreadSnapshot,

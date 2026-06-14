@@ -1,7 +1,7 @@
 import type { ComposeTargetRef, ConnectionStatus, InsertionResult, InsertionTargetStatus, PanelView, Tone } from './types';
 import type { PlausibleTabCandidate } from './tab-disambiguation';
 import type { BrowserDiagnosticsPublishReliabilityState } from './recapture-diagnostics-publish-retry';
-import type { DesktopExtensionDiagnosticsBridgeResult } from '../../../shared/recapture-diagnostics-contract';
+import type { DesktopExtensionDiagnosticsBridgeResult } from '@draftlet/shared/contracts';
 
 export type { BrowserDiagnosticsPublishReliabilityState } from './recapture-diagnostics-publish-retry';
 

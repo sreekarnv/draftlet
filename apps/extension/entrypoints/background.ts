@@ -85,7 +85,7 @@ import {
   DESKTOP_EXTENSION_DIAGNOSTICS_BRIDGE_PROTOCOL,
   type BrowserRecaptureTargetSummary,
   createRecaptureDiagnosticsBridgeFailure,
-} from '../../../shared/recapture-diagnostics-contract';
+} from '@draftlet/shared/contracts';
 
 interface LocalGenerationTransportHandle {
   sessionId: string;

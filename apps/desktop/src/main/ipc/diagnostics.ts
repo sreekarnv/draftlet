@@ -5,13 +5,13 @@ import {
   createRecaptureDiagnosticsBridgeFailure,
   type DesktopExtensionDiagnosticsBridgeResult,
   type BrowserRecaptureDiagnosticsRelayState,
-} from '../../../../../shared/recapture-diagnostics-contract';
+} from '@draftlet/shared/contracts';
 import {
   GENERATION_RUN_MAINTENANCE_DIAGNOSTICS_PROTOCOL,
   createGenerationRunMaintenanceDiagnosticsFailure,
   type GenerationRunMaintenanceDiagnosticsResult,
   type GenerationRunMaintenanceStatus,
-} from '../../../../../shared/generation-run-maintenance-diagnostics-contract';
+} from '@draftlet/shared/contracts';
 import { SERVER_BASE_URL } from './settings.js';
 
 export function registerDiagnosticsIpc() {

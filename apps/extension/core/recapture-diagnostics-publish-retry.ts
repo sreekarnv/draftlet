@@ -1,4 +1,4 @@
-import type { RecaptureDiagnosticsReport } from '../../../shared/recapture-diagnostics-contract';
+import type { RecaptureDiagnosticsReport } from '@draftlet/shared/contracts';
 
 export interface BrowserDiagnosticsPublishReliabilityState {
   queued: boolean;

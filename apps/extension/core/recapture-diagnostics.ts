@@ -11,7 +11,7 @@ import type {
   BrowserRecaptureAttemptSummary,
   BrowserRecaptureTargetSummary,
   RecaptureDiagnosticsReportSummary,
-} from '../../../shared/recapture-diagnostics-contract';
+} from '@draftlet/shared/contracts';
 
 interface RecaptureDiagnosticsLogOptions {
   maxEntries?: number;
