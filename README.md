@@ -1,117 +1,147 @@
 # Draftlet
 
-Draftlet is a local-first browser drafting assistant. Select text on a webpage, generate reply drafts with a local Ollama model, then copy or best-effort insert a reply.
+Draftlet is a local-first browser drafting assistant that uses a local Ollama model to help draft replies from selected webpage text.
 
-## Demo
+## What it does
 
-### Desktop companion
+- Select text on a webpage.
+- Open the Draftlet side panel.
+- Generate reply drafts from your local Ollama model.
+- Refine drafts in a thread with follow-up instructions.
+- Copy a reply, or let Draftlet try to insert it into the page for you.
+- Use the desktop companion to set up Ollama, the model, and the local Draftlet server.
 
-![Draftlet desktop companion](.github/assets/desktop-companion.png)
+## Why local-first
 
-Local runtime checklist for Ollama, model readiness, and the Draftlet server.
+- Drafts are generated through a local runtime, not a hosted Draftlet service.
+- Ollama runs on your machine, so prompts and generated text stay between your browser, the Draftlet server, and Ollama.
+- The Draftlet server stores sessions, threads, and preferences in a local SQLite database.
 
-### Extension workflow
+Draftlet can only control what runs in its own processes. Your browser, the page you are on, and your operating system can still capture, log, or sync content outside of Draftlet.
 
-![Draftlet extension workflow](.github/assets/extension-gmail.gif)
+## Current status
 
-Selecting text, opening Draftlet, and generating local reply drafts.
+Draftlet is an early local-first project under active development. The repository supports local development and manual extension loading.
 
-## Why I Built It
+- The browser extension builds as an unpacked Chrome MV3 extension for development. It is not currently distributed through the Chrome Web Store.
+- The desktop companion is an Electron app for setup, runtime controls, diagnostics, and tray behavior.
+- Generation quality depends on the local Ollama model you install and the model Draftlet selects.
 
-Most AI writing tools send page context to hosted services. Draftlet explores the opposite shape: a browser UX backed by a local server, local model runtime, and local persistence so drafting help can stay on the user's machine.
+## Requirements
 
-## Product Shape
+- Node.js with pnpm (workspaces enabled)
+- Python 3.12+
+- [uv](https://docs.astral.sh/uv/) for Python dependency management
+- [Ollama](https://ollama.com/download), running on `127.0.0.1:11434`
+- An Ollama model; `gemma3:4b` is the recommended default
+- A Chromium-based browser (for example, Chrome) with Developer Mode enabled to load the unpacked extension
 
-- **Browser extension:** selection detection, contextual launcher, reply workspace, history, copy, and best-effort insertion.
-- **Electron desktop app:** setup companion for Ollama, model selection, and Draftlet server readiness.
-- **Local FastAPI server:** prompt building, Ollama streaming, SSE responses, SQLite history, and preferences.
+The desktop companion runs on the platforms Electron supports. The Linux desktop build uses Electron Forge Debian and ZIP makers.
 
-Ollama is required separately. Draftlet does not bundle Ollama. Packaged desktop builds can launch a bundled PyInstaller build of the Draftlet Python server.
+## Quick start
 
-## Key Engineering Highlights
+The full setup walkthrough lives in [docs/setup.md](docs/setup.md).
 
-- WXT Chrome extension with React isolated to the panel UI
-- Shadow DOM in-page fallback plus Chrome side panel workspace where available
-- Fetch-based SSE streaming from FastAPI to the extension UI
-- Defensive delimiter parser for local model output
-- Best-effort insertion for inputs, textareas, and basic contenteditable editors
-- SQLite persistence with SQLAlchemy 2.0 and Alembic migrations
-- Electron main/preload/renderer split with explicit IPC commands
-- PyInstaller server bundle used by the desktop companion
+1. Install Ollama and pull a model:
 
-## Main Features
+   ```bash
+   ollama pull gemma3:4b
+   ```
 
-- Generate three draft replies from selected webpage text
-- Choose tone in the Draftlet panel
-- Copy or insert a generated reply
-- Fall back to clipboard when insertion is unsupported
-- Revisit local generation history
-- Select an installed Ollama model from the desktop app
-- Check Ollama, model, and server readiness from one desktop flow
+2. Install repo dependencies:
 
-## Quick First Run
+   ```bash
+   pnpm install
+   cd apps/server && uv sync --group dev && cd ../..
+   ```
 
-1. Open the Draftlet desktop app.
-2. Install and start Ollama if needed.
-3. Pull `gemma3:4b`, or select another installed Ollama model.
-4. Start the Draftlet server from the desktop app.
-5. Build and load the extension from `apps/extension/.output/chrome-mv3`.
-6. Select text on a webpage and open Draftlet.
+3. Apply server database migrations:
 
-Detailed setup lives in [docs/setup.md](docs/setup.md).
+   ```bash
+   cd apps/server && uv run alembic upgrade head && cd ../..
+   ```
 
-## Local Development
+4. Start the local stack (server, extension dev, desktop):
+
+   ```bash
+   pnpm dev
+   ```
+
+   Or start one app at a time:
+
+   ```bash
+   pnpm dev:server
+   pnpm dev:extension
+   pnpm dev:desktop
+   ```
+
+5. Build the extension and load it as an unpacked extension:
+
+   ```bash
+   pnpm --dir apps/extension build
+   ```
+
+   Load the directory `apps/extension/.output/chrome-mv3` in your browser's extensions page with Developer Mode enabled.
+
+6. Select text on a page, open the Draftlet side panel, and generate a reply.
+
+## Documentation
+
+- [Setup and commands](docs/setup.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [Recapture validation checklist](docs/recapture-validation.md)
+- [Architecture](docs/architecture/architecture.md)
+- [Boundaries](docs/architecture/boundaries.md)
+- [Events and contracts](docs/architecture/events-and-contracts.md)
+- [Phase plan](docs/architecture/phase-plan.md)
+- [UI principles](docs/ui/ui-principles.md)
+- [Legacy docs (v1 / POC)](docs/v1/README.md)
+
+## Current limitations
+
+- Ollama must be installed and running separately. Draftlet does not bundle it.
+- Generation quality depends on the local model. Smaller models can produce shallow or malformed replies.
+- Insertion back into a webpage is best-effort. Pages that use complex editors (for example, rich text or canvas) may fall back to copy.
+- The extension must be loaded as an unpacked build from this repository. There is no signed store build yet.
+- The Draftlet server must be running for the extension to generate replies. If the server stops, the extension surfaces a connection error and offers a retry.
+- The extension currently expects the local server at `http://127.0.0.1:47632`.
+- Draftlet only controls its own processes. It cannot prevent the browser, the page, or the operating system from capturing content elsewhere.
+
+## Development commands
+
+Run from the repo root unless noted.
 
 ```bash
-pnpm install
-cd apps/server && uv sync --group dev
-cd ../..
-pnpm dev
-```
-
-Useful commands:
-
-```bash
-pnpm dev:desktop
-pnpm dev:extension
-pnpm dev:server
+pnpm typecheck
 pnpm build
 pnpm make:desktop
 ```
 
-## Tests
+Extension:
 
 ```bash
 pnpm --dir apps/extension exec tsc --noEmit
 pnpm --dir apps/extension test
 pnpm --dir apps/extension build
-pnpm --dir apps/desktop typecheck
-cd apps/server && uv run pytest && uv run alembic upgrade head
 ```
 
-CI runs these checks on push and pull request.
+Desktop:
 
-## Local URLs
+```bash
+pnpm --dir apps/desktop typecheck
+pnpm --dir apps/desktop test
+pnpm --dir apps/desktop package
+pnpm --dir apps/desktop make
+```
 
-- Draftlet server: `http://127.0.0.1:47632`
-- Server health: `http://127.0.0.1:47632/health`
-- Ollama: `http://127.0.0.1:11434`
+Server:
 
-## Privacy
+```bash
+cd apps/server
+uv run pytest
+uv run alembic upgrade head
+```
 
-Draftlet is local-first. Selected text is sent to the local Draftlet server, prompts are generated through local Ollama, and history/preferences are stored in local SQLite. There is no hosted Draftlet service in this repo.
+## License
 
-## Current Limitations
-
-- Insertion is best-effort and varies by website/editor.
-- Ollama must be installed and running separately.
-- The extension currently assumes the local server runs on `127.0.0.1:47632`.
-- The browser extension is documented as an unpacked Chrome extension for repo-based testing.
-- Local model output can still be malformed despite defensive parsing.
-
-## More Docs
-
-- [Setup and commands](docs/setup.md)
-- [v2 architecture target](docs/architecture/architecture.md)
-- [v1/current architecture reference](docs/v1/current-architecture.md)
-- [Troubleshooting](docs/troubleshooting.md)
+[MIT](LICENSE)
