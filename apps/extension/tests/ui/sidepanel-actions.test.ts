@@ -24,8 +24,8 @@ import {
   startDraftGenerationFromCurrentSession,
   trailEventForRecapture,
   trailLevelForRecapture,
-  type SendMessage,
 } from '../../ui/sidepanel/actions';
+import type { SendMessage } from '../../ui/sidepanel/runtime-message-bus';
 import type { ConnectionStatus, InsertionTargetStatus, PanelState } from '../../core/types';
 
 interface PanelCall {

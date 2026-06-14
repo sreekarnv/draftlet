@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { PlausibleTabCandidate, WorkspaceSession } from '../../../core/messages';
+import type { WorkspaceSession } from '../../../core/messages';
 import {
   handleActivateRecaptureTab,
   handleGetInsertionTargetStatus,
@@ -8,8 +8,7 @@ import {
   handleRecaptureInsertionTarget,
   revalidateInsertionTarget,
 } from '../../../core/background/insertion-coordinator';
-import { sessions } from '../../../core/background/state';
-import { recaptureDiagnostics } from '../../../core/background/state';
+import { sessions, recaptureDiagnostics } from '../../../core/background/state';
 
 const runtimeApiMocks = vi.hoisted(() => ({
   cancelReplyGenerationRunExecution: vi.fn(),
@@ -77,11 +76,20 @@ function seedSession(options: Partial<WorkspaceSession> = {}): WorkspaceSession 
 function tab(id: number, url: string, options: { active?: boolean; currentWindow?: boolean; windowId?: number } = {}): Browser.tabs.Tab {
   return {
     id,
+    index: 0,
     windowId: options.windowId ?? 1,
     title: `Tab ${id}`,
     url,
     active: options.active ?? false,
     currentWindow: options.currentWindow ?? true,
+    pinned: false,
+    highlighted: false,
+    frozen: false,
+    incognito: false,
+    selected: false,
+    discarded: false,
+    autoDiscardable: true,
+    groupId: -1,
   } as Browser.tabs.Tab;
 }
 
@@ -403,4 +411,4 @@ describe('handleActivateRecaptureTab', () => {
   });
 });
 
-void {} as PlausibleTabCandidate;
+void {};

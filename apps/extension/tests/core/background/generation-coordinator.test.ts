@@ -23,8 +23,6 @@ import {
   clearLocalGenerationTransport,
   hydrateWorkspaceSessionFromRuntime,
 } from '../../../core/background/runtime-run-state';
-import type { WorkspaceSessionStore } from '../../../core/workspace-session';
-import type { ConversationThreadStore } from '../../../core/conversation-thread';
 
 const runtimeApiMocks = vi.hoisted(() => ({
   cancelReplyGenerationRunExecution: vi.fn(),
@@ -342,6 +340,6 @@ describe('handleCancelDraftGeneration', () => {
   });
 });
 
-void sessions as WorkspaceSessionStore;
-void threads as ConversationThreadStore;
+void sessions;
+void threads;
 void hydrateWorkspaceSessionFromRuntime;
