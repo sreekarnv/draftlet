@@ -219,3 +219,39 @@ A migration PR should usually do one thing:
 - delete one obsolete flow after validation
 
 Do not combine UI polish, backend refactors, contract changes, dependency changes, and cleanup unless they are inseparable from the same migration step.
+
+## Test Hardening (current)
+
+Vitest coverage was extended for the highest-risk orchestration paths so future refactors are safe. No domain model changes, no runtime/contract changes, no server changes.
+
+### Extension side panel (`apps/extension/ui/sidepanel/actions.ts`)
+
+- `startDraftGenerationFromCurrentSession`: no current session, active generation start, background failure response, send-reject path.
+- `cancelActiveGeneration`: clears `activeRunId` and sends `CANCEL_DRAFT_GENERATION`; no-op when none; swallows send rejections.
+- `restoreDomainHistoryItem` / restore thread success and un-restoreable failure.
+- `refreshHealth` and `loadDomainHistory`: connected / disconnected / error / send-reject branches.
+- `recaptureInsertionTarget` and `activateRecaptureTab`: no-session failure, success path, send-reject fallback.
+- `appendTrail`, `trailEventForRecapture`, `trailLevelForRecapture` are exported for direct testing.
+
+### Extension background coordinators
+
+- `core/background/generation-coordinator.ts`: `handleStartDraftGeneration` happy path with assertion that `putWorkspaceSession` → `putConversationThread` → `putTurn` → `claimGenerationRun` order is preserved, the transport controller is registered, the session is updated with `activeRunId`. Conflict path via `live_attached` restore candidate, missing-instruction refinement, persistence failure, claim failure, all return the right error codes and do not leave a transport handle. `handleCancelDraftGeneration` covers `sessionId+generationId`, sessionId-only fallback, and the no-run path.
+- `core/background/runtime-run-state.ts`: `hydrateAndEmitRunProgress`, `subscribeToRuntimeRunEvents` happy/error/abort, `streamRuntimeRunEvents` replay cursor handling, `hasLocalGenerationTransport` and `hasLocalGenerationTransportForSession`, `hydrateAndEmitThreadSnapshot`, `finalizeGenerationRunStatus` (success, fall back to turn status, interrupted → failed), and `reconcileInterruptedGenerationRun`. A real bug was found and fixed: `streamRuntimeRunEvents` returned before the in-flight `hydrateAndEmitRunProgress(...).then(...)` callbacks had updated the local cursor. The fix tracks pending hydration promises in a list and `await Promise.allSettled(...)` before returning.
+- `core/background/insertion-coordinator.ts`: successful insert, stale target failure, session-not-found, content-script-unavailable, tab disambiguation, missing tab, recapture diagnostics recording, tab activation success / unavailable.
+
+### Desktop (`apps/desktop`)
+
+New Vitest setup (`vitest.config.ts` + `test` script). Tests use an `electron` mock that records `ipcMain.handle` calls and stubs `app.getPath` to a temp directory; `globalThis.fetch` is stubbed for IPC handlers.
+
+- `src/renderer/lib/diagnostics-export.ts`: payload shape for `loaded`, `not_loaded`, `unavailable` sections; `serializeDesktopDiagnosticsExportPayload` round-trip.
+- `src/main/ipc/settings.ts`: missing-file, round-trip, whitespace handling, empty-model rejection, preservation of other keys, `RECOMMENDED_MODEL` constant.
+- `src/main/ipc/health.ts`: `checkServerHealth` happy/non-ok/conflict/offline, `checkHttpStatus` 2xx/non-2xx/transport, `isDraftletHealth` truth table, `registerHealthIpc` handler registration.
+- `src/main/ipc/diagnostics.ts`: success / http error / stale / not-published / transport-unavailable branches for the recapture report and the maintenance diagnostics; handler registration. Known issue: the response uses snake_case field names (`stale_after_seconds`, `terminal_runs`, etc.) while the shared contract and the result objects use camelCase, so `result.staleAfterSeconds` and `result.status.terminalRuns` currently land as `undefined`. Tests assert that undefined to lock the current behavior; the fix belongs in a follow-up that adds a snake_case → camelCase mapper.
+
+### Files not changed
+
+- `apps/server/**` (no server behavior or contracts touched).
+- `apps/extension/core/messages.ts` (no split).
+- `apps/extension/core/recapture-diagnostics.ts`, `recapture-diagnostics-view.ts`, `restore-conflict.ts`, `generation-run-recovery.ts`, `sse-client.ts`, `insertion.ts` (existing tests already cover them).
+- `packages/shared` exports.
+- Database migrations.
