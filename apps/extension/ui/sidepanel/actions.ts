@@ -23,9 +23,6 @@ import {
   type InsertReplyResult,
   type InsertionTargetStatusResult,
   type RecaptureInsertionTargetResult,
-  type RecaptureStatusTrailEvent,
-  type RecaptureStatusTrailItem,
-  type RecaptureStatusTrailLevel,
   type RestoreDomainThreadResult,
   type RuntimeStatusResult,
   type StartDraftGenerationResult,
@@ -36,12 +33,17 @@ import {
 import { buildWorkspaceRestoreState } from '../../core/restore-conflict';
 import type { InsertionResult, InsertionTargetStatus, PanelView, Tone } from '../../core/types';
 import {
-  MAX_RECAPTURE_TRAIL_ITEMS,
   type SidePanelState,
   shouldApplySessionUpdate,
 } from './state';
 import type { PanelController } from '../mount-panel';
 import type { SendMessage } from './runtime-message-bus';
+import {
+  appendTrail,
+  insertionTargetMessage,
+  trailEventForRecapture,
+  trailLevelForRecapture,
+} from '../../components/panel/recapture-status-trail';
 
 export interface SidePanelStorage {
   getSavedTone(): Promise<Tone>;
@@ -683,75 +685,6 @@ export async function activateRecaptureTab(state: SidePanelState, panel: PanelCo
     panel.setRestoreState(buildCurrentRestoreState(state));
     return { ok: false, message };
   }
-}
-
-export function appendTrail(
-  trail: RecaptureStatusTrailItem[],
-  event: RecaptureStatusTrailEvent,
-  level: RecaptureStatusTrailLevel,
-  message: string,
-  tabId?: number,
-): RecaptureStatusTrailItem[] {
-  return [
-    ...trail,
-    {
-      event,
-      level,
-      message,
-      tabId,
-      at: new Date().toISOString(),
-    },
-  ].slice(-MAX_RECAPTURE_TRAIL_ITEMS);
-}
-
-export function trailEventForRecapture(response: RecaptureInsertionTargetResult): RecaptureStatusTrailEvent {
-  if (response.outcome === 'recapture_succeeded') {
-    return 'recapture_succeeded';
-  }
-
-  if (response.outcome === 'needs_focused_compose_target' || response.outcome === 'tab_choice_acknowledged') {
-    return 'focus_required';
-  }
-
-  return 'recapture_failed';
-}
-
-export function trailLevelForRecapture(response: RecaptureInsertionTargetResult): RecaptureStatusTrailLevel {
-  if (response.outcome === 'recapture_succeeded') {
-    return 'success';
-  }
-
-  if (response.outcome === 'needs_focused_compose_target' || response.outcome === 'tab_choice_acknowledged') {
-    return 'warning';
-  }
-
-  return 'failed';
-}
-
-function insertionTargetMessage(session: WorkspaceSession): string {
-  const status: InsertionTargetStatus = session.insertionTargetStatus ?? (session.insertionTarget ? 'stale' : 'needs_recapture');
-
-  if (status === 'live') {
-    return 'Target available';
-  }
-
-  if (status === 'stale') {
-    return 'Target stale; Draftlet will recheck before inserting.';
-  }
-
-  if (status === 'unavailable') {
-    return 'Target unavailable; Copy still works.';
-  }
-
-  if (status === 'needs_focus') {
-    return 'Focus a compose field in the selected tab, then retry recapture.';
-  }
-
-  if (status === 'tab_disambiguation_required') {
-    return 'Choose the tab with the compose field, then recapture.';
-  }
-
-  return 'Focus a compose field and recapture to enable insertion.';
 }
 
 export async function cancelActiveGeneration(state: SidePanelState): Promise<void> {

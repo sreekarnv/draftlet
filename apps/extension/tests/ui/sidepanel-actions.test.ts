@@ -10,11 +10,10 @@ import {
   type DraftletMessage,
   type WorkspaceSession,
 } from '../../core/messages';
-import { MAX_RECAPTURE_TRAIL_ITEMS, createInitialState } from '../../ui/sidepanel/state';
+import { createInitialState } from '../../ui/sidepanel/state';
 import type { PanelController } from '../../ui/mount-panel';
 import {
   activateRecaptureTab,
-  appendTrail,
   cancelActiveGeneration,
   configureSendMessage,
   loadDomainHistory,
@@ -22,8 +21,6 @@ import {
   refreshHealth,
   restoreDomainHistoryItem,
   startDraftGenerationFromCurrentSession,
-  trailEventForRecapture,
-  trailLevelForRecapture,
 } from '../../ui/sidepanel/actions';
 import type { SendMessage } from '../../ui/sidepanel/runtime-message-bus';
 import type { ConnectionStatus, InsertionTargetStatus, PanelState } from '../../core/types';
@@ -100,54 +97,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
-});
-
-describe('appendTrail', () => {
-  it('appends a bounded trail item with a timestamp', () => {
-    const next = appendTrail([], 'recapture_requested', 'pending', 'Recapture requested.', 7);
-
-    expect(next).toHaveLength(1);
-    expect(next[0]).toMatchObject({
-      event: 'recapture_requested',
-      level: 'pending',
-      message: 'Recapture requested.',
-      tabId: 7,
-    });
-    expect(typeof next[0].at).toBe('string');
-    expect(Date.parse(next[0].at)).not.toBeNaN();
-  });
-
-  it('keeps only the latest items when over the maximum', () => {
-    let trail: ReturnType<typeof appendTrail> = [];
-    for (let i = 0; i < MAX_RECAPTURE_TRAIL_ITEMS + 2; i += 1) {
-      trail = appendTrail(trail, 'recapture_requested', 'pending', `step ${i}`, i);
-    }
-
-    expect(trail).toHaveLength(MAX_RECAPTURE_TRAIL_ITEMS);
-    expect(trail[0]).toMatchObject({ tabId: 2, message: 'step 2' });
-    expect(trail.at(-1)).toMatchObject({ tabId: MAX_RECAPTURE_TRAIL_ITEMS + 1, message: `step ${MAX_RECAPTURE_TRAIL_ITEMS + 1}` });
-  });
-});
-
-describe('trailEventForRecapture / trailLevelForRecapture', () => {
-  it('maps recapture_succeeded to a success trail entry', () => {
-    expect(trailEventForRecapture({ outcome: 'recapture_succeeded' } as never)).toBe('recapture_succeeded');
-    expect(trailLevelForRecapture({ outcome: 'recapture_succeeded' } as never)).toBe('success');
-  });
-
-  it('maps focus and tab-choice outcomes to focus_required warning', () => {
-    expect(trailEventForRecapture({ outcome: 'needs_focused_compose_target' } as never)).toBe('focus_required');
-    expect(trailEventForRecapture({ outcome: 'tab_choice_acknowledged' } as never)).toBe('focus_required');
-    expect(trailLevelForRecapture({ outcome: 'needs_focused_compose_target' } as never)).toBe('warning');
-    expect(trailLevelForRecapture({ outcome: 'tab_choice_acknowledged' } as never)).toBe('warning');
-  });
-
-  it('falls back to recapture_failed for any other outcome', () => {
-    expect(trailEventForRecapture({ outcome: 'recapture_failed' } as never)).toBe('recapture_failed');
-    expect(trailLevelForRecapture({ outcome: 'recapture_failed' } as never)).toBe('failed');
-    expect(trailEventForRecapture({ outcome: 'chosen_tab_unavailable' } as never)).toBe('recapture_failed');
-    expect(trailLevelForRecapture({ outcome: 'chosen_tab_unavailable' } as never)).toBe('failed');
-  });
 });
 
 describe('startDraftGenerationFromCurrentSession', () => {
