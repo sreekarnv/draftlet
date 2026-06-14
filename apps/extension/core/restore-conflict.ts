@@ -68,11 +68,11 @@ export function buildWorkspaceRestoreState({
     issues.push({
       code: 'active_run_restored',
       severity: 'info',
-      message: 'Restored an active runtime run. Draftlet will replay durable progress when available.',
+      message: 'Reattached to an active runtime run and replaying durable progress.',
       action: {
         kind: 'wait_for_active_run',
-        label: 'Waiting for run',
-        message: 'Wait for runtime progress before starting another draft.',
+        label: 'Reattached',
+        message: 'Draftlet is following durable run progress; it is not resuming model tokens mid-stream.',
       },
       runId: session.activeRunId,
       threadId: session.activeThreadId,
@@ -268,7 +268,7 @@ function summaryForState(
   }
 
   if (primaryIssue?.code === 'active_run_restored') {
-    return 'Restored active run; waiting for durable runtime progress.';
+    return 'Reattached to active draft generation and replaying progress.';
   }
 
   if (primaryIssue?.code === 'interrupted_run_retryable') {

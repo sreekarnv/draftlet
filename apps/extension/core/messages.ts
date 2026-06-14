@@ -222,6 +222,14 @@ export interface GenerationRunProgressSnapshot {
   replayCursor: number;
 }
 
+export interface GenerationRunExecutionState {
+  checkedAt: string;
+  staleAfterSeconds: number;
+  active: GenerationRun[];
+  live: GenerationRun[];
+  stale: GenerationRun[];
+}
+
 export interface WorkspaceSessionSnapshot {
   session: WorkspaceSession;
   thread: ConversationThreadSnapshot | null;

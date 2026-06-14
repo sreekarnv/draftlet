@@ -7,6 +7,7 @@ import type {
   DomainHistoryItem,
   DraftVariant,
   GenerationRun,
+  GenerationRunExecutionState,
   GenerationRunProgressSnapshot,
   GenerationRunStatus,
   SourceSnapshot,
@@ -917,14 +918,6 @@ interface GenerationRunProgressSnapshotRead {
   thread: ConversationThreadSnapshotRead | null;
   events: GenerationRunProgressEventRead[];
   replay_cursor: number;
-}
-
-export interface GenerationRunExecutionState {
-  checkedAt: string;
-  staleAfterSeconds: number;
-  active: GenerationRun[];
-  live: GenerationRun[];
-  stale: GenerationRun[];
 }
 
 interface ConversationThreadSnapshotRead {
