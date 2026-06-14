@@ -14,7 +14,6 @@ from app.schemas.domain import (
     GenerationRunProgressEvent,
     GenerationRunProgressSnapshot,
     GenerationRunClaim,
-    GenerationRunExecutionState,
     GenerationRunHeartbeat,
     GenerationRunReconcileRequest,
     GenerationRunStatusUpdate,
@@ -316,33 +315,6 @@ def list_active_generation_runs(
         statement = statement.where(GenerationRun.turn_id == turn_id)
 
     return list(session.scalars(statement.order_by(GenerationRun.claimed_at.desc())))
-
-
-def inspect_generation_run_execution_state(
-    session: Session,
-    session_id: str | None = None,
-    thread_id: str | None = None,
-    turn_id: str | None = None,
-    stale_after_seconds: int = DEFAULT_GENERATION_RUN_STALE_AFTER_SECONDS,
-) -> GenerationRunExecutionState:
-    now = datetime.now(UTC)
-    active_runs = list_active_generation_runs(session, session_id=session_id, thread_id=thread_id, turn_id=turn_id)
-    live: list[GenerationRun] = []
-    stale: list[GenerationRun] = []
-
-    for run in active_runs:
-        if is_generation_run_stale(run, now, stale_after_seconds):
-            stale.append(run)
-        else:
-            live.append(run)
-
-    return GenerationRunExecutionState(
-        checked_at=now,
-        stale_after_seconds=stale_after_seconds,
-        active=active_runs,
-        live=live,
-        stale=stale,
-    )
 
 
 def get_generation_run_progress_snapshot(

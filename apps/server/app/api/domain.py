@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -38,7 +40,7 @@ from app.services.domain_service import (
     get_generation_run_progress_snapshot,
     get_thread_snapshot,
     heartbeat_generation_run,
-    inspect_generation_run_execution_state,
+    is_generation_run_stale,
     list_active_generation_runs,
     list_recent_domain_history,
     reconcile_stale_generation_runs,
@@ -190,18 +192,11 @@ async def get_generation_run_execution_state(
     stale_after_seconds: int = Query(default=30, ge=0),
     session: Session = Depends(get_session),
 ) -> GenerationRunExecutionState:
-    state = inspect_generation_run_execution_state(
-        session,
-        session_id=session_id,
-        thread_id=thread_id,
-        turn_id=turn_id,
-        stale_after_seconds=stale_after_seconds,
-    )
-    feed_attachments: dict[str, GenerationRunLiveFeedAttachment] = {}
-    stale_run_ids = {run.run_id for run in state.stale}
+    checked_at = datetime.now(UTC)
+    active_runs = list_active_generation_runs(session, session_id=session_id, thread_id=thread_id, turn_id=turn_id)
     restore_candidates: list[GenerationRunRestoreCandidate] = []
 
-    for run in state.active:
+    for run in active_runs:
         feed = await inspect_reply_execution_feed(run.run_id)
         attachment = build_live_feed_attachment(
             run_status=run.status,
@@ -209,12 +204,14 @@ async def get_generation_run_execution_state(
             replay_available=feed.replay_available,
             subscriber_count=feed.subscriber_count,
         )
-        feed_attachments[run.run_id] = attachment
-        restore_candidates.append(build_restore_candidate(run, attachment, stale=run.run_id in stale_run_ids))
+        stale = is_generation_run_stale(run, checked_at, stale_after_seconds)
+        restore_candidates.append(build_restore_candidate(run, attachment, stale=stale))
 
-    state.feed_attachments = feed_attachments
-    state.restore_candidates = restore_candidates
-    return state
+    return GenerationRunExecutionState(
+        checked_at=checked_at,
+        stale_after_seconds=stale_after_seconds,
+        restore_candidates=restore_candidates,
+    )
 
 
 @router.get("/generation-runs/{run_id}/progress", response_model=GenerationRunProgressSnapshot)

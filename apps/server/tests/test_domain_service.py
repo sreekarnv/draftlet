@@ -29,7 +29,7 @@ from app.services.domain_service import (
     get_session_snapshot,
     get_thread_snapshot,
     heartbeat_generation_run,
-    inspect_generation_run_execution_state,
+    is_generation_run_stale,
     list_generation_run_events,
     list_active_generation_runs,
     list_recent_domain_history,
@@ -952,12 +952,9 @@ class DomainServiceTest(unittest.TestCase):
                 "run-1",
                 GenerationRunHeartbeat(lease_owner="extension-background"),
             )
-            live_state = inspect_generation_run_execution_state(session, session_id=workspace.session_id, stale_after_seconds=30)
-            stale_state = inspect_generation_run_execution_state(session, session_id=workspace.session_id, stale_after_seconds=0)
-
             self.assertIsNotNone(heartbeat.heartbeat_at)
-            self.assertEqual([run.run_id for run in live_state.live], ["run-1"])
-            self.assertEqual([run.run_id for run in stale_state.stale], ["run-1"])
+            self.assertFalse(is_generation_run_stale(heartbeat, stale_after_seconds=30))
+            self.assertTrue(is_generation_run_stale(heartbeat, stale_after_seconds=0))
 
     def test_terminal_generation_run_status_is_not_overwritten_by_late_completion(self) -> None:
         with self.Session() as session:
