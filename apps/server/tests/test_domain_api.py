@@ -23,7 +23,7 @@ def create_test_sessionmaker():
     return sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
-def test_execution_state_includes_live_feed_attachment_truth(monkeypatch) -> None:
+def test_execution_state_uses_restore_candidates_as_sole_candidate_surface(monkeypatch) -> None:
     async def inspect_feed(run_id: str, after_sequence: int = 0) -> ReplyExecutionFeedSnapshot:
         return ReplyExecutionFeedSnapshot(
             run_id=run_id,
@@ -86,12 +86,11 @@ def test_execution_state_includes_live_feed_attachment_truth(monkeypatch) -> Non
             session=session,
         ))
 
-    attachment = state.feed_attachments["run-1"]
-    assert [run.run_id for run in state.live] == ["run-1"]
-    assert attachment.mode == "live_attached"
-    assert attachment.live_attached is True
-    assert attachment.replay_available is True
-    assert attachment.subscriber_count == 2
+    payload = state.model_dump()
+    assert "active" not in payload
+    assert "live" not in payload
+    assert "stale" not in payload
+    assert "feed_attachments" not in payload
     assert len(state.restore_candidates) == 1
     candidate = state.restore_candidates[0]
     assert candidate.run_id == "run-1"

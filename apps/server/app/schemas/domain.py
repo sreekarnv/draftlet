@@ -292,10 +292,6 @@ class GenerationRunRestoreCandidate(BaseModel):
 class GenerationRunExecutionState(BaseModel):
     checked_at: datetime
     stale_after_seconds: int
-    active: list[GenerationRunRead]
-    live: list[GenerationRunRead]
-    stale: list[GenerationRunRead]
-    feed_attachments: dict[str, GenerationRunLiveFeedAttachment] = Field(default_factory=dict)
     restore_candidates: list[GenerationRunRestoreCandidate] = Field(default_factory=list)
 
 
