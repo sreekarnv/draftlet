@@ -4,31 +4,31 @@ Detailed setup and command reference for Draftlet.
 
 ## Prerequisites
 
-- Node.js with pnpm
-- Python 3.12+
-- uv
-- Ollama
-- An Ollama model, recommended: `gemma3:4b`
+Install these before running Draftlet for the first time.
 
-## First Run
+- **Node.js** with **pnpm** (workspaces enabled)
+- **Python 3.12+**
+- **[uv](https://docs.astral.sh/uv/)** for Python dependency management
+- **[Ollama](https://ollama.com/download)** running on `127.0.0.1:11434`
+- An **Ollama model**; `gemma3:4b` is the recommended default
+- A **Chromium-based browser** (for example, Chrome) with Developer Mode enabled, for loading the unpacked extension
 
-1. Open the Draftlet desktop app.
-2. Install Ollama if it is missing.
-3. Start Ollama if it is installed but not running.
-4. Pull `gemma3:4b`, or select another installed model.
-5. Start the Draftlet server from the desktop app.
-6. Build and load the browser extension.
-7. Select text on a webpage and open Draftlet.
+The desktop companion is an Electron app. On Linux, the packaged installer is produced through Electron Forge's Debian and ZIP makers, which expect packaging tools such as `fakeroot` and `dpkg` to be available.
 
-## Install Dependencies
+## Install repo dependencies
+
+From the repo root:
 
 ```bash
 pnpm install
 cd apps/server
 uv sync --group dev
+cd ../..
 ```
 
-## Model Setup
+This installs the Node workspace dependencies (extension, desktop, shared) and the Python server dependencies (including dev tools like PyInstaller and pytest).
+
+## Configure Ollama
 
 Pull the recommended onboarding model:
 
@@ -36,47 +36,51 @@ Pull the recommended onboarding model:
 ollama pull gemma3:4b
 ```
 
-The desktop app can also list installed Ollama models and persist the selected active model. If no model is selected, Draftlet falls back to `gemma3:4b`.
+Confirm Ollama is reachable and lists your model:
 
-## Database Migrations
+```bash
+curl http://127.0.0.1:11434/api/tags
+```
 
-Run migrations for the development SQLite database:
+The desktop companion can also list installed Ollama models and persist the selected active model. If no model is selected, Draftlet falls back to `gemma3:4b`.
+
+## Apply database migrations
+
+The Draftlet server stores sessions, threads, turns, variants, preferences, and diagnostics in SQLite. Apply the latest schema before first run:
 
 ```bash
 cd apps/server
 uv run alembic upgrade head
 ```
 
-The default development database path is:
+The default development database path is `apps/server/draftlet.db`. The file is created on first run.
 
-```text
-apps/server/draftlet.db
-```
+## Run the local stack
 
-## Local Development
-
-Run all local development processes:
+Run all three local development processes at once:
 
 ```bash
 pnpm dev
 ```
 
+This script starts the FastAPI server, the WXT extension dev process, and the Electron desktop companion, and cleans them up on exit.
+
 Run one app at a time:
 
 ```bash
-pnpm dev:desktop
-pnpm dev:extension
 pnpm dev:server
+pnpm dev:extension
+pnpm dev:desktop
 ```
 
-Manual server command:
+The server script runs:
 
 ```bash
 cd apps/server
 uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 47632
 ```
 
-## Extension Loading
+## Load the browser extension
 
 Build the Chrome MV3 extension:
 
@@ -84,21 +88,72 @@ Build the Chrome MV3 extension:
 pnpm --dir apps/extension build
 ```
 
-Load this directory in Chrome with Developer Mode enabled:
+The unpacked build is written to:
 
 ```text
 apps/extension/.output/chrome-mv3
 ```
 
-## Build and Package
+Open your browser's extensions page, enable Developer Mode, and choose **Load unpacked**. Point it at the `chrome-mv3` directory above. After you change extension code, rebuild and reload the unpacked extension from the extensions page.
 
-Run the release-oriented build:
+## Run the desktop app
+
+The desktop companion starts through:
+
+```bash
+pnpm dev:desktop
+```
+
+It exposes setup, runtime start/stop, model selection, diagnostics, and tray behavior. Use it as the primary way to check Ollama, model, and server readiness.
+
+## Verify the server is healthy
+
+After starting the server, confirm it responds:
+
+```bash
+curl http://127.0.0.1:47632/health
+```
+
+Useful sanity checks:
+
+```bash
+curl http://127.0.0.1:47632/health
+curl http://127.0.0.1:47632/domain/history
+curl http://127.0.0.1:47632/preferences
+curl http://127.0.0.1:11434/api/tags
+```
+
+If the server fails to start because port `47632` is in use, stop the conflicting process. The desktop companion only stops a process holding the port if `/health` identifies it as a Draftlet server.
+
+## Local URLs and ports
+
+- **Draftlet server:** `http://127.0.0.1:47632`
+- **Server health:** `http://127.0.0.1:47632/health`
+- **Ollama:** `http://127.0.0.1:11434`
+- **Development SQLite database:** `apps/server/draftlet.db`
+- **Extension build:** `apps/extension/.output/chrome-mv3`
+
+The extension currently expects the server at `http://127.0.0.1:47632`. There is no remote server option.
+
+## Common first-run expectations
+
+- The first `pnpm install` can take a few minutes because the workspace pulls the extension, desktop, and shared packages.
+- The first server start creates `apps/server/draftlet.db` if it does not exist. Delete that file to reset local history and preferences.
+- The first extension build can take a minute or two; subsequent builds are faster.
+- The first draft generation is slow because Ollama loads the model into memory. Later generations on the same model are much faster.
+- If you change Python dependencies, rerun `uv sync --group dev` inside `apps/server`.
+- If you change Node dependencies, rerun `pnpm install` from the repo root.
+- Packaged desktop builds store runtime data under the Electron user-data directory, not inside the repo. The development server and database always live under `apps/server/`.
+
+## Build and package
+
+Release-oriented build (Python server bundle, packaged desktop app, browser extension):
 
 ```bash
 pnpm build
 ```
 
-This builds the Python server bundle, packages the Electron desktop app, and builds the browser extension.
+This runs the shared package build, builds a PyInstaller onedir server bundle, packages the Electron desktop app with that bundle copied in, and builds the browser extension.
 
 Package outputs:
 
@@ -108,13 +163,13 @@ apps/desktop/out/
 apps/extension/.output/chrome-mv3
 ```
 
-Create desktop installers, including Linux `.deb` and ZIP outputs:
+Create desktop installers (Linux `.deb` and ZIP):
 
 ```bash
 pnpm make:desktop
 ```
 
-On Debian/Ubuntu hosts, the Debian maker expects packaging tools such as `fakeroot` and `dpkg`. Installer outputs are written under:
+On Debian/Ubuntu hosts, this expects packaging tools such as `fakeroot` and `dpkg` to be installed. Installer outputs are written under:
 
 ```text
 apps/desktop/out/make/
@@ -132,6 +187,8 @@ cd apps/server && uv run pyinstaller --clean --noconfirm draftlet-server.spec
 
 ## Tests
 
+Run tests for each app from the repo root.
+
 Extension:
 
 ```bash
@@ -144,6 +201,7 @@ Desktop:
 
 ```bash
 pnpm --dir apps/desktop typecheck
+pnpm --dir apps/desktop test
 pnpm --dir apps/desktop package
 ```
 
@@ -155,29 +213,21 @@ uv run pytest
 uv run alembic upgrade head
 ```
 
-## Local URLs
+The GitHub Actions workflow at `.github/workflows/ci.yml` runs the extension, desktop, and server checks on push and pull request.
 
-- Draftlet server: `http://127.0.0.1:47632`
-- Server health: `http://127.0.0.1:47632/health`
-- Ollama: `http://127.0.0.1:11434`
-- Development SQLite database: `apps/server/draftlet.db`
+## API surface
 
-Useful checks:
+The runtime exposes a small HTTP and SSE API for the extension and desktop surfaces.
 
-```bash
-curl http://127.0.0.1:47632/health
-curl http://127.0.0.1:47632/domain/history
-curl http://127.0.0.1:47632/preferences
-curl http://127.0.0.1:11434/api/tags
-```
-
-## API
-
-- `GET /health` identifies and checks the Draftlet server
-- `POST /replies/{run_id}/start` starts a runtime-owned reply generation run
-- `GET /replies/{run_id}/events` streams live/replayed run progress as SSE
-- `GET /replies/{run_id}/events?after=N` is intended for active and recent terminal run replay. Runtime keeps active replay rows, caps each run to the latest 100 rows, and prunes terminal run replay rows after 14 days. Older terminal run history remains available through domain snapshots such as `/domain/generation-runs/{run_id}/progress` and `/domain/history`, but the SSE replay feed may no longer have old rows.
-- `GET /domain/history` returns recent persisted Draftlet workspace threads
-- `GET /diagnostics/generation-runs/maintenance` returns process-local recent startup reconciliation, stale-run reconciliation, and replay-prune outcomes for debugging runtime maintenance behavior
-- `GET /preferences` lists saved preferences
-- `PUT /preferences` upserts a preference
+- `GET /health` — identifies and checks the Draftlet server
+- `POST /replies/{run_id}/start` — starts a runtime-owned reply generation run
+- `POST /replies/{run_id}/cancel` — cancels a claimed run; the active stream stops at the next bounded check
+- `GET /replies/{run_id}/events` — streams live and replayed run progress as SSE
+- `GET /replies/{run_id}/events?after=N` — replay feed for active and recent terminal runs; older terminal run history remains available through `/domain/generation-runs/{run_id}/progress` and `/domain/history`, but the SSE replay feed may no longer have old rows
+- `GET /domain/history` — recent persisted Draftlet workspace threads
+- `GET /domain/generation-runs/{run_id}/progress` — bounded durable progress snapshot for a run
+- `GET /domain/generation-runs/execution-state` — bounded restore candidates for browser restore
+- `GET /diagnostics/generation-runs/maintenance` — process-local recent startup reconciliation, stale-run reconciliation, and replay-prune outcomes
+- `GET /diagnostics/browser-recapture` — latest privacy-bounded browser recapture diagnostics report published by the extension
+- `GET /preferences` — list saved preferences
+- `PUT /preferences` — upsert a preference
