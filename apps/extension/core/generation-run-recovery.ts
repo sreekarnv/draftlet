@@ -72,7 +72,6 @@ export function chooseRestoredRunRecoveryDecision({
 
 export function classifyHydratedRunRecovery(
   run: GenerationRun,
-  executionState?: GenerationRunExecutionState | null,
   liveFeedAttachment?: GenerationRunLiveFeedAttachment | null,
 ): HydratedRunRecoveryDecision {
   if (isTerminalGenerationRunStatus(run.status)) {
@@ -91,17 +90,7 @@ export function classifyHydratedRunRecovery(
     return { kind: 'reconcile_stale', run };
   }
 
-  const restoreCandidate = executionState?.restoreCandidates.find((candidate) => candidate.runId === run.runId);
-
-  if (restoreCandidate?.restoreMode === 'live_attached' && restoreCandidate.liveAttached) {
-    return { kind: 'reattach_live', run };
-  }
-
-  if (restoreCandidate?.restoreMode === 'stale' || restoreCandidate?.restoreMode === 'replay_only') {
-    return { kind: 'reconcile_stale', run };
-  }
-
-  if (executionState) {
+  if (!liveFeedAttachment) {
     return { kind: 'reconcile_stale', run };
   }
 

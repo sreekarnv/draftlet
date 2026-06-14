@@ -64,6 +64,7 @@ import {
   type Turn,
   type WorkspaceRestoreSource,
   type WorkspaceRestoreState,
+  type WorkspaceRestoreIssue,
   type WorkspaceSession,
   type WorkspaceSessionResult,
 } from '../core/messages';
@@ -76,7 +77,7 @@ import {
 import { buildRecaptureDiagnosticsReportSummary, createRecaptureDiagnosticsLog } from '../core/recapture-diagnostics';
 import { createRecaptureDiagnosticsPublishRetryQueue } from '../core/recapture-diagnostics-publish-retry';
 import { createRecaptureDiagnosticsReport } from '../core/recapture-diagnostics-view';
-import { attachWorkspaceRestoreState, buildWorkspaceRestoreState } from '../core/restore-conflict';
+import { attachWorkspaceRestoreState, buildRunRecoveryIssue, buildWorkspaceRestoreState } from '../core/restore-conflict';
 import { findPlausibleTabCandidates, isPlausibleSessionTab, type PlausibleTabCandidate } from '../core/tab-disambiguation';
 import { createWorkspaceSessionStore } from '../core/workspace-session';
 import type { GenerationMode, InsertionTargetStatus, Tone } from '../core/types';
@@ -1350,6 +1351,7 @@ async function restoreRuntimeSnapshot(session: WorkspaceSession): Promise<Worksp
     const recovery = await recoverRestoredRunFromDurableProgress(restoredSession, restoredThread);
     restoredSession = recovery.session;
     restoredThread = recovery.thread;
+    const recoveryIssues = recovery.issues;
 
     if (!recovery.handled && restoredThread) {
       restoredThread = await reconcileInterruptedGeneration(restoredSession.sessionId, restoredThread);
@@ -1377,7 +1379,7 @@ async function restoreRuntimeSnapshot(session: WorkspaceSession): Promise<Worksp
       }
     }
 
-    restoredSession = attachAndRecordWorkspaceRestoreState(restoredSession, restoredThread, 'current_tab');
+    restoredSession = attachAndRecordWorkspaceRestoreState(restoredSession, restoredThread, 'current_tab', recoveryIssues);
     sessions.hydrateSession(restoredSession);
 
     if (restoredThread) {
@@ -1400,7 +1402,12 @@ async function restoreRuntimeSnapshot(session: WorkspaceSession): Promise<Worksp
 async function recoverRestoredRunFromDurableProgress(
   restoredSession: WorkspaceSession,
   restoredThread: ConversationThreadSnapshot | null,
-): Promise<{ handled: boolean; session: WorkspaceSession; thread: ConversationThreadSnapshot | null }> {
+): Promise<{
+  handled: boolean;
+  session: WorkspaceSession;
+  thread: ConversationThreadSnapshot | null;
+  issues: WorkspaceRestoreIssue[];
+}> {
   const executionState = await getGenerationRunExecutionState({
     sessionId: restoredSession.sessionId,
     threadId: restoredThread?.thread.threadId ?? restoredSession.activeThreadId,
@@ -1414,7 +1421,7 @@ async function recoverRestoredRunFromDurableProgress(
   });
 
   if (decision.kind === 'none' || decision.kind === 'interrupted_retryable') {
-    return { handled: false, session: restoredSession, thread: restoredThread };
+    return { handled: false, session: restoredSession, thread: restoredThread, issues: [] };
   }
 
   const runId = decision.kind === 'hydrate_active' ? decision.runId : decision.run.runId;
@@ -1427,7 +1434,20 @@ async function recoverRestoredRunFromDurableProgress(
   const progressRun = progress?.run ?? (decision.kind === 'hydrate_active' ? undefined : decision.run);
 
   if (!progressRun) {
-    return { handled: false, session: restoredSession, thread: progressThread };
+    const issue = buildRunRecoveryIssue('progress_unavailable', recoveryRefsFromDecision(decision, restoredSession));
+
+    if (decision.kind === 'hydrate_active') {
+      return { handled: false, session: restoredSession, thread: progressThread, issues: [issue] };
+    }
+
+    const reconciledThread = await reconcileInterruptedGenerationRun(decision.run);
+    const refreshedSession = await hydrateWorkspaceSessionFromRuntime(restoredSession.sessionId, restoredSession);
+    return {
+      handled: true,
+      session: refreshedSession ?? restoredSession,
+      thread: reconciledThread ?? progressThread,
+      issues: [issue],
+    };
   }
 
   if (!restoredSession.activeRunId && !isTerminalGenerationRunStatus(progressRun.status)) {
@@ -1438,7 +1458,7 @@ async function recoverRestoredRunFromDurableProgress(
     }) ?? restoredSession;
   }
 
-  const hydratedDecision = classifyHydratedRunRecovery(progressRun, executionState, progress?.liveFeedAttachment);
+  const hydratedDecision = classifyHydratedRunRecovery(progressRun, progress?.liveFeedAttachment);
 
   if (hydratedDecision.kind === 'terminal_snapshot') {
     const refreshedSession = await hydrateWorkspaceSessionFromRuntime(restoredSession.sessionId, restoredSession);
@@ -1446,16 +1466,27 @@ async function recoverRestoredRunFromDurableProgress(
       handled: true,
       session: refreshedSession ?? restoredSession,
       thread: progressThread,
+      issues: [],
     };
   }
 
   if (hydratedDecision.kind === 'reconcile_stale') {
     const reconciledThread = await reconcileInterruptedGenerationRun(progressRun);
     const refreshedSession = await hydrateWorkspaceSessionFromRuntime(restoredSession.sessionId, restoredSession);
+    const issueKind = progress?.liveFeedAttachment?.mode === 'replay_only'
+      ? 'replay_only_reconciled'
+      : 'stale_reconciled';
     return {
       handled: true,
       session: refreshedSession ?? restoredSession,
       thread: reconciledThread ?? progressThread,
+      issues: [
+        buildRunRecoveryIssue(issueKind, {
+          runId: progressRun.runId,
+          threadId: progressRun.threadId,
+          turnId: progressRun.turnId,
+        }),
+      ],
     };
   }
 
@@ -1466,7 +1497,26 @@ async function recoverRestoredRunFromDurableProgress(
     progress?.replayCursor ?? 0,
   );
 
-  return { handled: true, session: restoredSession, thread: progressThread };
+  return { handled: true, session: restoredSession, thread: progressThread, issues: [] };
+}
+
+function recoveryRefsFromDecision(
+  decision: Exclude<ReturnType<typeof chooseRestoredRunRecoveryDecision>, { kind: 'none' | 'interrupted_retryable' }>,
+  session: WorkspaceSession,
+): { runId: string; threadId?: string; turnId?: string } {
+  if (decision.kind === 'hydrate_active') {
+    return {
+      runId: decision.runId,
+      threadId: session.activeThreadId,
+      turnId: session.activeTurnId,
+    };
+  }
+
+  return {
+    runId: decision.run.runId,
+    threadId: decision.run.threadId,
+    turnId: decision.run.turnId,
+  };
 }
 
 async function reconcileInterruptedGenerationRun(run: {
@@ -1990,8 +2040,9 @@ function attachAndRecordWorkspaceRestoreState(
   session: WorkspaceSession,
   thread: ConversationThreadSnapshot | null | undefined,
   source: WorkspaceRestoreSource,
+  recoveryIssues?: WorkspaceRestoreIssue[],
 ): WorkspaceSession {
-  const restoredSession = attachWorkspaceRestoreState(session, thread, source);
+  const restoredSession = attachWorkspaceRestoreState(session, thread, source, recoveryIssues);
 
   if (restoredSession.restoreState) {
     recordRestoreStateDiagnostic(restoredSession, restoredSession.restoreState);
