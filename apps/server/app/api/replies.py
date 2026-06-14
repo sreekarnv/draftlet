@@ -9,7 +9,7 @@ from app.core.database import SessionLocal
 from app.db.models import GenerationRunEvent
 from app.schemas.reply_event import ReplyEvent
 from app.schemas.reply_request import ReplyRequest
-from app.services.execution_registry import ReplyExecutionRegistry, ReplyExecutionUpdate
+from app.services.execution_registry import ReplyExecutionFeedSnapshot, ReplyExecutionRegistry, ReplyExecutionUpdate
 from app.services.domain_service import append_generation_run_event, list_generation_run_events
 from app.services.reply_service import cancel_reply_execution_record, generate_reply_events
 
@@ -94,6 +94,10 @@ reply_execution_registry = ReplyExecutionRegistry(
     record_update=record_reply_execution_update,
     load_replay=load_reply_execution_replay,
 )
+
+
+async def inspect_reply_execution_feed(run_id: str, after_sequence: int = 0) -> ReplyExecutionFeedSnapshot:
+    return await reply_execution_registry.inspect_feed(run_id, after_sequence=after_sequence)
 
 
 @router.post("/replies/{run_id}/start")

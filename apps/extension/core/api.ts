@@ -8,6 +8,7 @@ import type {
   DraftVariant,
   GenerationRun,
   GenerationRunExecutionState,
+  GenerationRunLiveFeedAttachment,
   GenerationRunProgressSnapshot,
   GenerationRunStatus,
   SourceSnapshot,
@@ -590,6 +591,21 @@ function mapGenerationRunProgressSnapshot(snapshot: GenerationRunProgressSnapsho
       at: event.at ?? undefined,
     })),
     replayCursor: snapshot.replay_cursor,
+    liveFeedAttachment: snapshot.live_feed_attachment
+      ? mapGenerationRunLiveFeedAttachment(snapshot.live_feed_attachment)
+      : undefined,
+  };
+}
+
+function mapGenerationRunLiveFeedAttachment(
+  attachment: GenerationRunLiveFeedAttachmentRead,
+): GenerationRunLiveFeedAttachment {
+  return {
+    mode: isGenerationRunLiveFeedAttachmentMode(attachment.mode) ? attachment.mode : 'replay_only',
+    liveAttached: attachment.live_attached,
+    replayAvailable: attachment.replay_available,
+    subscriberCount: attachment.subscriber_count,
+    reason: attachment.reason ?? undefined,
   };
 }
 
@@ -767,6 +783,10 @@ function isGenerationRunStatus(value: string): value is GenerationRunStatus {
   return value === 'active' || value === 'streaming' || value === 'completed' || value === 'failed' || value === 'cancelled' || value === 'interrupted';
 }
 
+function isGenerationRunLiveFeedAttachmentMode(value: string | undefined): value is GenerationRunLiveFeedAttachment['mode'] {
+  return value === 'live_attached' || value === 'replay_only' || value === 'stale';
+}
+
 interface DraftVariantStreamPayload {
   reply: string;
   variant_id: string;
@@ -912,12 +932,21 @@ interface GenerationRunProgressEventRead {
   at: string | null;
 }
 
+interface GenerationRunLiveFeedAttachmentRead {
+  mode: string;
+  live_attached: boolean;
+  replay_available: boolean;
+  subscriber_count: number;
+  reason: string | null;
+}
+
 interface GenerationRunProgressSnapshotRead {
   checked_at: string;
   run: GenerationRunRead;
   thread: ConversationThreadSnapshotRead | null;
   events: GenerationRunProgressEventRead[];
   replay_cursor: number;
+  live_feed_attachment?: GenerationRunLiveFeedAttachmentRead | null;
 }
 
 interface ConversationThreadSnapshotRead {

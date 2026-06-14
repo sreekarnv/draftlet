@@ -29,6 +29,15 @@ class ReplyExecutionStart:
     live: bool
 
 
+@dataclass(frozen=True)
+class ReplyExecutionFeedSnapshot:
+    run_id: str
+    live: bool
+    replay_available: bool
+    subscriber_count: int
+    last_sequence: int | None = None
+
+
 @dataclass
 class ReplyExecution:
     request: ReplyRequest
@@ -87,8 +96,10 @@ class ReplyExecutionRegistry:
                 replay = self._load_durable_replay(run_id, after_sequence)
                 if not replay:
                     replay = [update for update in execution.replay if update.sequence > after_sequence]
-                execution.subscribers.append(queue)
-                should_subscribe = True
+                should_subscribe = not execution.task.done()
+
+                if should_subscribe:
+                    execution.subscribers.append(queue)
 
         if not should_subscribe:
             for update in replay:
@@ -126,6 +137,36 @@ class ReplyExecutionRegistry:
                 return True
 
         return await self._on_cancel_missing(run_id)
+
+    async def inspect_feed(self, run_id: str, after_sequence: int = 0) -> ReplyExecutionFeedSnapshot:
+        async with self._lock:
+            execution = self._executions.get(run_id)
+
+            if execution:
+                live = not execution.task.done()
+                subscriber_count = len(execution.subscribers)
+                replay = [update for update in execution.replay if update.sequence > after_sequence]
+                last_sequence = max((update.sequence for update in execution.replay), default=None)
+            else:
+                live = False
+                subscriber_count = 0
+                replay = []
+                last_sequence = None
+
+        durable_replay = self._load_durable_replay(run_id, after_sequence)
+        durable_last_sequence = max((update.sequence for update in durable_replay), default=None)
+        last_sequence = max(
+            (sequence for sequence in (last_sequence, durable_last_sequence) if sequence is not None),
+            default=None,
+        )
+
+        return ReplyExecutionFeedSnapshot(
+            run_id=run_id,
+            live=live,
+            replay_available=bool(replay or durable_replay),
+            subscriber_count=subscriber_count,
+            last_sequence=last_sequence,
+        )
 
     async def _run(self, request: ReplyRequest) -> None:
         run_id = require_run_id(request)

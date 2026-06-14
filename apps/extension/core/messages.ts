@@ -207,6 +207,16 @@ export interface GenerationRunProgressEvent {
   at?: string;
 }
 
+export type GenerationRunLiveFeedAttachmentMode = 'live_attached' | 'replay_only' | 'stale';
+
+export interface GenerationRunLiveFeedAttachment {
+  mode: GenerationRunLiveFeedAttachmentMode;
+  liveAttached: boolean;
+  replayAvailable: boolean;
+  subscriberCount: number;
+  reason?: string;
+}
+
 export interface ConversationThreadSnapshot {
   thread: ConversationThread;
   turns: Turn[];
@@ -220,6 +230,7 @@ export interface GenerationRunProgressSnapshot {
   thread: ConversationThreadSnapshot | null;
   events: GenerationRunProgressEvent[];
   replayCursor: number;
+  liveFeedAttachment?: GenerationRunLiveFeedAttachment;
 }
 
 export interface GenerationRunExecutionState {

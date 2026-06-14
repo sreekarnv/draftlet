@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -312,12 +313,21 @@ class GenerationRunProgressEvent(BaseModel):
     at: datetime | None = None
 
 
+class GenerationRunLiveFeedAttachment(BaseModel):
+    mode: Literal["live_attached", "replay_only", "stale"]
+    live_attached: bool
+    replay_available: bool
+    subscriber_count: int = Field(default=0, ge=0)
+    reason: str | None = Field(default=None, max_length=120)
+
+
 class GenerationRunProgressSnapshot(BaseModel):
     checked_at: datetime
     run: GenerationRunRead
     thread: ConversationThreadSnapshot | None = None
     events: list[GenerationRunProgressEvent]
     replay_cursor: int
+    live_feed_attachment: GenerationRunLiveFeedAttachment
 
 
 class WorkspaceSessionSnapshot(BaseModel):

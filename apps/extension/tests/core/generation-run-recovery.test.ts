@@ -91,6 +91,51 @@ describe('generation run recovery decisions', () => {
       run: { runId: 'run-stale' },
     });
   });
+
+  it('reattaches hydrated active runs only when the runtime feed is live-attached', () => {
+    const run = generationRun({ runId: 'run-live', status: 'streaming' });
+
+    expect(classifyHydratedRunRecovery(run, executionState({ stale: [run] }), {
+      mode: 'live_attached',
+      liveAttached: true,
+      replayAvailable: true,
+      subscriberCount: 0,
+      reason: 'producer_attached',
+    })).toMatchObject({
+      kind: 'reattach_live',
+      run: { runId: 'run-live' },
+    });
+  });
+
+  it('reconciles hydrated active runs when runtime feed is replay-only despite live execution state', () => {
+    const run = generationRun({ runId: 'run-replay-only', status: 'streaming' });
+
+    expect(classifyHydratedRunRecovery(run, executionState({ live: [run] }), {
+      mode: 'replay_only',
+      liveAttached: false,
+      replayAvailable: true,
+      subscriberCount: 0,
+      reason: 'no_live_producer',
+    })).toMatchObject({
+      kind: 'reconcile_stale',
+      run: { runId: 'run-replay-only' },
+    });
+  });
+
+  it('reconciles hydrated active runs when runtime feed is explicitly stale', () => {
+    const run = generationRun({ runId: 'run-stale-feed', status: 'active' });
+
+    expect(classifyHydratedRunRecovery(run, executionState({ live: [run] }), {
+      mode: 'stale',
+      liveAttached: false,
+      replayAvailable: false,
+      subscriberCount: 0,
+      reason: 'active_run_without_live_producer',
+    })).toMatchObject({
+      kind: 'reconcile_stale',
+      run: { runId: 'run-stale-feed' },
+    });
+  });
 });
 
 function workspaceSession(overrides: Partial<WorkspaceSession> = {}): WorkspaceSession {
