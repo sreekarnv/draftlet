@@ -11,6 +11,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Assumes dependencies are already installed:
 #   pnpm install
 #   cd apps/server && uv sync --group dev
+pnpm --dir "$ROOT_DIR/packages/shared" build
 "$ROOT_DIR/scripts/build-server.sh"
 pnpm --dir "$ROOT_DIR/apps/desktop" package
 pnpm --dir "$ROOT_DIR/apps/extension" build

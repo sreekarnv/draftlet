@@ -169,6 +169,53 @@ describe('DraftletPanel recapture guidance', () => {
     expect(recaptured).toBe(true);
     expect(container.textContent).toContain('Focus a compose field and recapture.');
   });
+
+  it('submits follow-up refinement instructions through the refinement form', async () => {
+    const container = document.createElement('div');
+    let refinementInstruction = '';
+    document.body.append(container);
+
+    await act(async () => {
+      mounted = mountDraftletPanel(container, {
+        onGenerate() {},
+        onRefine(instruction) {
+          refinementInstruction = instruction;
+        },
+        onInsert: async (): Promise<InsertionResult> => ({ status: 'copied', message: 'Copied' }),
+        onCloseRequest() {},
+        onAfterRender() {},
+      });
+    });
+
+    await act(async () => {
+      mounted!.controller.open({
+        selectedText: 'Can you reply to this thread?',
+      });
+      mounted!.controller.setThreadSnapshot(completedThreadSnapshot());
+      mounted!.controller.setState('success', '');
+    });
+
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement | null;
+    const refineButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Refine')) as HTMLButtonElement | undefined;
+
+    expect(textarea).not.toBeNull();
+    expect(refineButton?.disabled).toBe(true);
+
+    await act(async () => {
+      const valueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+      valueSetter?.call(textarea, 'Make this warmer');
+      textarea!.dispatchEvent(new InputEvent('input', { bubbles: true, data: 'Make this warmer' }));
+    });
+
+    expect(refineButton?.disabled).toBe(false);
+
+    await act(async () => {
+      refineButton?.click();
+    });
+
+    expect(refinementInstruction).toBe('Make this warmer');
+  });
 });
 
 function interruptedThreadSnapshot(): ConversationThreadSnapshot {
@@ -215,6 +262,24 @@ function interruptedThreadSnapshot(): ConversationThreadSnapshot {
       errorCode: 'generation_interrupted',
       errorMessage: 'Draft generation was interrupted before completion.',
     },
+  };
+}
+
+function completedThreadSnapshot(): ConversationThreadSnapshot {
+  const base = interruptedThreadSnapshot();
+
+  return {
+    ...base,
+    thread: {
+      ...base.thread,
+      latestTurnId: 'turn-1',
+      status: 'active',
+      updatedAt: '2026-01-01T00:01:00.000Z',
+    },
+    turns: [
+      turn('turn-1', 'Generate reply drafts', 'completed', '2026-01-01T00:01:00.000Z'),
+    ],
+    latestRecoverableRun: undefined,
   };
 }
 
