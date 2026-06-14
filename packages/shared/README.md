@@ -32,3 +32,10 @@ Current shared UI primitives:
 - `Separator`
 
 Desktop and extension can wrap these primitives locally to preserve surface-specific density and defaults.
+
+Form and state direction:
+
+- Use `react-hook-form` for non-trivial React forms.
+- Use Zustand for cross-component UI/app state when local `useState` starts spreading across siblings or route/page boundaries.
+- Keep tiny one-component toggles and transient feedback in local `useState`.
+- Do not use UI stores as a second source of truth for runtime-owned domain data.

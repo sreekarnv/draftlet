@@ -23,6 +23,7 @@
     "@draftlet/shared": "workspace:*",
     "lucide-react": "^1.17.0",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "react-hook-form": "^7.79.0"
   }
 }

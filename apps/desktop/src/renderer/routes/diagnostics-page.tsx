@@ -1,14 +1,11 @@
 import { BrowserDiagnosticsCard } from '../components/browser-diagnostics-card';
 import { RuntimeMaintenanceDiagnosticsCard } from '../components/runtime-maintenance-diagnostics-card';
 import { Badge, Button, Card } from '../components/ui';
+import { useDiagnosticsStore } from '../stores/diagnostics-store';
 import type { BrowserDiagnosticsBridgeResult, RuntimeMaintenanceDiagnosticsResult, RuntimeState } from '../lib/types';
 
 interface DiagnosticsPageProps {
-  browserDiagnostics: BrowserDiagnosticsBridgeResult | null;
   busy: boolean;
-  diagnosticsLastRefreshedAt: string | null;
-  diagnosticsRefreshing: boolean;
-  maintenanceDiagnostics: RuntimeMaintenanceDiagnosticsResult | null;
   runtime: RuntimeState;
   onCopyBrowserDiagnostics: () => Promise<void>;
   onCopyDiagnosticsExport: () => Promise<void>;
@@ -19,11 +16,7 @@ interface DiagnosticsPageProps {
 }
 
 export function DiagnosticsPage({
-  browserDiagnostics,
   busy,
-  diagnosticsLastRefreshedAt,
-  diagnosticsRefreshing,
-  maintenanceDiagnostics,
   runtime,
   onCopyBrowserDiagnostics,
   onCopyDiagnosticsExport,
@@ -32,6 +25,11 @@ export function DiagnosticsPage({
   onOpenExtensionHelp,
   onRefreshDiagnostics,
 }: DiagnosticsPageProps) {
+  const browserDiagnostics = useDiagnosticsStore((state) => state.browserDiagnostics);
+  const diagnosticsLastRefreshedAt = useDiagnosticsStore((state) => state.diagnosticsLastRefreshedAt);
+  const diagnosticsRefreshing = useDiagnosticsStore((state) => state.diagnosticsRefreshing);
+  const maintenanceDiagnostics = useDiagnosticsStore((state) => state.maintenanceDiagnostics);
+
   return (
     <section className="grid gap-3">
       <DiagnosticsRefreshGroup
