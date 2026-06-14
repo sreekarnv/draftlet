@@ -90,6 +90,7 @@ The full setup walkthrough lives in [docs/setup.md](docs/setup.md).
 - [Setup and commands](docs/setup.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Recapture validation checklist](docs/recapture-validation.md)
+- [Public release checklist](docs/release-checklist.md)
 - [Architecture](docs/architecture/architecture.md)
 - [Boundaries](docs/architecture/boundaries.md)
 - [Events and contracts](docs/architecture/events-and-contracts.md)

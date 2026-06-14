@@ -125,6 +125,21 @@ curl http://127.0.0.1:11434/api/tags
 
 If the server fails to start because port `47632` is in use, stop the conflicting process. The desktop companion only stops a process holding the port if `/health` identifies it as a Draftlet server.
 
+## CORS and local origins
+
+The Draftlet server only allows requests from a configured local origin allowlist. By default that allowlist is:
+
+- `http://127.0.0.1:47632`
+- `http://localhost:47632`
+- `http://127.0.0.1:5173` and `http://localhost:5173` (the Vite dev server, if you use it)
+
+The server also accepts a default `chrome-extension://<id>` regex so unpacked extension builds work without you having to look up the extension ID first. The server is bound to `127.0.0.1` only, so the loopback-only exposure is the trade-off for the chrome-extension default.
+
+Tighten the allowlist with environment variables when needed:
+
+- `DRAFTLET_CORS_ALLOW_ORIGINS` — comma-separated list of allowed origins. Replaces the default loopback list.
+- `DRAFTLET_CORS_ALLOW_ORIGIN_REGEX` — Python regex matched against the request `Origin` header. Set to `disabled` to drop the default `chrome-extension://<id>` pattern entirely.
+
 ## Local URLs and ports
 
 - **Draftlet server:** `http://127.0.0.1:47632`
