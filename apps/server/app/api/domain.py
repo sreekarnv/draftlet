@@ -182,20 +182,33 @@ def get_active_generation_runs(
 
 
 @router.get("/generation-runs/execution-state", response_model=GenerationRunExecutionState)
-def get_generation_run_execution_state(
+async def get_generation_run_execution_state(
     session_id: str | None = None,
     thread_id: str | None = None,
     turn_id: str | None = None,
     stale_after_seconds: int = Query(default=30, ge=0),
     session: Session = Depends(get_session),
 ) -> GenerationRunExecutionState:
-    return inspect_generation_run_execution_state(
+    state = inspect_generation_run_execution_state(
         session,
         session_id=session_id,
         thread_id=thread_id,
         turn_id=turn_id,
         stale_after_seconds=stale_after_seconds,
     )
+    feed_attachments: dict[str, GenerationRunLiveFeedAttachment] = {}
+
+    for run in state.active:
+        feed = await inspect_reply_execution_feed(run.run_id)
+        feed_attachments[run.run_id] = build_live_feed_attachment(
+            run_status=run.status,
+            registry_live=feed.live,
+            replay_available=feed.replay_available,
+            subscriber_count=feed.subscriber_count,
+        )
+
+    state.feed_attachments = feed_attachments
+    return state
 
 
 @router.get("/generation-runs/{run_id}/progress", response_model=GenerationRunProgressSnapshot)

@@ -259,12 +259,21 @@ class GenerationRunRead(BaseModel):
     updated_at: datetime
 
 
+class GenerationRunLiveFeedAttachment(BaseModel):
+    mode: Literal["live_attached", "replay_only", "stale"]
+    live_attached: bool
+    replay_available: bool
+    subscriber_count: int = Field(default=0, ge=0)
+    reason: str | None = Field(default=None, max_length=120)
+
+
 class GenerationRunExecutionState(BaseModel):
     checked_at: datetime
     stale_after_seconds: int
     active: list[GenerationRunRead]
     live: list[GenerationRunRead]
     stale: list[GenerationRunRead]
+    feed_attachments: dict[str, GenerationRunLiveFeedAttachment] = Field(default_factory=dict)
 
 
 class DraftVariantRead(BaseModel):
@@ -311,14 +320,6 @@ class GenerationRunProgressEvent(BaseModel):
     status: str | None = None
     variant_id: str | None = None
     at: datetime | None = None
-
-
-class GenerationRunLiveFeedAttachment(BaseModel):
-    mode: Literal["live_attached", "replay_only", "stale"]
-    live_attached: bool
-    replay_available: bool
-    subscriber_count: int = Field(default=0, ge=0)
-    reason: str | None = Field(default=None, max_length=120)
 
 
 class GenerationRunProgressSnapshot(BaseModel):

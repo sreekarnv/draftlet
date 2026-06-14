@@ -239,6 +239,7 @@ export interface GenerationRunExecutionState {
   active: GenerationRun[];
   live: GenerationRun[];
   stale: GenerationRun[];
+  feedAttachments: Record<string, GenerationRunLiveFeedAttachment>;
 }
 
 export interface WorkspaceSessionSnapshot {

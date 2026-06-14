@@ -204,6 +204,15 @@ describe('generation run runtime API', () => {
       active: [generationRunRead({ status: 'streaming' })],
       live: [generationRunRead({ status: 'streaming' })],
       stale: [],
+      feed_attachments: {
+        'generation-1': {
+          mode: 'live_attached',
+          live_attached: true,
+          replay_available: true,
+          subscriber_count: 1,
+          reason: 'producer_attached',
+        },
+      },
     }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -216,6 +225,13 @@ describe('generation run runtime API', () => {
     expect(state.live[0]).toMatchObject({
       runId: 'generation-1',
       status: 'streaming',
+    });
+    expect(state.feedAttachments['generation-1']).toMatchObject({
+      mode: 'live_attached',
+      liveAttached: true,
+      replayAvailable: true,
+      subscriberCount: 1,
+      reason: 'producer_attached',
     });
     expect(state.stale).toEqual([]);
   });
