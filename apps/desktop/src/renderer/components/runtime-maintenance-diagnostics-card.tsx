@@ -1,5 +1,5 @@
 import { Badge, Button, Card } from './ui';
-import type { GenerationRunMaintenanceOutcome } from '../../../../../shared/generation-run-maintenance-diagnostics-contract';
+import type { GenerationRunMaintenanceOutcome } from '@draftlet/shared/contracts';
 import type { RuntimeMaintenanceDiagnosticsResult } from '../lib/types';
 
 interface RuntimeMaintenanceDiagnosticsCardProps {

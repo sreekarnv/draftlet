@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-import { serializeRecaptureDiagnosticsReport } from '../../../../../shared/recapture-diagnostics-contract';
+import { serializeRecaptureDiagnosticsReport } from '@draftlet/shared/contracts';
 import { desktopApi } from '../lib/api';
 import { RECOMMENDED_MODEL } from '../lib/constants';
 import {

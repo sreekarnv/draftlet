@@ -1,5 +1,5 @@
-import type { DesktopExtensionDiagnosticsBridgeResult } from '../../../../../shared/recapture-diagnostics-contract';
-import type { GenerationRunMaintenanceDiagnosticsResult } from '../../../../../shared/generation-run-maintenance-diagnostics-contract';
+import type { DesktopExtensionDiagnosticsBridgeResult } from '@draftlet/shared/contracts';
+import type { GenerationRunMaintenanceDiagnosticsResult } from '@draftlet/shared/contracts';
 
 export type CommandStatusCode =
   | 'ready'

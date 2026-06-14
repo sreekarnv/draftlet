@@ -184,7 +184,7 @@ The first desktop-extension diagnostics transport is a bounded runtime relay:
 - desktop reads the latest report through its normal main-process IPC and the runtime endpoint
 - desktop can display the report or an expired-report state, but cannot mutate browser recapture state
 
-The shared contract lives in `shared/recapture-diagnostics-contract.ts`. Extension popup export and desktop diagnostics guidance must use that shared contract instead of defining parallel report shapes.
+The shared contract lives in `packages/shared/src/contracts/recapture-diagnostics.ts` and is exported as `@draftlet/shared/contracts`. Extension popup export and desktop diagnostics guidance must use that shared contract instead of defining parallel report shapes.
 
 The bridge contract stays narrow and diagnostics-only:
 - desktop requests the latest bounded recapture diagnostics report from the runtime relay

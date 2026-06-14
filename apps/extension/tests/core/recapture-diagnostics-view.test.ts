@@ -7,7 +7,7 @@ import {
   createRecaptureDiagnosticsBridgeFailure,
   createRecaptureDiagnosticsBridgeSuccess,
   serializeRecaptureDiagnosticsReport,
-} from '../../../../shared/recapture-diagnostics-contract';
+} from '@draftlet/shared/contracts';
 import {
   createRecaptureDiagnosticsReport,
   formatDiagnosticTime,

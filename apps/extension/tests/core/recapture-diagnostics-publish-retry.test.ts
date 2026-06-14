@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { createRecaptureDiagnosticsPublishRetryQueue } from '../../core/recapture-diagnostics-publish-retry';
-import { createRecaptureDiagnosticsReport } from '../../../../shared/recapture-diagnostics-contract';
+import { createRecaptureDiagnosticsReport } from '@draftlet/shared/contracts';
 
 describe('recapture diagnostics publish retry queue', () => {
   it('queues a failed report and exposes publish reliability state', () => {
