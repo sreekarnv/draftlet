@@ -1438,7 +1438,7 @@ async function recoverRestoredRunFromDurableProgress(
     }) ?? restoredSession;
   }
 
-  const hydratedDecision = classifyHydratedRunRecovery(progressRun, executionState);
+  const hydratedDecision = classifyHydratedRunRecovery(progressRun, executionState, progress?.liveFeedAttachment);
 
   if (hydratedDecision.kind === 'terminal_snapshot') {
     const refreshedSession = await hydrateWorkspaceSessionFromRuntime(restoredSession.sessionId, restoredSession);

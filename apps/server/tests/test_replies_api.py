@@ -162,6 +162,84 @@ def test_runtime_reply_execution_registry_replays_durable_updates_without_live_e
     assert asyncio.run(run()) == [("event", 2), ("run_completed", 3)]
 
 
+def test_runtime_reply_execution_registry_reports_live_then_replay_only_feed() -> None:
+    async def run() -> tuple[bool, bool, list[tuple[str, int]]]:
+        producer_started = asyncio.Event()
+        release_producer = asyncio.Event()
+
+        async def produce(_request: ReplyRequest):
+            producer_started.set()
+            await release_producer.wait()
+            yield ReplyEvent(reply="Generated draft", variant_id="variant-1", turn_id="turn-1", thread_id="thread-1")
+
+        async def cancel_missing(_run_id: str) -> bool:
+            return False
+
+        registry = ReplyExecutionRegistry(producer=produce, on_cancel_missing=cancel_missing)
+        request = ReplyRequest(
+            selected_text="Please reply.",
+            tone="friendly",
+            source_url="https://example.com",
+            session_id="session-1",
+            thread_id="thread-1",
+            turn_id="turn-1",
+            run_id="run-1",
+        )
+
+        await registry.start(request)
+        await asyncio.wait_for(producer_started.wait(), timeout=1)
+        live_feed = await registry.inspect_feed("run-1")
+
+        release_producer.set()
+        replayed: list[tuple[str, int]] = []
+        async for update in registry.subscribe("run-1"):
+            replayed.append((update.status, update.sequence))
+
+        replay_only_feed = await registry.inspect_feed("run-1", after_sequence=1)
+
+        return live_feed.live, replay_only_feed.live, replayed
+
+    assert asyncio.run(run()) == (
+        True,
+        False,
+        [("run_started", 1), ("event", 2), ("run_completed", 3)],
+    )
+
+
+def test_runtime_reply_execution_registry_does_not_wait_on_finished_feed_after_cursor() -> None:
+    async def run() -> list[ReplyExecutionUpdate]:
+        async def produce(_request: ReplyRequest):
+            yield ReplyEvent(reply="Generated draft", variant_id="variant-1", turn_id="turn-1", thread_id="thread-1")
+
+        async def cancel_missing(_run_id: str) -> bool:
+            return False
+
+        registry = ReplyExecutionRegistry(producer=produce, on_cancel_missing=cancel_missing)
+        request = ReplyRequest(
+            selected_text="Please reply.",
+            tone="friendly",
+            source_url="https://example.com",
+            session_id="session-1",
+            thread_id="thread-1",
+            turn_id="turn-1",
+            run_id="run-1",
+        )
+
+        await registry.start(request)
+        async for _update in registry.subscribe("run-1"):
+            pass
+
+        async def collect_after_terminal_cursor() -> list[ReplyExecutionUpdate]:
+            updates: list[ReplyExecutionUpdate] = []
+            async for update in registry.subscribe("run-1", after_sequence=3):
+                updates.append(update)
+            return updates
+
+        return await asyncio.wait_for(collect_after_terminal_cursor(), timeout=1)
+
+    assert asyncio.run(run()) == []
+
+
 def test_legacy_reply_start_and_stream_endpoint_is_not_registered() -> None:
     assert not any(route.path == "/replies" and "POST" in route.methods for route in app.routes if hasattr(route, "methods"))
 

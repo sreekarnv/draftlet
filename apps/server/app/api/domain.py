@@ -13,6 +13,7 @@ from app.schemas.domain import (
     GenerationRunClaim,
     GenerationRunExecutionState,
     GenerationRunHeartbeat,
+    GenerationRunLiveFeedAttachment,
     GenerationRunProgressSnapshot,
     GenerationRunRead,
     GenerationRunReconcileRequest,
@@ -24,7 +25,9 @@ from app.schemas.domain import (
     WorkspaceSessionSnapshot,
     WorkspaceSessionUpsert,
 )
+from app.api.replies import inspect_reply_execution_feed
 from app.services.domain_service import (
+    ACTIVE_GENERATION_RUN_STATUSES,
     create_or_update_thread,
     create_or_update_turn,
     create_or_update_variant,
@@ -196,7 +199,7 @@ def get_generation_run_execution_state(
 
 
 @router.get("/generation-runs/{run_id}/progress", response_model=GenerationRunProgressSnapshot)
-def get_generation_run_progress(
+async def get_generation_run_progress(
     run_id: str,
     after_sequence: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=100),
@@ -207,7 +210,47 @@ def get_generation_run_progress(
     if not snapshot:
         raise HTTPException(status_code=404, detail="Generation run not found")
 
+    feed = await inspect_reply_execution_feed(run_id, after_sequence=after_sequence)
+    snapshot.live_feed_attachment = build_live_feed_attachment(
+        run_status=snapshot.run.status,
+        registry_live=feed.live,
+        replay_available=feed.replay_available or bool(snapshot.events),
+        subscriber_count=feed.subscriber_count,
+    )
     return snapshot
+
+
+def build_live_feed_attachment(
+    run_status: str,
+    registry_live: bool,
+    replay_available: bool,
+    subscriber_count: int,
+) -> GenerationRunLiveFeedAttachment:
+    if registry_live:
+        return GenerationRunLiveFeedAttachment(
+            mode="live_attached",
+            live_attached=True,
+            replay_available=replay_available,
+            subscriber_count=subscriber_count,
+            reason="producer_attached",
+        )
+
+    if run_status in ACTIVE_GENERATION_RUN_STATUSES:
+        return GenerationRunLiveFeedAttachment(
+            mode="stale",
+            live_attached=False,
+            replay_available=replay_available,
+            subscriber_count=subscriber_count,
+            reason="active_run_without_live_producer",
+        )
+
+    return GenerationRunLiveFeedAttachment(
+        mode="replay_only",
+        live_attached=False,
+        replay_available=replay_available,
+        subscriber_count=subscriber_count,
+        reason="no_live_producer",
+    )
 
 
 @router.patch("/generation-runs/{run_id}/heartbeat", response_model=GenerationRunRead)

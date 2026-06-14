@@ -334,6 +334,9 @@ class DomainServiceTest(unittest.TestCase):
             self.assertIsNotNone(progress)
             self.assertEqual(progress.run.run_id, "run-1")
             self.assertEqual(progress.thread.thread.thread_id, "thread-1")
+            self.assertEqual(progress.live_feed_attachment.mode, "replay_only")
+            self.assertFalse(progress.live_feed_attachment.live_attached)
+            self.assertTrue(progress.live_feed_attachment.replay_available)
             self.assertEqual([event.event_type for event in progress.events], [
                 "run_started",
                 "variant_persisted",

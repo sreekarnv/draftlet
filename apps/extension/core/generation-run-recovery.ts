@@ -2,6 +2,7 @@ import type {
   ConversationThreadSnapshot,
   GenerationRun,
   GenerationRunExecutionState,
+  GenerationRunLiveFeedAttachment,
   GenerationRunStatus,
   WorkspaceSession,
 } from './messages';
@@ -82,9 +83,22 @@ export function chooseRestoredRunRecoveryDecision({
 export function classifyHydratedRunRecovery(
   run: GenerationRun,
   executionState?: GenerationRunExecutionState | null,
+  liveFeedAttachment?: GenerationRunLiveFeedAttachment | null,
 ): HydratedRunRecoveryDecision {
   if (isTerminalGenerationRunStatus(run.status)) {
     return { kind: 'terminal_snapshot', run };
+  }
+
+  if (liveFeedAttachment?.mode === 'live_attached' && liveFeedAttachment.liveAttached) {
+    return { kind: 'reattach_live', run };
+  }
+
+  if (liveFeedAttachment?.mode === 'stale') {
+    return { kind: 'reconcile_stale', run };
+  }
+
+  if (liveFeedAttachment?.mode === 'replay_only') {
+    return { kind: 'reconcile_stale', run };
   }
 
   if (executionState?.stale.some((candidate) => candidate.runId === run.runId)) {

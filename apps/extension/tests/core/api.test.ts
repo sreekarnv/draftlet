@@ -236,6 +236,13 @@ describe('generation run runtime API', () => {
         status: 'streaming',
       },
       replayCursor: 101,
+      liveFeedAttachment: {
+        mode: 'live_attached',
+        liveAttached: true,
+        replayAvailable: true,
+        subscriberCount: 1,
+        reason: 'producer_attached',
+      },
       events: [
         {
           sequence: 101,
@@ -372,6 +379,13 @@ function generationRunProgressRead() {
       },
     ],
     replay_cursor: 101,
+    live_feed_attachment: {
+      mode: 'live_attached',
+      live_attached: true,
+      replay_available: true,
+      subscriber_count: 1,
+      reason: 'producer_attached',
+    },
   };
 }
 

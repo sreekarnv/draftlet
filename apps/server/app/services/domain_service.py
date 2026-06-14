@@ -10,6 +10,7 @@ from app.schemas.domain import (
     DomainHistoryItem,
     DraftVariantCreate,
     DraftVariantStateUpdate,
+    GenerationRunLiveFeedAttachment,
     GenerationRunProgressEvent,
     GenerationRunProgressSnapshot,
     GenerationRunClaim,
@@ -349,6 +350,7 @@ def get_generation_run_progress_snapshot(
     run_id: str,
     after_sequence: int = 0,
     limit: int = 50,
+    live_feed_attachment: GenerationRunLiveFeedAttachment | None = None,
 ) -> GenerationRunProgressSnapshot | None:
     run = session.get(GenerationRun, run_id)
 
@@ -367,6 +369,21 @@ def get_generation_run_progress_snapshot(
         thread=thread_snapshot,
         events=events,
         replay_cursor=replay_cursor,
+        live_feed_attachment=live_feed_attachment
+        or build_replay_only_live_feed_attachment(replay_available=bool(events), reason="progress_snapshot"),
+    )
+
+
+def build_replay_only_live_feed_attachment(
+    replay_available: bool,
+    reason: str = "no_live_producer",
+) -> GenerationRunLiveFeedAttachment:
+    return GenerationRunLiveFeedAttachment(
+        mode="replay_only",
+        live_attached=False,
+        replay_available=replay_available,
+        subscriber_count=0,
+        reason=reason,
     )
 
 
