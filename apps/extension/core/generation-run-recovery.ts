@@ -3,6 +3,7 @@ import type {
   GenerationRun,
   GenerationRunExecutionState,
   GenerationRunLiveFeedAttachment,
+  GenerationRunRestoreCandidate,
   GenerationRunStatus,
   WorkspaceSession,
 } from './messages';
@@ -33,6 +34,15 @@ export function chooseRestoredRunRecoveryDecision({
   executionState,
 }: ChooseRestoredRunRecoveryInput): RestoredRunRecoveryDecision {
   if (session.activeRunId) {
+    const restoreCandidate = findRestoreCandidate(executionState, session.activeRunId);
+    const restoreCandidateDecision = restoreCandidate
+      ? decisionFromRestoreCandidate(restoreCandidate, 'active_run_id')
+      : null;
+
+    if (restoreCandidateDecision) {
+      return restoreCandidateDecision;
+    }
+
     const activeCandidate = findExecutionStateRun(executionState, session.activeRunId);
     const feedDecision = activeCandidate
       ? decisionFromFeedAttachment(activeCandidate, executionState, 'active_run_id')
@@ -61,6 +71,16 @@ export function chooseRestoredRunRecoveryDecision({
     }
 
     return { kind: 'hydrate_active', runId: session.activeRunId, source: 'active_run_id' };
+  }
+
+  const restoreCandidate = chooseRankedRelevantRestoreCandidate(session, thread, executionState);
+
+  if (restoreCandidate) {
+    const decision = decisionFromRestoreCandidate(restoreCandidate, 'execution_state');
+
+    if (decision) {
+      return decision;
+    }
   }
 
   const feedRankedCandidate = chooseFeedRankedRelevantCandidate(session, thread, executionState);
@@ -116,6 +136,16 @@ export function classifyHydratedRunRecovery(
     return { kind: 'reconcile_stale', run };
   }
 
+  const restoreCandidate = executionState?.restoreCandidates.find((candidate) => candidate.runId === run.runId);
+
+  if (restoreCandidate?.restoreMode === 'live_attached' && restoreCandidate.liveAttached) {
+    return { kind: 'reattach_live', run };
+  }
+
+  if (restoreCandidate?.restoreMode === 'stale' || restoreCandidate?.restoreMode === 'replay_only') {
+    return { kind: 'reconcile_stale', run };
+  }
+
   if (executionState?.stale.some((candidate) => candidate.runId === run.runId)) {
     return { kind: 'reconcile_stale', run };
   }
@@ -168,6 +198,59 @@ function findExecutionStateRun(
     ?? executionState?.stale.find((run) => run.runId === runId);
 }
 
+function findRestoreCandidate(
+  executionState: GenerationRunExecutionState | null | undefined,
+  runId: string,
+): GenerationRunRestoreCandidate | undefined {
+  return executionState?.restoreCandidates.find((candidate) => candidate.runId === runId);
+}
+
+function chooseRankedRelevantRestoreCandidate(
+  session: WorkspaceSession,
+  thread: ConversationThreadSnapshot | null | undefined,
+  executionState: GenerationRunExecutionState | null | undefined,
+): GenerationRunRestoreCandidate | null {
+  if (!executionState?.restoreCandidates.length) {
+    return null;
+  }
+
+  return executionState.restoreCandidates
+    .filter((candidate) => isRelevantRestoreCandidate(session, thread, candidate))
+    .sort((left, right) => {
+      const rankDifference = restoreCandidateRank(left) - restoreCandidateRank(right);
+
+      if (rankDifference !== 0) {
+        return rankDifference;
+      }
+
+      return restoreCandidateTimestamp(right) - restoreCandidateTimestamp(left);
+    })[0] ?? null;
+}
+
+function isRelevantRestoreCandidate(
+  session: WorkspaceSession,
+  thread: ConversationThreadSnapshot | null | undefined,
+  candidate: GenerationRunRestoreCandidate,
+): boolean {
+  if (candidate.sessionId !== session.sessionId) {
+    return false;
+  }
+
+  if (session.activeThreadId && candidate.threadId !== session.activeThreadId) {
+    return false;
+  }
+
+  if (thread && candidate.threadId !== thread.thread.threadId) {
+    return false;
+  }
+
+  if (session.activeTurnId && candidate.turnId !== session.activeTurnId) {
+    return false;
+  }
+
+  return true;
+}
+
 function chooseFeedRankedRelevantCandidate(
   session: WorkspaceSession,
   thread: ConversationThreadSnapshot | null | undefined,
@@ -193,6 +276,23 @@ function chooseFeedRankedRelevantCandidate(
   }
 
   return decisionFromFeedAttachment(candidate.run, executionState, 'execution_state');
+}
+
+function decisionFromRestoreCandidate(
+  candidate: GenerationRunRestoreCandidate,
+  source: RestoredRunRecoverySource,
+): Extract<RestoredRunRecoveryDecision, { kind: 'reattach_live' | 'reconcile_stale' }> | null {
+  const run = restoreCandidateToGenerationRun(candidate);
+
+  if (candidate.restoreMode === 'live_attached' && candidate.liveAttached) {
+    return { kind: 'reattach_live', run, source };
+  }
+
+  if (candidate.restoreMode === 'replay_only' || candidate.restoreMode === 'stale') {
+    return { kind: 'reconcile_stale', run, source };
+  }
+
+  return null;
 }
 
 function decisionFromFeedAttachment(
@@ -231,4 +331,42 @@ function feedAttachmentRank(attachment: GenerationRunLiveFeedAttachment | undefi
   }
 
   return 3;
+}
+
+function restoreCandidateRank(candidate: GenerationRunRestoreCandidate): number {
+  if (candidate.restoreMode === 'live_attached' && candidate.liveAttached) {
+    return 0;
+  }
+
+  if (candidate.restoreMode === 'replay_only') {
+    return 1;
+  }
+
+  if (candidate.restoreMode === 'stale') {
+    return 2;
+  }
+
+  return 3;
+}
+
+function restoreCandidateTimestamp(candidate: GenerationRunRestoreCandidate): number {
+  const value = candidate.lastActivityAt ?? candidate.heartbeatAt ?? candidate.claimedAt ?? candidate.updatedAt;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function restoreCandidateToGenerationRun(candidate: GenerationRunRestoreCandidate): GenerationRun {
+  return {
+    runId: candidate.runId,
+    sessionId: candidate.sessionId,
+    threadId: candidate.threadId,
+    turnId: candidate.turnId,
+    status: candidate.status,
+    leaseOwner: candidate.leaseOwner,
+    claimedAt: candidate.claimedAt,
+    heartbeatAt: candidate.heartbeatAt,
+    interruptedAt: candidate.interruptedAt,
+    createdAt: candidate.claimedAt,
+    updatedAt: candidate.updatedAt,
+  };
 }

@@ -213,6 +213,27 @@ describe('generation run runtime API', () => {
           reason: 'producer_attached',
         },
       },
+      restore_candidates: [{
+        run_id: 'generation-1',
+        session_id: 'session-1',
+        thread_id: 'thread-1',
+        turn_id: 'turn-1',
+        status: 'streaming',
+        lease_owner: 'extension-background',
+        restore_mode: 'live_attached',
+        live_attached: true,
+        replay_available: true,
+        subscriber_count: 1,
+        recoverable: true,
+        stale: false,
+        interrupted: false,
+        reason: 'producer_attached',
+        claimed_at: '2026-06-09T00:00:00.000Z',
+        heartbeat_at: '2026-06-09T00:00:02.000Z',
+        interrupted_at: null,
+        last_activity_at: '2026-06-09T00:00:02.000Z',
+        updated_at: '2026-06-09T00:00:02.000Z',
+      }],
     }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -232,6 +253,17 @@ describe('generation run runtime API', () => {
       replayAvailable: true,
       subscriberCount: 1,
       reason: 'producer_attached',
+    });
+    expect(state.restoreCandidates[0]).toMatchObject({
+      runId: 'generation-1',
+      sessionId: 'session-1',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'streaming',
+      restoreMode: 'live_attached',
+      liveAttached: true,
+      replayAvailable: true,
+      stale: false,
     });
     expect(state.stale).toEqual([]);
   });

@@ -217,6 +217,28 @@ export interface GenerationRunLiveFeedAttachment {
   reason?: string;
 }
 
+export interface GenerationRunRestoreCandidate {
+  runId: string;
+  sessionId: string;
+  threadId: string;
+  turnId: string;
+  status: GenerationRunStatus;
+  leaseOwner: string;
+  restoreMode: GenerationRunLiveFeedAttachmentMode;
+  liveAttached: boolean;
+  replayAvailable: boolean;
+  subscriberCount: number;
+  recoverable: boolean;
+  stale: boolean;
+  interrupted: boolean;
+  reason?: string;
+  claimedAt: string;
+  heartbeatAt?: string;
+  interruptedAt?: string;
+  lastActivityAt?: string;
+  updatedAt: string;
+}
+
 export interface ConversationThreadSnapshot {
   thread: ConversationThread;
   turns: Turn[];
@@ -240,6 +262,7 @@ export interface GenerationRunExecutionState {
   live: GenerationRun[];
   stale: GenerationRun[];
   feedAttachments: Record<string, GenerationRunLiveFeedAttachment>;
+  restoreCandidates: GenerationRunRestoreCandidate[];
 }
 
 export interface WorkspaceSessionSnapshot {
