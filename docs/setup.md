@@ -106,6 +106,25 @@ pnpm dev:desktop
 
 It exposes setup, runtime start/stop, model selection, diagnostics, and tray behavior. Use it as the primary way to check Ollama, model, and server readiness.
 
+### Linux (chrome-sandbox)
+
+On Linux, `pnpm dev:desktop` requires the Electron SUID helper at `apps/desktop/node_modules/electron/dist/chrome-sandbox` to be **root-owned** and mode `4755`. If those permissions are missing, the helper aborts on startup and the desktop companion never opens a window.
+
+Apply the fix from the repo root:
+
+```bash
+sudo chown root:root apps/desktop/node_modules/electron/dist/chrome-sandbox
+sudo chmod 4755    apps/desktop/node_modules/electron/dist/chrome-sandbox
+```
+
+If you cannot elevate, the desktop companion has a **dev-only** escape hatch that disables the sandbox:
+
+```bash
+ELECTRON_DISABLE_SANDBOX=1 pnpm dev:desktop
+```
+
+This is for local development only. Do not ship it and do not use it for workflows that handle untrusted content. The full recipe and trade-offs are in [troubleshooting.md](troubleshooting.md#electron-dev-fails-on-linux-sandbox-setup). The packaged build path (`pnpm make:desktop`) ships a correctly-permissioned helper and is unaffected.
+
 ## Verify the server is healthy
 
 After starting the server, confirm it responds:
