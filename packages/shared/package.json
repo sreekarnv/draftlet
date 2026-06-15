@@ -1,6 +1,6 @@
 {
   "name": "@draftlet/shared",
-  "version": "0.1.1",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "sideEffects": false,
@@ -13,21 +13,9 @@
       "types": "./src/ui/index.ts",
       "default": "./src/ui/index.ts"
     },
-    "./hooks": {
-      "types": "./src/hooks/index.ts",
-      "default": "./src/hooks/index.ts"
-    },
     "./utils": {
       "types": "./src/utils/index.ts",
       "default": "./src/utils/index.ts"
-    },
-    "./forms": {
-      "types": "./src/forms/index.ts",
-      "default": "./src/forms/index.ts"
-    },
-    "./state": {
-      "types": "./src/state/index.ts",
-      "default": "./src/state/index.ts"
     },
     "./tokens": {
       "types": "./src/tokens/index.ts",
