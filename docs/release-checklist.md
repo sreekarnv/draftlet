@@ -27,10 +27,10 @@ Expected results:
 
 - `pnpm typecheck` runs the shared package typecheck, the extension typecheck, and the desktop typecheck in sequence and exits 0.
 - `pnpm build` produces a packaged Python server bundle, packages the Electron desktop app, and builds the Chrome MV3 extension.
-- Extension test command runs 160+ tests across 20 files.
-- Desktop test command runs 35+ tests across 4 files.
-- Server `uv run pytest` runs 70+ tests across the server package, including the new CORS settings tests under `tests/test_cors.py`.
-- `uv run alembic upgrade head` reports `0012_browser_recapture_diagnostics (head)`.
+- Extension test command runs ~230 tests across ~24 files.
+- Desktop test command runs the desktop Vitest suite under `apps/desktop/tests/`.
+- Server `uv run pytest` runs the full server test package, including the CORS settings tests under `tests/test_cors.py` and the diagnostics API tests under `tests/test_diagnostics_api.py`.
+- `uv run alembic upgrade head` reports the current head revision (verify against the top of `apps/server/alembic/versions/`).
 
 If a command is environment-specific (for example, the Linux desktop maker needs `fakeroot` and `dpkg`), note that in [`troubleshooting.md`](troubleshooting.md) rather than pretending it works everywhere.
 
@@ -53,7 +53,7 @@ Then verify:
 - Copy works for the current variant on every surface.
 - Insertion into a plain `<textarea>` works end-to-end.
 - Insertion into a basic `contenteditable` works end-to-end when the page does not override the input pipeline.
-- A recapture prompt appears when the saved `ComposeTargetRef` is no longer reachable, and recapture rebinds the target to the newly focused field.
+- A recapture prompt appears when the saved `ComposeTargetRef` is no longer reachable, and the side panel's `Insert` / `Use` action rebinds the target to the newly focused field. The recapture background contract is exercised in the dev-only manual QA checklist under [docs/dev/recapture-target-recovery.md](dev/recapture-target-recovery.md).
 - A restored session whose original tab is still around offers a tab disambiguation step before insertion.
 - The history list loads existing threads and restores the previous one with the same turn and variant layout.
 - The runtime restart recovery / interrupted run guidance matches the behavior described in [`troubleshooting.md`](troubleshooting.md).
@@ -97,8 +97,9 @@ Then verify:
 - The [`README.md`](../README.md) quick start still matches the documented setup commands and the documented port (`47632`).
 - [`docs/setup.md`](setup.md) commands line up with the current `package.json` scripts and the Python tooling flow.
 - [`docs/troubleshooting.md`](troubleshooting.md) covers the failures observed during this checklist.
-- No public-facing doc mentions "v2" in headings, names, or filenames.
+- No public-facing doc mentions "v2" in headings, names, or filenames. Internal `AGENTS.md` and `.agents/skills/` rules are not public-facing.
 - No public-facing doc claims the extension is in the Chrome Web Store, claims Ollama is bundled, or makes marketing-level privacy claims beyond what the local-first design actually delivers.
+- The developer-only docs under [`docs/dev/`](dev/) are not referenced from the public docs index.
 - The troubleshooting entry for stale or interrupted generation recovery matches the behavior in `apps/server/app/services/domain_service.py`.
 - The setup entry for CORS environment variables matches the current `apps/server/app/core/config.py` defaults.
 
