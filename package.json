@@ -1,7 +1,7 @@
 {
   "name": "draftlet",
   "type": "module",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "private": true,
   "scripts": {
     "typecheck": "pnpm --filter @draftlet/shared typecheck && pnpm --dir apps/extension exec tsc --noEmit && pnpm --dir apps/desktop typecheck",
