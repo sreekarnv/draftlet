@@ -1,14 +1,14 @@
-import type { ConversationThreadSnapshot, RecaptureStatusTrailItem, WorkspaceSession } from '../../core/messages';
+import type { ConversationThreadSnapshot, InsertionStatusTrailItem, WorkspaceSession } from '../../core/messages';
 import type { PanelView, Tone } from '../../core/types';
 
-export const MAX_RECAPTURE_TRAIL_ITEMS = 4;
+export const MAX_INSERTION_TRAIL_ITEMS = 4;
 
 export interface SidePanelState {
   currentSession: WorkspaceSession | null;
   currentThreadSnapshot: ConversationThreadSnapshot | null;
   currentTone: Tone;
   currentPanelView: PanelView;
-  recaptureTrail: RecaptureStatusTrailItem[];
+  insertionTrail: InsertionStatusTrailItem[];
   isInsertInProgress: boolean;
   insertInProgressMessage: string;
 }
@@ -19,7 +19,7 @@ export function createInitialState(initialTone: Tone, initialView: PanelView): S
     currentThreadSnapshot: null,
     currentTone: initialTone,
     currentPanelView: initialView,
-    recaptureTrail: [],
+    insertionTrail: [],
     isInsertInProgress: false,
     insertInProgressMessage: '',
   };

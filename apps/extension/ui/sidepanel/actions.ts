@@ -38,7 +38,7 @@ import type { SendMessage } from './runtime-message-bus';
 import {
   appendTrail,
   insertionTargetMessage,
-} from '../../components/panel/recapture-status-trail';
+} from '../../components/panel/insertion-status-trail';
 
 export interface SidePanelStorage {
   getSavedTone(): Promise<Tone>;
@@ -111,7 +111,7 @@ export function applySession(
   state.currentPanelView = activeView;
 
   if (previousSession?.sessionId !== session.sessionId) {
-    state.recaptureTrail = [];
+    state.insertionTrail = [];
     state.currentThreadSnapshot = null;
   }
 
@@ -127,7 +127,7 @@ export function applySession(
     status: session.insertionTargetStatus ?? (session.insertionTarget ? 'stale' : 'needs_recapture'),
     message: insertionTargetMessage(session),
     candidates: session.plausibleTabs,
-    trail: state.recaptureTrail,
+    trail: state.insertionTrail,
   });
   panel.setRestoreState(restoreState ?? state.currentSession.restoreState ?? buildCurrentRestoreState(state));
 
@@ -225,7 +225,7 @@ export async function refreshInsertionTargetStatus(state: SidePanelState, panel:
     panel.setInsertionTargetStatus({
       status: 'needs_recapture',
       message: 'Open Draftlet from a compose field to enable insertion.',
-      trail: state.recaptureTrail,
+      trail: state.insertionTrail,
     });
     return;
   }
@@ -240,7 +240,7 @@ export async function refreshInsertionTargetStatus(state: SidePanelState, panel:
       status: response.status,
       message: response.message,
       candidates: response.candidates,
-      trail: state.recaptureTrail,
+      trail: state.insertionTrail,
     });
     state.currentSession = {
       ...state.currentSession,
@@ -253,7 +253,7 @@ export async function refreshInsertionTargetStatus(state: SidePanelState, panel:
     panel.setInsertionTargetStatus({
       status: 'unavailable',
       message: 'Insertion target is unavailable.',
-      trail: state.recaptureTrail,
+      trail: state.insertionTrail,
     });
     if (state.currentSession) {
       state.currentSession = {
@@ -497,7 +497,7 @@ function applyInsertionResult(
     panel.setInsertionTargetStatus({
       status: 'live',
       message: 'Inserted into the focused field.',
-      trail: state.recaptureTrail,
+      trail: state.insertionTrail,
     });
     if (state.currentSession) {
       state.currentSession = {
@@ -514,7 +514,7 @@ function applyInsertionResult(
     panel.setInsertionTargetStatus({
       status: result.targetStatus ?? 'unavailable',
       message: result.message,
-      trail: state.recaptureTrail,
+      trail: state.insertionTrail,
     });
     if (state.currentSession) {
       state.currentSession = {
@@ -536,7 +536,7 @@ function applyInsertionResult(
     panel.setInsertionTargetStatus({
       status: result.targetStatus,
       message: result.message,
-      trail: state.recaptureTrail,
+      trail: state.insertionTrail,
     });
     if (state.currentSession) {
       state.currentSession = {
@@ -559,8 +559,8 @@ async function fallbackCopy(
   try {
     await navigator.clipboard.writeText(replyText);
     const message = "Couldn't find a compose field, so the draft was copied.";
-    state.recaptureTrail = appendTrail(
-      state.recaptureTrail,
+    state.insertionTrail = appendTrail(
+      state.insertionTrail,
       'recapture_failed',
       'failed',
       message,
@@ -568,7 +568,7 @@ async function fallbackCopy(
     panel.setInsertionTargetStatus({
       status: 'unavailable',
       message,
-      trail: state.recaptureTrail,
+      trail: state.insertionTrail,
     });
     if (state.currentSession) {
       state.currentSession = {
@@ -581,8 +581,8 @@ async function fallbackCopy(
     return { status: 'copied', message, targetStatus: 'unavailable' };
   } catch {
     const message = "Couldn't find a compose field. Use Copy instead.";
-    state.recaptureTrail = appendTrail(
-      state.recaptureTrail,
+    state.insertionTrail = appendTrail(
+      state.insertionTrail,
       'recapture_failed',
       'failed',
       message,
@@ -590,7 +590,7 @@ async function fallbackCopy(
     panel.setInsertionTargetStatus({
       status: 'unavailable',
       message,
-      trail: state.recaptureTrail,
+      trail: state.insertionTrail,
     });
     if (state.currentSession) {
       state.currentSession = {
@@ -612,7 +612,7 @@ export function onInsertionInProgress(state: SidePanelState, panel: PanelControl
     status: 'needs_focus',
     message,
     outcome: 'needs_focused_compose_target',
-    trail: state.recaptureTrail,
+    trail: state.insertionTrail,
   });
   if (state.currentSession) {
     state.currentSession = {

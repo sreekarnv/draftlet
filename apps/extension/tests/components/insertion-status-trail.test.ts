@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import type { WorkspaceSession } from '../../core/messages';
-import { MAX_RECAPTURE_TRAIL_ITEMS } from '../../ui/sidepanel/state';
+import { MAX_INSERTION_TRAIL_ITEMS } from '../../ui/sidepanel/state';
 import {
   appendTrail,
   insertionTargetMessage,
-  trailEventForRecapture,
-  trailLevelForRecapture,
-} from '../../components/panel/recapture-status-trail';
+  trailEventForInsertion,
+  trailLevelForInsertion,
+} from '../../components/panel/insertion-status-trail';
 
 function workspaceSession(overrides: Partial<WorkspaceSession> = {}): WorkspaceSession {
   return {
@@ -48,13 +48,13 @@ describe('appendTrail', () => {
 
   it('keeps only the latest items when over the maximum', () => {
     let trail: ReturnType<typeof appendTrail> = [];
-    for (let i = 0; i < MAX_RECAPTURE_TRAIL_ITEMS + 2; i += 1) {
+    for (let i = 0; i < MAX_INSERTION_TRAIL_ITEMS + 2; i += 1) {
       trail = appendTrail(trail, 'recapture_requested', 'pending', `step ${i}`, i);
     }
 
-    expect(trail).toHaveLength(MAX_RECAPTURE_TRAIL_ITEMS);
+    expect(trail).toHaveLength(MAX_INSERTION_TRAIL_ITEMS);
     expect(trail[0]).toMatchObject({ tabId: 2, message: 'step 2' });
-    expect(trail.at(-1)).toMatchObject({ tabId: MAX_RECAPTURE_TRAIL_ITEMS + 1, message: `step ${MAX_RECAPTURE_TRAIL_ITEMS + 1}` });
+    expect(trail.at(-1)).toMatchObject({ tabId: MAX_INSERTION_TRAIL_ITEMS + 1, message: `step ${MAX_INSERTION_TRAIL_ITEMS + 1}` });
   });
 
   it('does not mutate the input trail', () => {
@@ -77,24 +77,24 @@ describe('appendTrail', () => {
   });
 });
 
-describe('trailEventForRecapture / trailLevelForRecapture', () => {
+describe('trailEventForInsertion / trailLevelForInsertion', () => {
   it('maps recapture_succeeded to a success trail entry', () => {
-    expect(trailEventForRecapture({ outcome: 'recapture_succeeded' } as never)).toBe('recapture_succeeded');
-    expect(trailLevelForRecapture({ outcome: 'recapture_succeeded' } as never)).toBe('success');
+    expect(trailEventForInsertion({ outcome: 'recapture_succeeded' } as never)).toBe('recapture_succeeded');
+    expect(trailLevelForInsertion({ outcome: 'recapture_succeeded' } as never)).toBe('success');
   });
 
   it('maps focus and tab-choice outcomes to focus_required warning', () => {
-    expect(trailEventForRecapture({ outcome: 'needs_focused_compose_target' } as never)).toBe('focus_required');
-    expect(trailEventForRecapture({ outcome: 'tab_choice_acknowledged' } as never)).toBe('focus_required');
-    expect(trailLevelForRecapture({ outcome: 'needs_focused_compose_target' } as never)).toBe('warning');
-    expect(trailLevelForRecapture({ outcome: 'tab_choice_acknowledged' } as never)).toBe('warning');
+    expect(trailEventForInsertion({ outcome: 'needs_focused_compose_target' } as never)).toBe('focus_required');
+    expect(trailEventForInsertion({ outcome: 'tab_choice_acknowledged' } as never)).toBe('focus_required');
+    expect(trailLevelForInsertion({ outcome: 'needs_focused_compose_target' } as never)).toBe('warning');
+    expect(trailLevelForInsertion({ outcome: 'tab_choice_acknowledged' } as never)).toBe('warning');
   });
 
   it('falls back to recapture_failed for any other outcome', () => {
-    expect(trailEventForRecapture({ outcome: 'recapture_failed' } as never)).toBe('recapture_failed');
-    expect(trailLevelForRecapture({ outcome: 'recapture_failed' } as never)).toBe('failed');
-    expect(trailEventForRecapture({ outcome: 'chosen_tab_unavailable' } as never)).toBe('recapture_failed');
-    expect(trailLevelForRecapture({ outcome: 'chosen_tab_unavailable' } as never)).toBe('failed');
+    expect(trailEventForInsertion({ outcome: 'recapture_failed' } as never)).toBe('recapture_failed');
+    expect(trailLevelForInsertion({ outcome: 'recapture_failed' } as never)).toBe('failed');
+    expect(trailEventForInsertion({ outcome: 'chosen_tab_unavailable' } as never)).toBe('recapture_failed');
+    expect(trailLevelForInsertion({ outcome: 'chosen_tab_unavailable' } as never)).toBe('failed');
   });
 });
 

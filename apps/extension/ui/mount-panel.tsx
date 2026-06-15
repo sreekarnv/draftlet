@@ -5,8 +5,8 @@ import { DEFAULT_PANEL_VIEW, DEFAULT_TONE } from '../core/constants';
 import type {
   ConversationThreadSnapshot,
   DomainHistoryItem,
+  InsertionStatusTrailItem,
   RecaptureInsertionTargetOutcome,
-  RecaptureStatusTrailItem,
   WorkspaceRestoreState,
 } from '../core/messages';
 import type { PlausibleTabCandidate } from '../core/tab-disambiguation';
@@ -38,7 +38,7 @@ export interface InsertionTargetViewState {
   outcome?: RecaptureInsertionTargetOutcome;
   selectedTab?: PlausibleTabCandidate;
   candidates?: PlausibleTabCandidate[];
-  trail?: RecaptureStatusTrailItem[];
+  trail?: InsertionStatusTrailItem[];
 }
 
 export type PanelAction =

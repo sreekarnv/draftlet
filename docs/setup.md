@@ -144,6 +144,23 @@ curl http://127.0.0.1:11434/api/tags
 
 If the server fails to start because port `47632` is in use, stop the conflicting process. The desktop companion only stops a process holding the port if `/health` identifies it as a Draftlet server.
 
+## Local data
+
+Draftlet stores data in two places:
+
+- **SQLite database** at `apps/server/draftlet.db` during development, and under the Electron user-data directory in packaged desktop builds. The schema holds `WorkspaceSession`, `ConversationThread`, `Turn`, `DraftVariant`, `GenerationRun`, `GenerationRunEvent`, preferences, and bounded browser recapture diagnostics reports. Migrations are managed by Alembic; the head revision is at the top of `apps/server/alembic/versions/`.
+- **Browser extension storage** holds only lightweight coordination state (for example, the last selected tone or the last panel view). The extension does not persist domain state.
+
+To reset local development state, stop the server and delete the database file:
+
+```bash
+rm apps/server/draftlet.db
+```
+
+The next server start recreates the database after `uv run alembic upgrade head`. Alembic migration history is preserved across resets; only the data is removed.
+
+Packaged desktop builds store runtime data under the Electron user-data directory, not inside the repo. The development server and database always live under `apps/server/`.
+
 ## CORS and local origins
 
 The Draftlet server only allows requests from a configured local origin allowlist. By default that allowlist is:

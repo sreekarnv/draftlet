@@ -109,7 +109,7 @@ The runtime should not emit UI-specific instructions. It should emit domain and 
 
 ## Extension WorkspaceSession And Thread Flow
 
-The current v2 extension generation flow is intentionally transitional but now session- and thread-aware:
+The extension generation flow is session- and thread-aware end to end:
 - content script sends `draftlet:launch-side-panel` with a page context snapshot
 - service worker creates or updates a per-tab `WorkspaceSession`
 - side panel restores the active tab session with `draftlet:get-current-workspace-session`
@@ -133,7 +133,7 @@ This keeps the webpage out of runtime transport and generation workflow ownershi
 
 ## Runtime-Backed Session And Thread Flow
 
-The current v2 generation flow is transitional but now uses durable runtime domain persistence:
+The generation flow uses durable runtime domain persistence for sessions, threads, turns, variants, and generation runs:
 - content script sends `draftlet:launch-side-panel` with a page context snapshot
 - service worker coordinates the active browser tab and upserts a runtime `WorkspaceSession`
 - side panel restores the active tab session with `draftlet:get-current-workspace-session`; background also asks runtime for the persisted session/thread snapshot when available
@@ -167,11 +167,11 @@ The current v2 generation flow is transitional but now uses durable runtime doma
 - insertion remains explicit: side panel sends `draftlet:insert-reply` with `sessionId` and `variantId` when available; service worker checks `ComposeTargetRef` metadata, asks the content script to revalidate the target with `draftlet:revalidate-insertion-target`, and reports live/stale/unavailable status for fallback copy/manual use
 - recapture after stale restore is explicit: side panel can send `draftlet:activate-recapture-tab` to bring a validated chosen tab forward, then sends `draftlet:recapture-insertion-target` with an optional chosen `tabId`; background binds reachable selected tabs, asks the content script to recapture or restore the focused compose target, and returns typed outcomes for tab acknowledgement, focus-required retry, unavailable tabs, stale targets, and successful recapture
 - the side panel may keep a bounded, local recapture status trail for recent activation/recapture attempts; this is UI recovery context, not durable runtime history
-- background keeps a bounded in-memory recapture diagnostics log for extension debugging; debug surfaces can query it with `draftlet:get-recapture-diagnostics`, and it must not include selected text or full page content
-- the popup may display compact runtime status and recent recapture diagnostics, and may copy a bounded diagnostics report for debugging, but it must remain a quick status/debug surface and not duplicate side-panel drafting workflow
-- desktop diagnostics reads the latest extension-published browser recapture diagnostics report through the runtime relay; browser tab/content-script state remains extension-owned
+- background keeps a bounded in-memory recapture diagnostics log for extension debugging; debug surfaces can query it with `draftlet:get-recapture-diagnostics`, and it does not include selected text or full page content
+- the popup may display compact runtime status and recent recapture diagnostics, and may copy a bounded diagnostics report for debugging, but the recapture diagnostics surface is dev-only and gated behind `DRAFTLET_DEBUG_INSERTION=1`; the popup remains a quick status surface and does not duplicate the side panel drafting workflow
+- desktop diagnostics reads the latest extension-published browser recapture diagnostics report through the runtime relay; browser tab and content-script state remain extension-owned
 
-Legacy runtime `Generation`/`Reply` persistence and `/history` are retired. Side-panel history and streaming now use domain-backed `WorkspaceSession` / `ConversationThread` / `Turn` / `DraftVariant` data end to end, with `GenerationRun` as the bounded durable execution lease for active/recoverable generation work. Current and accepted variant state is bounded to one variant per thread in this phase.
+The runtime owns the `WorkspaceSession` / `ConversationThread` / `Turn` / `DraftVariant` / `GenerationRun` data model end to end. The side panel's history and streaming use that domain model exclusively. The `/domain/history` endpoint and the `/domain/generation-runs/{run_id}/progress` snapshot are the public history surfaces. The `GenerationRun` lease is the bounded durable execution record for active and recoverable generation work, and a run can be `live_attached`, `replay_only`, or `stale`. Current and accepted variant state is bounded to one variant per thread.
 
 ## Desktop-Extension Diagnostics Bridge
 
