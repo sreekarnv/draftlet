@@ -73,6 +73,22 @@ Another process is bound to the Draftlet server port. Stop that process, or chan
 - The extension currently expects the server at `http://127.0.0.1:47632`. There is no remote option yet.
 - If the extension was loaded from a stale build, rebuild it with `pnpm --dir apps/extension build` and reload the unpacked extension.
 
+## Reload the extension
+
+After changing extension source, you must rebuild and reload the unpacked extension. The browser does not pick up code changes from disk on its own.
+
+1. From the repo root, rebuild:
+
+   ```bash
+   pnpm --dir apps/extension build
+   ```
+
+2. Open your browser's extensions page.
+3. Find the Draftlet card and click **Reload**.
+4. Reload the page you are drafting on so the content script reattaches.
+
+If the extension still behaves like the old build, remove the unpacked extension and re-load it from `apps/extension/.output/chrome-mv3`. A stale manifest, a partial WXT dev cache, or a browser update can leave the loaded extension out of sync with the source. Clear `apps/extension/.wxt/` and `apps/extension/.output/` (both are gitignored) before rebuilding if the reload does not take.
+
 ## Side panel does not open
 
 - Make sure the extension is loaded and enabled. Chrome's side panel needs a recent Chromium build; very old browsers do not expose a side panel entry.
@@ -133,6 +149,24 @@ The desktop companion registers a tray icon when it starts.
 
   The report is intentionally narrow: it includes metadata, status, and outcome fields, but never selected text, generated draft text, full page content, DOM selectors, cookies, tokens, or local runtime secrets.
 - Extension logs and popup diagnostics are also available directly in the browser's extensions page when you need to inspect a specific page interaction.
+
+## Desktop companion fails to launch
+
+`pnpm dev:desktop` starts the Electron desktop companion through `scripts/dev-desktop.sh`. The most common launch failure on Linux is the `chrome-sandbox` SUID helper, which is documented separately in the next section. Other common launch failures:
+
+- **Stale build cache.** If the Electron Forge Vite cache is out of sync, remove it and retry:
+
+  ```bash
+  rm -rf apps/desktop/.vite apps/desktop/out
+  pnpm --dir apps/desktop start
+  ```
+
+- **Port 47632 already in use by something other than Draftlet.** Stop the conflicting process or change the port in the desktop settings.
+- **Ollama is unreachable on startup.** The desktop companion will still launch, but the runtime status card will show a connection error. Start Ollama and refresh the status card.
+- **macOS or Windows fails to open a window.** The Electron dev process should still print logs to the terminal that launched it. Read the first error line; it usually names a missing native module (rerun `pnpm install`) or a Gatekeeper / SmartScreen prompt (allow the app to open and retry).
+- **Dev-only sandbox flag.** If you cannot apply the `chmod 4755` fix on Linux, see the next section for the dev-only `ELECTRON_DISABLE_SANDBOX=1` escape hatch. Never ship a packaged build with that flag.
+
+If the desktop window never appears and no error is printed, run `pnpm --dir apps/desktop start` directly in a terminal so the Electron main-process output is visible.
 
 ## Electron dev fails on Linux sandbox setup
 

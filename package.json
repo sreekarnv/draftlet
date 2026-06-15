@@ -3,13 +3,17 @@
   "type": "module",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "typecheck": "pnpm --filter @draftlet/shared typecheck && pnpm --dir apps/extension exec tsc --noEmit && pnpm --dir apps/desktop typecheck",
     "dev": "./scripts/dev.sh",
     "dev:desktop": "./scripts/dev-desktop.sh",
     "dev:extension": "./scripts/dev-extension.sh",
     "dev:server": "./scripts/dev-server.sh",
-    "build": "./scripts/build.sh"
+    "build": "./scripts/build.sh",
+    "make:desktop": "DRAFTLET_MAKE_DEB=1 DRAFTLET_MAKE_APPIMAGE=1 pnpm --dir apps/desktop make"
   },
   "devEngines": {
     "packageManager": {

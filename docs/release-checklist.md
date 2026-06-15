@@ -27,9 +27,10 @@ Expected results:
 
 - `pnpm typecheck` runs the shared package typecheck, the extension typecheck, and the desktop typecheck in sequence and exits 0.
 - `pnpm build` produces a packaged Python server bundle, packages the Electron desktop app, and builds the Chrome MV3 extension.
+- `pnpm make:desktop` runs `DRAFTLET_MAKE_DEB=1 DRAFTLET_MAKE_APPIMAGE=1 pnpm --dir apps/desktop make` and produces the Linux `.deb` and ZIP installers under `apps/desktop/out/make/`. On Debian/Ubuntu hosts, this needs `fakeroot` and `dpkg` to be installed.
 - Extension test command runs ~230 tests across ~24 files.
-- Desktop test command runs the desktop Vitest suite under `apps/desktop/tests/`.
-- Server `uv run pytest` runs the full server test package, including the CORS settings tests under `tests/test_cors.py` and the diagnostics API tests under `tests/test_diagnostics_api.py`.
+- Desktop test command runs 35 tests across 4 files.
+- Server `uv run pytest` runs 70 tests across the server package, including the CORS settings tests under `tests/test_cors.py` and the diagnostics API tests under `tests/test_diagnostics_api.py`.
 - `uv run alembic upgrade head` reports the current head revision (verify against the top of `apps/server/alembic/versions/`).
 
 If a command is environment-specific (for example, the Linux desktop maker needs `fakeroot` and `dpkg`), note that in [`troubleshooting.md`](troubleshooting.md) rather than pretending it works everywhere.
