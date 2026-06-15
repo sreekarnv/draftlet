@@ -1,6 +1,6 @@
 [project]
 name = "draftlet-server"
-version = "0.1.1"
+version = "1.0.0"
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.18.4",
