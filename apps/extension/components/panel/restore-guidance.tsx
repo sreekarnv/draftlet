@@ -6,12 +6,10 @@ import { Button, cn } from './ui';
 
 interface RestoreGuidanceProps {
   restoreState: WorkspaceRestoreState | null;
-  onRecaptureInsertionTarget: (tabId?: number) => Promise<void>;
   onRetryInterruptedTurn: (turnId: string) => Promise<void>;
 }
 
 export function RestoreGuidance({
-  onRecaptureInsertionTarget,
   onRetryInterruptedTurn,
   restoreState,
 }: RestoreGuidanceProps) {
@@ -43,7 +41,6 @@ export function RestoreGuidance({
         </div>
         <RestorePrimaryAction
           action={restoreState.primaryAction}
-          onRecaptureInsertionTarget={onRecaptureInsertionTarget}
           onRetryInterruptedTurn={onRetryInterruptedTurn}
         />
       </div>
@@ -53,29 +50,23 @@ export function RestoreGuidance({
 
 function RestorePrimaryAction({
   action,
-  onRecaptureInsertionTarget,
   onRetryInterruptedTurn,
 }: {
   action: WorkspaceRecoveryAction | undefined;
-  onRecaptureInsertionTarget: (tabId?: number) => Promise<void>;
   onRetryInterruptedTurn: (turnId: string) => Promise<void>;
 }) {
   if (!action) {
     return null;
   }
 
+  // The recapture_target primary action is no longer surfaced as a button
+  // because Insert/Use owns the target recovery flow now. We render the
+  // action label as a passive badge instead.
   if (action.kind === 'recapture_target') {
     return (
-      <Button
-        className="h-7 shrink-0 px-2.5 text-[11px] leading-4"
-        onClick={() => void onRecaptureInsertionTarget()}
-        title={action.message}
-        type="button"
-        variant="secondary"
-      >
-        <RefreshCw aria-hidden="true" className="h-3 w-3" />
+      <span className="shrink-0 rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-semibold leading-4 text-slate-600 ring-1 ring-slate-200">
         {action.label}
-      </Button>
+      </span>
     );
   }
 

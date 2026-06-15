@@ -4,7 +4,6 @@ import type { InsertionResult, PanelView, Tone } from '../../core/types';
 import { mountDraftletPanel, type PanelController, type VariantActionResult } from '../mount-panel';
 import {
   acceptVariant,
-  activateRecaptureTab,
   cancelActiveGeneration,
   closeSidePanel,
   configureSendMessage,
@@ -12,7 +11,6 @@ import {
   initializeSidePanel,
   loadDomainHistory,
   onDraftletMessage,
-  recaptureInsertionTarget,
   refreshHealth,
   refreshInsertionTargetStatus,
   refineReplies,
@@ -73,9 +71,7 @@ export function createSidePanelController(options: SidePanelControllerOptions): 
     },
     onLoadHistory: () => loadDomainHistory(state, panel),
     onRestoreHistoryItem: (item: DomainHistoryItem) => restoreDomainHistoryItem(state, panel, item),
-    onInsert: (replyText, variantId) => insertIntoActivePage(state, panel, sendRuntimeMessage, replyText, variantId),
-    onRecaptureInsertionTarget: (tabId) => recaptureInsertionTarget(state, panel, tabId),
-    onActivateRecaptureTab: (tabId) => activateRecaptureTab(state, panel, tabId),
+    onInsert: (replyText, variantId) => insertIntoActivePage(state, panel, replyText, variantId),
     onSelectVariant: (variantId) => setVariantCurrent(state, panel, variantId),
     onAcceptVariant: (variantId) => acceptVariant(state, panel, variantId),
     onCloseRequest: () => {
@@ -95,7 +91,7 @@ export function createSidePanelController(options: SidePanelControllerOptions): 
     setTone: (tone) => setTone(state, panel, storage, tone),
     setActiveView: (view) => setActiveView(state, panel, storage, view),
     startDraftGeneration: () => startDraftGenerationFromCurrentSession(state, panel),
-    insertIntoActivePage: (replyText, variantId) => insertIntoActivePage(state, panel, initialSend, replyText, variantId),
+    insertIntoActivePage: (replyText, variantId) => insertIntoActivePage(state, panel, replyText, variantId),
     cancelActiveGeneration: () => cancelActiveGeneration(state),
     closeSidePanel: () => closeSidePanel(state),
     refreshHealth: () => refreshHealth(state, panel),

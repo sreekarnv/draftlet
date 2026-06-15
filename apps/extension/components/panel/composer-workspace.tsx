@@ -13,16 +13,12 @@ import { Button, cn } from './ui';
 interface ComposerWorkspaceProps {
   callbacks: PanelCallbacks;
   view: PanelViewState;
-  onActivateRecaptureTab: (tabId: number) => Promise<void>;
-  onRecaptureInsertionTarget: (tabId?: number) => Promise<void>;
   onRetryInterruptedTurn: (turnId: string) => Promise<void>;
   onSelectTone: (tone: Tone) => void;
 }
 
 export function ComposerWorkspace({
   callbacks,
-  onActivateRecaptureTab,
-  onRecaptureInsertionTarget,
   onRetryInterruptedTurn,
   onSelectTone,
   view,
@@ -40,17 +36,12 @@ export function ComposerWorkspace({
           </div>
           <div className="grid justify-items-end gap-1 text-right">
             <div className={cn('text-xs font-semibold leading-5 text-slate-500', stateToneClass(view.state))}>{getStateText(view)}</div>
-            <TargetStatus
-              onActivateRecaptureTab={onActivateRecaptureTab}
-              onRecaptureInsertionTarget={onRecaptureInsertionTarget}
-              view={view}
-            />
+            <TargetStatus view={view} />
           </div>
         </div>
         <p className="m-0 max-h-[4.75rem] overflow-hidden text-[13.5px] leading-6 text-slate-800">{view.selectedText}</p>
       </div>
       <RestoreGuidance
-        onRecaptureInsertionTarget={onRecaptureInsertionTarget}
         onRetryInterruptedTurn={onRetryInterruptedTurn}
         restoreState={view.restoreState}
       />

@@ -88,7 +88,7 @@ wheels = [
 
 [[package]]
 name = "draftlet-server"
-version = "0.1.1"
+version = "1.0.0"
 source = { virtual = "." }
 dependencies = [
     { name = "alembic" },

@@ -9,6 +9,8 @@ export interface SidePanelState {
   currentTone: Tone;
   currentPanelView: PanelView;
   recaptureTrail: RecaptureStatusTrailItem[];
+  isInsertInProgress: boolean;
+  insertInProgressMessage: string;
 }
 
 export function createInitialState(initialTone: Tone, initialView: PanelView): SidePanelState {
@@ -18,6 +20,8 @@ export function createInitialState(initialTone: Tone, initialView: PanelView): S
     currentTone: initialTone,
     currentPanelView: initialView,
     recaptureTrail: [],
+    isInsertInProgress: false,
+    insertInProgressMessage: '',
   };
 }
 

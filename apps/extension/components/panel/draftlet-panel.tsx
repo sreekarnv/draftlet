@@ -17,9 +17,7 @@ interface DraftletPanelProps {
 
 export function DraftletPanel({ callbacks, controller }: DraftletPanelProps) {
   const {
-    activateRecaptureTab,
     loadHistory,
-    recaptureInsertionTarget,
     restoreHistoryItem,
     retryInterruptedTurn,
     selectTone,
@@ -51,8 +49,6 @@ export function DraftletPanel({ callbacks, controller }: DraftletPanelProps) {
         {view.activeView === 'replies' ? (
           <ComposerWorkspace
             callbacks={callbacks}
-            onActivateRecaptureTab={activateRecaptureTab}
-            onRecaptureInsertionTarget={recaptureInsertionTarget}
             onRetryInterruptedTurn={retryInterruptedTurn}
             onSelectTone={selectTone}
             view={view}

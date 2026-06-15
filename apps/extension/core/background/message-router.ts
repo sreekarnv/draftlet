@@ -1,5 +1,6 @@
 import {
   ACCEPT_DRAFT_VARIANT,
+  ACTIVATE_INSERTION_TAB,
   ACTIVATE_RECAPTURE_TAB,
   CANCEL_DRAFT_GENERATION,
   GET_CURRENT_WORKSPACE_SESSION,
@@ -8,6 +9,7 @@ import {
   GET_RECAPTURE_DIAGNOSTICS,
   GET_RUNTIME_STATUS,
   INSERT_REPLY,
+  INSERTION_IN_PROGRESS,
   LAUNCH_SIDE_PANEL,
   PUBLISH_RECAPTURE_DIAGNOSTICS_REPORT,
   RECAPTURE_INSERTION_TARGET,
@@ -18,8 +20,10 @@ import {
   type DraftletMessage,
 } from '../messages';
 import {
+  handleActivateInsertionTab,
   handleActivateRecaptureTab,
   handleGetInsertionTargetStatus,
+  handleInsertionInProgress,
   handleInsertReply,
   handleRecaptureInsertionTarget,
 } from './insertion-coordinator';
@@ -106,6 +110,14 @@ export function registerMessageRouter(
 
     if (message.type === ACTIVATE_RECAPTURE_TAB) {
       return handleActivateRecaptureTab(message.sessionId, message.tabId);
+    }
+
+    if (message.type === ACTIVATE_INSERTION_TAB) {
+      return handleActivateInsertionTab(message.sessionId);
+    }
+
+    if (message.type === INSERTION_IN_PROGRESS) {
+      return handleInsertionInProgress(message.sessionId, message.message);
     }
 
     if (message.type === SET_CURRENT_DRAFT_VARIANT) {
