@@ -12,6 +12,8 @@ import type { ForgeConfig } from '@electron-forge/shared-types';
 const logPrefix = '[draftlet:forge]';
 const localRequire = createRequire(__filename);
 const bundledServerDir = path.resolve(__dirname, '../server/dist/draftlet-server');
+const rootDir = path.resolve(__dirname, "../..");
+const iconPng = path.join(rootDir, "apps/desktop/assets/icon.png");
 
 /**
  * Node 24 currently freezes in Electron Packager's default Electron ZIP
@@ -142,6 +144,7 @@ const makers: ForgeConfig['makers'] = [
             bin: 'draftlet',
             description: 'Desktop companion for setting up and running Draftlet locally.',
             categories: ['Utility'],
+            icon: iconPng,
           },
         }),
       ]
@@ -154,6 +157,7 @@ const makers: ForgeConfig['makers'] = [
             productName: 'Draftlet',
             genericName: 'Draftlet',
             categories: ['Utility'],
+            icon: iconPng
           },
         }),
       ]

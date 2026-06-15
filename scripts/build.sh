@@ -3,10 +3,13 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-echo "[1/4] Typechecking shared package"
+echo "[1/6] Typechecking shared package"
 pnpm --dir "$ROOT_DIR/packages/shared" --silent build
 
-echo "[2/4] Building bundled Python server"
+echo "[2/6] Generating app icons"
+pnpm --dir "$ROOT_DIR" icons
+
+echo "[3/6] Building bundled Python server"
 "$ROOT_DIR/scripts/build-server.sh"
 
 if [[ ! -x "$ROOT_DIR/apps/server/dist/draftlet-server/draftlet-server" ]]; then
@@ -14,11 +17,11 @@ if [[ ! -x "$ROOT_DIR/apps/server/dist/draftlet-server/draftlet-server" ]]; then
   echo "The desktop app will still be packaged, but without a bundled local server." >&2
 fi
 
-echo "[3/4] Packaging Electron desktop app"
+echo "[4/6] Packaging Electron desktop app"
 pnpm --dir "$ROOT_DIR/apps/desktop" package
 
-echo "[4/4] Building browser extension"
+echo "[5/6] Building browser extension"
 pnpm --dir "$ROOT_DIR/apps/extension" build
 
-echo "[5/5] Generating desktop installers"
-DRAFTLET_MAKE_DEB=1 DRAFTLET_MAKE_APPIMAGE=1 pnpm --dir apps/desktop make
+echo "[6/6] Generating desktop installers"
+DRAFTLET_MAKE_DEB=1 DRAFTLET_MAKE_APPIMAGE=1 pnpm --dir "$ROOT_DIR/apps/desktop" make
