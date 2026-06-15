@@ -87,7 +87,7 @@ export function restoreGuidanceToneClass(status: WorkspaceRestoreState['status']
   return 'bg-slate-50 text-slate-700 ring-slate-200';
 }
 
-export function recaptureTrailToneClass(level: NonNullable<InsertionTargetViewState['trail']>[number]['level']) {
+export function insertionTrailToneClass(level: NonNullable<InsertionTargetViewState['trail']>[number]['level']) {
   if (level === 'success') {
     return 'bg-emerald-500';
   }

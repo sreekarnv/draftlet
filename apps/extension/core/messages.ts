@@ -300,7 +300,7 @@ export type RecaptureInsertionTargetOutcome =
   | 'recapture_succeeded'
   | 'recapture_failed';
 
-export type RecaptureStatusTrailEvent =
+export type InsertionStatusTrailEvent =
   | 'tab_activation_requested'
   | 'tab_activated'
   | 'tab_activation_failed'
@@ -309,11 +309,11 @@ export type RecaptureStatusTrailEvent =
   | 'recapture_succeeded'
   | 'recapture_failed';
 
-export type RecaptureStatusTrailLevel = 'pending' | 'success' | 'warning' | 'failed';
+export type InsertionStatusTrailLevel = 'pending' | 'success' | 'warning' | 'failed';
 
-export interface RecaptureStatusTrailItem {
-  event: RecaptureStatusTrailEvent;
-  level: RecaptureStatusTrailLevel;
+export interface InsertionStatusTrailItem {
+  event: InsertionStatusTrailEvent;
+  level: InsertionStatusTrailLevel;
   message: string;
   tabId?: number;
   at: string;

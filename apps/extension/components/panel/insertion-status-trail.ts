@@ -1,20 +1,20 @@
 import type {
+  InsertionStatusTrailEvent,
+  InsertionStatusTrailItem,
+  InsertionStatusTrailLevel,
   RecaptureInsertionTargetResult,
-  RecaptureStatusTrailEvent,
-  RecaptureStatusTrailItem,
-  RecaptureStatusTrailLevel,
   WorkspaceSession,
 } from '../../core/messages';
 import type { InsertionTargetStatus } from '../../core/types';
-import { MAX_RECAPTURE_TRAIL_ITEMS } from '../../ui/sidepanel/state';
+import { MAX_INSERTION_TRAIL_ITEMS } from '../../ui/sidepanel/state';
 
 export function appendTrail(
-  trail: RecaptureStatusTrailItem[],
-  event: RecaptureStatusTrailEvent,
-  level: RecaptureStatusTrailLevel,
+  trail: InsertionStatusTrailItem[],
+  event: InsertionStatusTrailEvent,
+  level: InsertionStatusTrailLevel,
   message: string,
   tabId?: number,
-): RecaptureStatusTrailItem[] {
+): InsertionStatusTrailItem[] {
   if (isSameTrailingItem(trail[trail.length - 1], event, message, tabId)) {
     return trail;
   }
@@ -28,16 +28,16 @@ export function appendTrail(
       tabId,
       at: new Date().toISOString(),
     },
-  ].slice(-MAX_RECAPTURE_TRAIL_ITEMS);
+  ].slice(-MAX_INSERTION_TRAIL_ITEMS);
 }
 
 export function replaceLastTrail(
-  trail: RecaptureStatusTrailItem[],
-  event: RecaptureStatusTrailEvent,
-  level: RecaptureStatusTrailLevel,
+  trail: InsertionStatusTrailItem[],
+  event: InsertionStatusTrailEvent,
+  level: InsertionStatusTrailLevel,
   message: string,
   tabId?: number,
-): RecaptureStatusTrailItem[] {
+): InsertionStatusTrailItem[] {
   if (trail.length === 0) {
     return appendTrail(trail, event, level, message, tabId);
   }
@@ -50,12 +50,12 @@ export function replaceLastTrail(
     tabId,
     at: new Date().toISOString(),
   });
-  return next.slice(-MAX_RECAPTURE_TRAIL_ITEMS);
+  return next.slice(-MAX_INSERTION_TRAIL_ITEMS);
 }
 
 function isSameTrailingItem(
-  last: RecaptureStatusTrailItem | undefined,
-  event: RecaptureStatusTrailEvent,
+  last: InsertionStatusTrailItem | undefined,
+  event: InsertionStatusTrailEvent,
   message: string,
   tabId: number | undefined,
 ): boolean {
@@ -68,7 +68,7 @@ function isSameTrailingItem(
     && last.tabId === tabId;
 }
 
-export function trailEventForRecapture(response: RecaptureInsertionTargetResult): RecaptureStatusTrailEvent {
+export function trailEventForInsertion(response: RecaptureInsertionTargetResult): InsertionStatusTrailEvent {
   if (response.outcome === 'recapture_succeeded') {
     return 'recapture_succeeded';
   }
@@ -80,7 +80,7 @@ export function trailEventForRecapture(response: RecaptureInsertionTargetResult)
   return 'recapture_failed';
 }
 
-export function trailLevelForRecapture(response: RecaptureInsertionTargetResult): RecaptureStatusTrailLevel {
+export function trailLevelForInsertion(response: RecaptureInsertionTargetResult): InsertionStatusTrailLevel {
   if (response.outcome === 'recapture_succeeded') {
     return 'success';
   }
