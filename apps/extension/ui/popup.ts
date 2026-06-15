@@ -15,6 +15,7 @@ import {
   recaptureDiagnosticLevelLabel,
   serializeRecaptureDiagnostics,
 } from '../core/recapture-diagnostics-view';
+import { readDebugFlag } from './popup-env';
 
 const root = document.getElementById('root');
 let latestDiagnostics: RecaptureDiagnosticEntry[] = [];
@@ -23,6 +24,8 @@ if (!root) {
   throw new Error('Draftlet popup root was not found.');
 }
 
+const diagnosticsEnabled = readDebugFlag();
+
 root.innerHTML = `
   <main class="draftlet-popup" aria-label="Draftlet status">
     <header class="popup-header">
@@ -30,12 +33,15 @@ root.innerHTML = `
         <h1>Draftlet</h1>
         <p>Extension status</p>
       </div>
-      <button class="icon-button" id="refresh" type="button" aria-label="Refresh diagnostics">Refresh</button>
+      <button class="icon-button" id="refresh" type="button" aria-label="Refresh">Refresh</button>
     </header>
     <section class="status-row" aria-label="Runtime status">
       <span class="label">Runtime</span>
       <span class="pill" id="runtime-status">Checking...</span>
     </section>
+    ${
+      diagnosticsEnabled
+        ? `
     <section class="diagnostics" aria-label="Recapture diagnostics">
       <div class="section-header">
         <div class="section-title">Recapture diagnostics</div>
@@ -48,16 +54,28 @@ root.innerHTML = `
       <div id="diagnostics-list" class="diagnostics-list">Loading...</div>
       <div id="copy-status" class="copy-status" role="status"></div>
     </section>
+    `
+        : ''
+    }
   </main>
 `;
 
 const runtimeStatus = requireElement('runtime-status');
-const publishState = requireElement('publish-state');
-const diagnosticsList = requireElement('diagnostics-list');
 const refreshButton = requireElement('refresh') as HTMLButtonElement;
-const publishButton = requireElement('publish-diagnostics') as HTMLButtonElement;
-const copyButton = requireElement('copy-diagnostics') as HTMLButtonElement;
-const copyStatus = requireElement('copy-status');
+
+let publishState: HTMLElement | null = null;
+let diagnosticsList: HTMLElement | null = null;
+let publishButton: HTMLButtonElement | null = null;
+let copyButton: HTMLButtonElement | null = null;
+let copyStatus: HTMLElement | null = null;
+
+if (diagnosticsEnabled) {
+  publishState = requireElement('publish-state');
+  diagnosticsList = requireElement('diagnostics-list');
+  publishButton = requireElement('publish-diagnostics') as HTMLButtonElement;
+  copyButton = requireElement('copy-diagnostics') as HTMLButtonElement;
+  copyStatus = requireElement('copy-status');
+}
 
 installStyles();
 void refreshPopup();
@@ -66,39 +84,58 @@ refreshButton.addEventListener('click', () => {
   void refreshPopup();
 });
 
-copyButton.addEventListener('click', () => {
-  void copyDiagnostics();
-});
+if (copyButton) {
+  copyButton.addEventListener('click', () => {
+    void copyDiagnostics();
+  });
+}
 
-publishButton.addEventListener('click', () => {
-  void publishDiagnostics();
-});
+if (publishButton) {
+  publishButton.addEventListener('click', () => {
+    void publishDiagnostics();
+  });
+}
 
 async function refreshPopup() {
   refreshButton.disabled = true;
-  publishButton.disabled = true;
-  copyButton.disabled = true;
-  copyStatus.textContent = '';
+  if (publishButton) publishButton.disabled = true;
+  if (copyButton) copyButton.disabled = true;
+  if (copyStatus) copyStatus.textContent = '';
   runtimeStatus.textContent = 'Checking...';
   runtimeStatus.className = 'pill';
-  diagnosticsList.textContent = 'Loading...';
+  if (diagnosticsList) diagnosticsList.textContent = 'Loading...';
 
   const [runtime, diagnostics] = await Promise.all([
     loadRuntimeStatus(),
-    loadRecaptureDiagnostics(),
+    diagnosticsEnabled ? loadRecaptureDiagnostics() : Promise.resolve(emptyDiagnosticsResult()),
   ]);
 
   runtimeStatus.textContent = runtime.status === 'connected' ? 'Connected' : 'Disconnected';
   runtimeStatus.className = `pill ${runtime.status === 'connected' ? 'success' : 'failed'}`;
   latestDiagnostics = diagnostics.entries;
-  renderPublishState(diagnostics.publish);
-  renderDiagnostics(diagnostics.entries);
+  if (publishState) renderPublishState(diagnostics.publish);
+  if (diagnosticsList) renderDiagnostics(diagnostics.entries);
   refreshButton.disabled = false;
-  publishButton.disabled = diagnostics.entries.length === 0;
-  copyButton.disabled = diagnostics.entries.length === 0;
+  if (publishButton) publishButton.disabled = diagnostics.entries.length === 0;
+  if (copyButton) copyButton.disabled = diagnostics.entries.length === 0;
+}
+
+function emptyDiagnosticsResult(): RecaptureDiagnosticsResult {
+  return {
+    entries: [],
+    publish: {
+      queued: false,
+      retryPending: false,
+      inFlight: false,
+      retryCount: 0,
+      maxRetryAttempts: 3,
+    },
+  };
 }
 
 async function copyDiagnostics() {
+  if (!copyStatus) return;
+
   if (latestDiagnostics.length === 0) {
     copyStatus.textContent = 'No diagnostics to copy.';
     return;
@@ -113,6 +150,8 @@ async function copyDiagnostics() {
 }
 
 async function publishDiagnostics() {
+  if (!copyStatus || !publishButton) return;
+
   if (latestDiagnostics.length === 0) {
     copyStatus.textContent = 'No diagnostics to send.';
     return;
@@ -122,10 +161,10 @@ async function publishDiagnostics() {
   copyStatus.textContent = 'Sending diagnostics to desktop...';
 
   try {
-    const result = await browser.runtime.sendMessage({
+    const result = (await browser.runtime.sendMessage({
       type: PUBLISH_RECAPTURE_DIAGNOSTICS_REPORT,
       limit: 50,
-    } satisfies DraftletMessage) as PublishRecaptureDiagnosticsReportResult;
+    } satisfies DraftletMessage)) as PublishRecaptureDiagnosticsReportResult;
 
     copyStatus.textContent = result.ok
       ? 'Sent diagnostics to desktop.'
@@ -141,9 +180,9 @@ async function publishDiagnostics() {
 
 async function loadRuntimeStatus(): Promise<RuntimeStatusResult> {
   try {
-    return await browser.runtime.sendMessage({
+    return (await browser.runtime.sendMessage({
       type: GET_RUNTIME_STATUS,
-    } satisfies DraftletMessage) as RuntimeStatusResult;
+    } satisfies DraftletMessage)) as RuntimeStatusResult;
   } catch {
     return { status: 'disconnected' };
   }
@@ -151,10 +190,10 @@ async function loadRuntimeStatus(): Promise<RuntimeStatusResult> {
 
 async function loadRecaptureDiagnostics(): Promise<RecaptureDiagnosticsResult> {
   try {
-    return await browser.runtime.sendMessage({
+    return (await browser.runtime.sendMessage({
       type: GET_RECAPTURE_DIAGNOSTICS,
       limit: 8,
-    } satisfies DraftletMessage) as RecaptureDiagnosticsResult;
+    } satisfies DraftletMessage)) as RecaptureDiagnosticsResult;
   } catch {
     return {
       entries: [
@@ -183,11 +222,13 @@ async function loadRecaptureDiagnostics(): Promise<RecaptureDiagnosticsResult> {
 async function refreshDiagnosticsState() {
   const diagnostics = await loadRecaptureDiagnostics();
   latestDiagnostics = diagnostics.entries;
-  renderPublishState(diagnostics.publish);
-  renderDiagnostics(diagnostics.entries);
+  if (publishState) renderPublishState(diagnostics.publish);
+  if (diagnosticsList) renderDiagnostics(diagnostics.entries);
 }
 
 function renderPublishState(state: BrowserDiagnosticsPublishReliabilityState | null | undefined) {
+  if (!publishState) return;
+
   if (!state) {
     publishState.textContent = '';
     publishState.className = 'publish-state';
@@ -217,6 +258,8 @@ function renderPublishState(state: BrowserDiagnosticsPublishReliabilityState | n
 }
 
 function renderDiagnostics(entries: RecaptureDiagnosticEntry[]) {
+  if (!diagnosticsList) return;
+
   if (entries.length === 0) {
     diagnosticsList.innerHTML = '<div class="empty">No recapture diagnostics yet.</div>';
     return;

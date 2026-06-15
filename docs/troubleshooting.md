@@ -136,7 +136,45 @@ The desktop companion registers a tray icon when it starts.
 
 ## Electron dev fails on Linux sandbox setup
 
-This is usually a local Electron development environment issue, not a Draftlet bug. Check Electron's Linux sandbox guidance for your distro, or run the packaged build path if local dev sandbox permissions are the blocker. The packaged build is produced by `pnpm make:desktop`.
+On Linux, `pnpm dev:desktop` launches the desktop companion through `electron-forge start`, which uses the Chromium SUID helper at:
+
+```text
+apps/desktop/node_modules/electron/dist/chrome-sandbox
+```
+
+For Electron's multi-process architecture to start, that helper must be **root-owned** and have the **setuid bit set** (mode `4755`). When it is not, the Electron main process aborts on startup with errors like `The SUID sandbox helper binary was found, but is not configured correctly` or `chrome-sandbox must be owned by root`.
+
+### Recommended fix (setuid the helper)
+
+Run from the repo root, adjusting the path if your `node_modules` lives elsewhere (use `find apps/desktop/node_modules/electron -name chrome-sandbox` to locate it):
+
+```bash
+sudo chown root:root apps/desktop/node_modules/electron/dist/chrome-sandbox
+sudo chmod 4755    apps/desktop/node_modules/electron/dist/chrome-sandbox
+```
+
+Verify the helper now has the right permissions:
+
+```bash
+stat -c '%a %U:%G' apps/desktop/node_modules/electron/dist/chrome-sandbox
+# expected: 4755 root:root
+```
+
+`pnpm install` re-extracts Electron on the next install, which resets the helper's ownership and mode. Re-apply the two `sudo` commands after every `pnpm install` on Linux until you switch to a permanent packaging path.
+
+### Dev-only fallback (no `sudo`, weaker security)
+
+If you cannot elevate (no `sudo`, locked-down distro, or you do not want to SUID a local file), the desktop companion can start with the renderer sandbox disabled. This is **dev-only**. Do **not** use it in production, do not ship it, and do not run the desktop companion with this flag for any workflow that handles untrusted content:
+
+```bash
+ELECTRON_DISABLE_SANDBOX=1 pnpm dev:desktop
+```
+
+`scripts/dev-desktop.sh` prints a one-line stderr notice on Linux when the helper is not mode `4755`. It does **not** auto-disable the sandbox and does **not** auto-chmod; both decisions stay with you.
+
+### Packaged build is unaffected
+
+`pnpm make:desktop` produces an installer that ships the helper with the correct ownership and mode. The Linux `.deb` and ZIP outputs under `apps/desktop/out/make/` are the supported way to run the desktop companion in a normal user environment without touching `sudo` or the sandbox flag.
 
 ## Clearing local history
 
