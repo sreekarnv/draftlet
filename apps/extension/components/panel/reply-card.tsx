@@ -148,7 +148,7 @@ function feedbackMessageFor(result: InsertionResult, previousTargetStatus: Inser
       || result.targetStatus === 'needs_focus'
       || previousTargetStatus === 'needs_focus'
     ) {
-      return 'Focus a compose field and retry recapture. Copied instead.';
+      return 'Could not insert here, so it was copied instead.';
     }
 
     return 'Could not insert here, so it was copied instead.';
@@ -159,11 +159,11 @@ function feedbackMessageFor(result: InsertionResult, previousTargetStatus: Inser
   }
 
   if (result.targetStatus === 'tab_disambiguation_required' || previousTargetStatus === 'tab_disambiguation_required') {
-    return 'Choose the matching tab, recapture, then try inserting again.';
+    return 'Could not find the compose field on the original page. Use Copy instead.';
   }
 
   if (result.targetStatus === 'needs_focus' || previousTargetStatus === 'needs_focus') {
-    return 'Focus a compose field and retry recapture before inserting.';
+    return 'Could not insert here. Use Copy instead.';
   }
 
   return 'Could not insert or copy this reply.';

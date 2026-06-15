@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { WorkspaceSession } from '../../../core/messages';
 import {
+  ARMED_RECAPTURE_TIMEOUT_MS,
+  handleActivateInsertionTab,
   handleActivateRecaptureTab,
   handleGetInsertionTargetStatus,
   handleInsertReply,
@@ -96,7 +98,11 @@ function tab(id: number, url: string, options: { active?: boolean; currentWindow
 const browserStub = vi.hoisted(() => ({
   runtime: { sendMessage: vi.fn(async () => undefined) },
   tabs: { sendMessage: vi.fn(), get: vi.fn(), update: vi.fn(), query: vi.fn().mockResolvedValue([]) },
-  windows: { update: vi.fn(async () => undefined), getCurrent: vi.fn(async () => ({ id: 1 })) },
+  windows: {
+    update: vi.fn(async () => undefined),
+    getCurrent: vi.fn(async () => ({ id: 1 })),
+    get: vi.fn(async (id: number) => ({ id, focused: true })),
+  },
   sidePanel: { open: vi.fn() },
 }));
 
@@ -127,6 +133,10 @@ beforeEach(() => {
   browserStub.tabs.query.mockResolvedValue([]);
   browserStub.runtime.sendMessage.mockReset();
   browserStub.runtime.sendMessage.mockResolvedValue(undefined);
+  browserStub.windows.update.mockReset();
+  browserStub.windows.update.mockResolvedValue(undefined);
+  browserStub.windows.get.mockReset();
+  browserStub.windows.get.mockImplementation(async (id: number) => ({ id, focused: true }));
 
   recaptureDiagnostics.clear();
 });
@@ -136,13 +146,11 @@ afterEach(() => {
 });
 
 describe('handleInsertReply', () => {
-  it('inserts into a live target through the content script and returns the content-script result', async () => {
+  it('forwards to the content script and returns the content-script insertion result', async () => {
     const session = seedSession({ sessionId: 'session-live-insert', tabId: 30, insertionTargetStatus: 'live' });
 
-    browserStub.tabs.get.mockResolvedValueOnce(tab(30, 'https://mail.example.com/thread/1'));
-    browserStub.tabs.sendMessage
-      .mockResolvedValueOnce({ status: 'live', message: 'Target available.' })
-      .mockResolvedValueOnce({ result: { status: 'inserted', message: 'Inserted.', targetStatus: 'live' } });
+    browserStub.tabs.get.mockResolvedValueOnce({ ...tab(30, 'https://mail.example.com/thread/1'), active: true, windowId: 1 });
+    browserStub.tabs.sendMessage.mockResolvedValueOnce({ result: { status: 'inserted', message: 'Inserted.', targetStatus: 'live' } });
 
     const result = await handleInsertReply('Hello there', session.sessionId);
 
@@ -153,26 +161,38 @@ describe('handleInsertReply', () => {
         type: 'draftlet:insert-reply',
         sessionId: session.sessionId,
         replyText: 'Hello there',
+        target: expect.objectContaining({ kind: 'textarea' }),
       }),
     );
   });
 
-  it('returns a target_stale failure when the revalidation reports stale', async () => {
+  it('forwards insert even when the session insertion target status is stale, since the content script owns the live snapshot', async () => {
     const session = seedSession({ sessionId: 'session-stale-insert', tabId: 31, insertionTargetStatus: 'stale' });
 
     browserStub.tabs.query.mockResolvedValueOnce([
-      tab(31, 'https://mail.example.com/thread/1'),
+      tab(31, 'https://mail.example.com/thread/1', { active: true, windowId: 1 }),
     ]);
-    browserStub.tabs.sendMessage.mockResolvedValueOnce({
-      status: 'stale',
-      message: 'Target stale.',
-    });
+    browserStub.tabs.sendMessage.mockResolvedValueOnce({ result: { status: 'inserted', message: 'Inserted.', targetStatus: 'live' } });
+
+    const result = await handleInsertReply('Hello', session.sessionId);
+
+    expect(result.result.status).toBe('inserted');
+    expect(browserStub.tabs.sendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('propagates a content-script reported unavailable target as a structured failure', async () => {
+    const session = seedSession({ sessionId: 'session-stale-cs-unavailable', tabId: 32, insertionTargetStatus: 'stale' });
+
+    browserStub.tabs.query.mockResolvedValueOnce([
+      tab(32, 'https://mail.example.com/thread/1', { active: true, windowId: 1 }),
+    ]);
+    browserStub.tabs.sendMessage.mockResolvedValueOnce({ result: { status: 'failed', message: 'Target missing.', targetStatus: 'unavailable', errorCode: 'target_missing' } });
 
     const result = await handleInsertReply('Hello', session.sessionId);
 
     expect(result.result.status).toBe('failed');
-    expect(result.result.targetStatus).toBe('stale');
-    expect(result.result.errorCode).toBe('target_stale');
+    expect(result.result.targetStatus).toBe('unavailable');
+    expect(result.result.errorCode).toBe('target_missing');
   });
 
   it('returns a session_not_found failure when no session is active', async () => {
@@ -181,6 +201,47 @@ describe('handleInsertReply', () => {
     expect(result.result.status).toBe('failed');
     expect(result.result.targetStatus).toBe('unavailable');
     expect(result.result.errorCode).toBe('session_not_found');
+    expect(browserStub.tabs.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('activates a non-active tab and focuses its window before sending the insert', async () => {
+    const session = seedSession({ sessionId: 'session-insert-activate', tabId: 33, insertionTargetStatus: 'live' });
+
+    browserStub.tabs.get.mockResolvedValueOnce({ ...tab(33, 'https://mail.example.com/thread/1'), active: false, windowId: 4 });
+    browserStub.windows.get.mockResolvedValueOnce({ id: 4, focused: false });
+    browserStub.tabs.update.mockResolvedValueOnce({ ...tab(33, 'https://mail.example.com/thread/1'), active: true, windowId: 4 });
+    browserStub.tabs.sendMessage.mockResolvedValueOnce({ result: { status: 'inserted', message: 'Inserted.', targetStatus: 'live' } });
+
+    await handleInsertReply('Hello there', session.sessionId);
+
+    expect(browserStub.windows.update).toHaveBeenCalledWith(4, { focused: true });
+    expect(browserStub.tabs.update).toHaveBeenCalledWith(33, { active: true });
+    expect(browserStub.tabs.sendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not change focus when the target tab and window are already active', async () => {
+    const session = seedSession({ sessionId: 'session-insert-noop-activate', tabId: 34, insertionTargetStatus: 'live' });
+
+    browserStub.tabs.get.mockResolvedValueOnce({ ...tab(34, 'https://mail.example.com/thread/1'), active: true, windowId: 1 });
+    browserStub.windows.get.mockResolvedValueOnce({ id: 1, focused: true });
+    browserStub.tabs.sendMessage.mockResolvedValueOnce({ result: { status: 'inserted', message: 'Inserted.', targetStatus: 'live' } });
+
+    await handleInsertReply('Hello there', session.sessionId);
+
+    expect(browserStub.windows.update).not.toHaveBeenCalled();
+    expect(browserStub.tabs.update).not.toHaveBeenCalled();
+  });
+
+  it('returns a target_unavailable failure when no plausible tab is open for the session', async () => {
+    const session = seedSession({ sessionId: 'session-insert-missing-tab', tabId: 35, insertionTargetStatus: 'stale' });
+
+    browserStub.tabs.query.mockResolvedValueOnce([]);
+
+    const result = await handleInsertReply('Hello', session.sessionId);
+
+    expect(result.result.status).toBe('failed');
+    expect(result.result.targetStatus).toBe('unavailable');
+    expect(result.result.errorCode).toBe('target_unavailable');
     expect(browserStub.tabs.sendMessage).not.toHaveBeenCalled();
   });
 });
@@ -408,6 +469,110 @@ describe('handleActivateRecaptureTab', () => {
     expect(result.activated).toBe(true);
     expect(result.tab?.tabId).toBe(70);
     expect(browserStub.tabs.update).toHaveBeenCalledWith(70, { active: true });
+  });
+});
+
+describe('handleRecaptureInsertionTarget armed recapture', () => {
+  it('exports a 5000ms armed recapture timeout constant', () => {
+    expect(ARMED_RECAPTURE_TIMEOUT_MS).toBe(5000);
+  });
+
+  it('returns a recapture_succeeded result when the content script reports a successful armed capture', async () => {
+    const session = seedSession({ sessionId: 'session-armed-success', tabId: 50, insertionTargetStatus: 'needs_recapture' });
+
+    const updatedTarget = {
+      targetId: 'compose-armed',
+      kind: 'textarea' as const,
+      pageUrl: 'https://mail.example.com/thread/1',
+      origin: 'https://mail.example.com',
+      fingerprint: 'textarea|armed',
+      lastSeenAt: '2026-01-01T00:01:00.000Z',
+    };
+
+    browserStub.tabs.query.mockResolvedValueOnce([tab(50, 'https://mail.example.com/thread/1')]);
+    browserStub.tabs.sendMessage.mockResolvedValueOnce({
+      recaptured: true,
+      status: 'live',
+      outcome: 'recapture_succeeded',
+      target: updatedTarget,
+      message: 'Recaptured.',
+    });
+
+    const result = await handleRecaptureInsertionTarget(session.sessionId);
+
+    expect(result.recaptured).toBe(true);
+    expect(result.status).toBe('live');
+    expect(result.outcome).toBe('recapture_succeeded');
+    expect(result.target).toEqual(updatedTarget);
+
+    const events = recaptureDiagnostics.list({ sessionId: session.sessionId }).map((entry) => entry.event);
+    expect(events).toContain('content_recapture_completed');
+    expect(events).not.toContain('recapture_failed');
+  });
+
+  it('returns recapture_failed with armed_capture_timeout reason when the content script times out', async () => {
+    const session = seedSession({ sessionId: 'session-armed-timeout', tabId: 51, insertionTargetStatus: 'needs_recapture' });
+
+    browserStub.tabs.query.mockResolvedValueOnce([tab(51, 'https://mail.example.com/thread/1')]);
+    browserStub.tabs.sendMessage.mockResolvedValueOnce({
+      recaptured: false,
+      status: 'unavailable',
+      outcome: 'recapture_failed',
+      reason: 'armed_capture_timeout',
+      message: 'Timed out.',
+    });
+
+    const result = await handleRecaptureInsertionTarget(session.sessionId);
+
+    expect(result.recaptured).toBe(false);
+    expect(result.reason).toBe('armed_capture_timeout');
+
+    const lastDiagnostic = recaptureDiagnostics.list({ sessionId: session.sessionId }).at(-1);
+    expect(lastDiagnostic).toMatchObject({
+      event: 'content_recapture_completed',
+      reason: 'armed_capture_timeout',
+    });
+  });
+});
+
+describe('handleActivateInsertionTab', () => {
+  it('returns void when no session is found', async () => {
+    await expect(handleActivateInsertionTab('session-missing')).resolves.toBeUndefined();
+    expect(browserStub.windows.update).not.toHaveBeenCalled();
+    expect(browserStub.tabs.update).not.toHaveBeenCalled();
+  });
+
+  it('activates the original session tab when it is not focused', async () => {
+    const session = seedSession({ sessionId: 'session-activate-insertion', tabId: 60 });
+
+    browserStub.tabs.get.mockResolvedValueOnce({ ...tab(60, 'https://mail.example.com/thread/1'), active: false, windowId: 7 });
+    browserStub.windows.get.mockResolvedValueOnce({ id: 7, focused: false });
+    browserStub.tabs.update.mockResolvedValueOnce({ ...tab(60, 'https://mail.example.com/thread/1'), active: true, windowId: 7 });
+
+    await handleActivateInsertionTab(session.sessionId);
+
+    expect(browserStub.windows.update).toHaveBeenCalledWith(7, { focused: true });
+    expect(browserStub.tabs.update).toHaveBeenCalledWith(60, { active: true });
+  });
+
+  it('does not change focus when the original tab and window are already active', async () => {
+    const session = seedSession({ sessionId: 'session-activate-noop', tabId: 61 });
+
+    browserStub.tabs.get.mockResolvedValueOnce({ ...tab(61, 'https://mail.example.com/thread/1'), active: true, windowId: 1 });
+    browserStub.windows.get.mockResolvedValueOnce({ id: 1, focused: true });
+
+    await handleActivateInsertionTab(session.sessionId);
+
+    expect(browserStub.windows.update).not.toHaveBeenCalled();
+    expect(browserStub.tabs.update).not.toHaveBeenCalled();
+  });
+
+  it('swallows errors when the tab cannot be resolved', async () => {
+    const session = seedSession({ sessionId: 'session-activate-error', tabId: 62 });
+
+    browserStub.tabs.get.mockRejectedValueOnce(new Error('no tab'));
+
+    await expect(handleActivateInsertionTab(session.sessionId)).resolves.toBeUndefined();
   });
 });
 

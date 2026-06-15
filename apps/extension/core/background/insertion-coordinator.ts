@@ -1,9 +1,10 @@
-import { INSERT_REPLY, RECAPTURE_INSERTION_TARGET, REVALIDATE_INSERTION_TARGET, type DraftletMessage, type InsertReplyResult, type InsertionTargetStatusResult, type RecaptureInsertionTargetResult, type WorkspaceSession } from '../messages';
+import { ACTIVATE_INSERTION_TAB, INSERT_REPLY, INSERTION_IN_PROGRESS, RECAPTURE_INSERTION_TARGET, REVALIDATE_INSERTION_TARGET, type DraftletMessage, type InsertReplyResult, type InsertionTargetStatusResult, type RecaptureInsertionTargetResult, type WorkspaceSession } from '../messages';
 import type { PlausibleTabCandidate } from '../tab-disambiguation';
 import { findPlausibleTabCandidates, isPlausibleSessionTab } from '../tab-disambiguation';
 import { sessions, type InsertionTabResolution } from './state';
 import {
   createDraftletError,
+  emitDraftletMessage,
   emitWorkspaceSessionUpdated,
 } from './shared-helpers';
 import {
@@ -15,6 +16,8 @@ import {
 } from './diagnostics-coordinator';
 import { resolveInsertionSession } from './runtime-run-state';
 
+export const ARMED_RECAPTURE_TIMEOUT_MS = 5000;
+
 export async function handleInsertReply(replyText: string, sessionId?: string): Promise<InsertReplyResult> {
   const session = await resolveInsertionSession(sessionId);
 
@@ -22,24 +25,47 @@ export async function handleInsertReply(replyText: string, sessionId?: string): 
     return { result: { status: 'failed', message: 'No active Draftlet tab.', targetStatus: 'unavailable', errorCode: 'session_not_found' } };
   }
 
-  const targetStatus = await revalidateInsertionTarget(session);
+  const tabResolution = await resolveInsertionTab(session);
 
-  if (targetStatus.status !== 'live') {
+  if (tabResolution.status === 'missing') {
+    recordRecaptureDiagnostic({
+      event: 'tab_resolution_missing',
+      level: 'warning',
+      sessionId: session.sessionId,
+      status: 'unavailable',
+      reason: 'tab_unavailable',
+      message: 'Original page is not open for insertion.',
+    });
+
     return {
       result: {
         status: 'failed',
-        message: targetStatus.message ?? 'Insertion target is not available.',
-        targetStatus: targetStatus.status,
-        errorCode: `target_${targetStatus.status}`,
+        message: 'Original page is not open.',
+        targetStatus: 'unavailable',
+        errorCode: 'target_unavailable',
       },
     };
   }
+
+  if (tabResolution.status === 'ambiguous') {
+    return {
+      result: {
+        status: 'failed',
+        message: 'Choose the tab with the compose field before inserting.',
+        targetStatus: 'tab_disambiguation_required',
+        errorCode: 'tab_disambiguation_required',
+      },
+    };
+  }
+
+  await ensureInsertionTabActive(tabResolution.tab);
+  bindSessionToTab(session, tabResolution.tab);
 
   return browser.tabs.sendMessage(session.tabId, {
     type: INSERT_REPLY,
     sessionId: session.sessionId,
     replyText,
-    target: targetStatus.target,
+    target: session.insertionTarget ?? session.latestContext.composeTarget,
   } satisfies DraftletMessage) as Promise<InsertReplyResult>;
 }
 
@@ -133,7 +159,7 @@ export async function handleRecaptureInsertionTarget(sessionId: string, tabId?: 
       reason: 'tab_unavailable',
       message: tabId
         ? 'That tab is no longer available. Choose another tab or use Copy.'
-        : 'Open the page with the compose field, focus it, and try again.',
+        : 'Could not find a compose field. Use Copy instead.',
     };
   }
 
@@ -512,4 +538,46 @@ function bindSessionToTab(session: WorkspaceSession, tab: Browser.tabs.Tab): Bro
   });
   void emitWorkspaceSessionUpdated(updated);
   return tab;
+}
+
+async function ensureInsertionTabActive(tab: Browser.tabs.Tab): Promise<void> {
+  if (typeof tab.windowId === 'number') {
+    try {
+      const window = await browser.windows.get(tab.windowId).catch(() => null);
+      if (window && !window.focused) {
+        await browser.windows.update(tab.windowId, { focused: true }).catch(() => undefined);
+      }
+    } catch {
+      // Ignore — tab/window activation is best-effort.
+    }
+  }
+
+  if (typeof tab.id === 'number' && !tab.active) {
+    await browser.tabs.update(tab.id, { active: true }).catch(() => undefined);
+  }
+}
+
+export async function handleActivateInsertionTab(sessionId: string): Promise<void> {
+  const session = sessions.getBySessionId(sessionId);
+  if (!session || typeof session.tabId !== 'number') {
+    return;
+  }
+
+  const tab = await browser.tabs.get(session.tabId).catch(() => null);
+  if (!tab?.id || !isPlausibleSessionTab(tab, session)) {
+    return;
+  }
+
+  await ensureInsertionTabActive(tab);
+}
+
+export async function handleInsertionInProgress(sessionId: string, message: string): Promise<void> {
+  // Fire-and-forget broadcast to the side panel so it can flip the
+  // "Click the compose field to insert." pending UI while the content
+  // script's INSERT_REPLY handler is still awaiting the arm resolution.
+  await emitDraftletMessage({
+    type: INSERTION_IN_PROGRESS,
+    sessionId,
+    message,
+  } satisfies DraftletMessage).catch(() => undefined);
 }

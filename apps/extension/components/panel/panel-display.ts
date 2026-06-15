@@ -41,7 +41,7 @@ export function stateToneClass(state: PanelState) {
 
 export function targetStatusLabel(target: InsertionTargetViewState) {
   if (target.status === 'live') {
-    return 'Target available';
+    return 'Ready to insert';
   }
 
   if (target.status === 'stale') {
@@ -53,14 +53,14 @@ export function targetStatusLabel(target: InsertionTargetViewState) {
   }
 
   if (target.status === 'needs_focus') {
-    return 'Focus compose field';
+    return 'Click the compose field';
   }
 
   if (target.status === 'tab_disambiguation_required') {
-    return 'Choose tab';
+    return 'Original page not found';
   }
 
-  return 'Needs recapture';
+  return 'Needs a compose field';
 }
 
 export function targetToneClass(status: InsertionTargetViewState['status']) {

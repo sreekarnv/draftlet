@@ -1,6 +1,5 @@
 import {
   ACCEPT_DRAFT_VARIANT,
-  ACTIVATE_RECAPTURE_TAB,
   CANCEL_DRAFT_GENERATION,
   CONVERSATION_THREAD_UPDATED,
   GET_CURRENT_WORKSPACE_SESSION,
@@ -8,13 +7,12 @@ import {
   GET_INSERTION_TARGET_STATUS,
   GET_RUNTIME_STATUS,
   INSERT_REPLY,
-  RECAPTURE_INSERTION_TARGET,
+  INSERTION_IN_PROGRESS,
   RESTORE_DOMAIN_THREAD,
   SET_CURRENT_DRAFT_VARIANT,
   START_DRAFT_GENERATION,
   START_DRAFT_REFINEMENT,
   WORKSPACE_SESSION_UPDATED,
-  type ActivateRecaptureTabResult,
   type ConversationThreadSnapshot,
   type DomainHistoryItem,
   type DomainHistoryResult,
@@ -22,7 +20,6 @@ import {
   type DraftVariantStateResult,
   type InsertReplyResult,
   type InsertionTargetStatusResult,
-  type RecaptureInsertionTargetResult,
   type RestoreDomainThreadResult,
   type RuntimeStatusResult,
   type StartDraftGenerationResult,
@@ -41,8 +38,6 @@ import type { SendMessage } from './runtime-message-bus';
 import {
   appendTrail,
   insertionTargetMessage,
-  trailEventForRecapture,
-  trailLevelForRecapture,
 } from '../../components/panel/recapture-status-trail';
 
 export interface SidePanelStorage {
@@ -467,11 +462,11 @@ async function updateVariantState(
 export async function insertIntoActivePage(
   state: SidePanelState,
   panel: PanelController,
-  send: SendMessage,
   replyText: string,
   variantId?: string,
 ): Promise<InsertionResult> {
-  await refreshInsertionTargetStatus(state, panel, send);
+  state.isInsertInProgress = true;
+  state.insertInProgressMessage = 'Click the compose field to insert.';
 
   try {
     const response = await sendMessage<InsertReplyResult>({
@@ -481,210 +476,151 @@ export async function insertIntoActivePage(
       variantId,
     } satisfies DraftletMessage);
 
-    if (response.result.targetStatus) {
-      panel.setInsertionTargetStatus({
-        status: response.result.targetStatus,
-        message: response.result.message,
-        trail: state.recaptureTrail,
-      });
-      if (state.currentSession) {
-        state.currentSession = {
-          ...state.currentSession,
-          insertionTargetStatus: response.result.targetStatus,
-          plausibleTabs: undefined,
-        };
-      }
-      panel.setRestoreState(buildCurrentRestoreState(state));
-    }
-
-    if (response.result.status !== 'failed') {
-      return response.result;
-    }
+    return applyInsertionResult(state, panel, response.result, replyText);
   } catch {
-    // Fall through to clipboard fallback below.
+    // The background failed to route the request. Fall back to a
+    // one-shot clipboard copy; show the corresponding message.
+    return fallbackCopy(state, panel, replyText);
+  } finally {
+    state.isInsertInProgress = false;
+    state.insertInProgressMessage = '';
+  }
+}
+
+function applyInsertionResult(
+  state: SidePanelState,
+  panel: PanelController,
+  result: InsertionResult,
+  replyText: string,
+): Promise<InsertionResult> | InsertionResult {
+  if (result.status === 'inserted') {
+    panel.setInsertionTargetStatus({
+      status: 'live',
+      message: 'Inserted into the focused field.',
+      trail: state.recaptureTrail,
+    });
+    if (state.currentSession) {
+      state.currentSession = {
+        ...state.currentSession,
+        insertionTargetStatus: 'live',
+        plausibleTabs: undefined,
+      };
+    }
+    panel.setRestoreState(buildCurrentRestoreState(state));
+    return result;
   }
 
+  if (result.status === 'copied') {
+    panel.setInsertionTargetStatus({
+      status: result.targetStatus ?? 'unavailable',
+      message: result.message,
+      trail: state.recaptureTrail,
+    });
+    if (state.currentSession) {
+      state.currentSession = {
+        ...state.currentSession,
+        insertionTargetStatus: result.targetStatus ?? 'unavailable',
+        plausibleTabs: undefined,
+      };
+    }
+    panel.setRestoreState(buildCurrentRestoreState(state));
+    return result;
+  }
+
+  // status === 'failed'
+  if (result.errorCode === 'armed_capture_timeout') {
+    return fallbackCopy(state, panel, replyText);
+  }
+
+  if (result.targetStatus) {
+    panel.setInsertionTargetStatus({
+      status: result.targetStatus,
+      message: result.message,
+      trail: state.recaptureTrail,
+    });
+    if (state.currentSession) {
+      state.currentSession = {
+        ...state.currentSession,
+        insertionTargetStatus: result.targetStatus,
+        plausibleTabs: undefined,
+      };
+    }
+    panel.setRestoreState(buildCurrentRestoreState(state));
+  }
+
+  return result;
+}
+
+async function fallbackCopy(
+  state: SidePanelState,
+  panel: PanelController,
+  replyText: string,
+): Promise<InsertionResult> {
   try {
     await navigator.clipboard.writeText(replyText);
-    return { status: 'copied', message: 'Insertion target unavailable; copied instead.', targetStatus: 'needs_recapture' };
-  } catch {
-    return { status: 'failed', message: 'Insert failed', targetStatus: 'unavailable' };
-  }
-}
-
-export async function recaptureInsertionTarget(state: SidePanelState, panel: PanelController, tabId?: number): Promise<VariantActionResult> {
-  if (!state.currentSession) {
-    state.recaptureTrail = appendTrail(state.recaptureTrail, 'recapture_failed', 'failed', 'Recapture failed: no active session.');
-    panel.setInsertionTargetStatus({
-      status: 'unavailable',
-      message: 'No active Draftlet session.',
-      trail: state.recaptureTrail,
-    });
-    return { ok: false, message: 'No active Draftlet session.' };
-  }
-
-  state.recaptureTrail = appendTrail(
-    state.recaptureTrail,
-    'recapture_requested',
-    'pending',
-    tabId ? 'Retrying recapture in the selected tab.' : 'Recapture requested.',
-    tabId,
-  );
-  panel.setInsertionTargetStatus({
-    status: tabId ? 'needs_focus' : 'needs_recapture',
-    message: tabId
-      ? 'Checking the selected tab for a compose field...'
-      : 'Focus a compose field on the page, then recapture.',
-    trail: state.recaptureTrail,
-  });
-  state.currentSession = {
-    ...state.currentSession,
-    insertionTargetStatus: tabId ? 'needs_focus' : 'needs_recapture',
-  };
-  panel.setRestoreState(buildCurrentRestoreState(state));
-
-  try {
-    const response = await sendMessage<RecaptureInsertionTargetResult>({
-      type: RECAPTURE_INSERTION_TARGET,
-      sessionId: state.currentSession.sessionId,
-      tabId,
-    } satisfies DraftletMessage);
-
+    const message = "Couldn't find a compose field, so the draft was copied.";
     state.recaptureTrail = appendTrail(
       state.recaptureTrail,
-      trailEventForRecapture(response),
-      trailLevelForRecapture(response),
-      response.message,
-      response.selectedTab?.tabId ?? tabId,
+      'recapture_failed',
+      'failed',
+      message,
     );
-    panel.setInsertionTargetStatus({
-      status: response.status,
-      message: response.message,
-      outcome: response.outcome,
-      selectedTab: response.selectedTab,
-      candidates: response.candidates,
-      trail: state.recaptureTrail,
-    });
-
-    if (response.recaptured && response.target) {
-      state.currentSession = {
-        ...state.currentSession,
-        insertionTarget: response.target,
-        insertionTargetStatus: response.status,
-        plausibleTabs: undefined,
-        latestContext: {
-          ...state.currentSession.latestContext,
-          tabId: tabId ?? state.currentSession.latestContext.tabId,
-          composeTarget: response.target,
-        },
-      };
-    } else if (response.candidates) {
-      state.currentSession = {
-        ...state.currentSession,
-        insertionTargetStatus: response.status,
-        plausibleTabs: response.candidates,
-      };
-    } else {
-      state.currentSession = {
-        ...state.currentSession,
-        insertionTargetStatus: response.status,
-        plausibleTabs: undefined,
-      };
-    }
-    panel.setRestoreState(buildCurrentRestoreState(state));
-
-    return {
-      ok: response.recaptured,
-      message: response.message,
-    };
-  } catch {
-    const message = 'Draftlet could not recapture the target. Copy still works.';
-    state.recaptureTrail = appendTrail(state.recaptureTrail, 'recapture_failed', 'failed', message, tabId);
     panel.setInsertionTargetStatus({
       status: 'unavailable',
       message,
       trail: state.recaptureTrail,
     });
-    state.currentSession = {
-      ...state.currentSession,
-      insertionTargetStatus: 'unavailable',
-      plausibleTabs: undefined,
-    };
+    if (state.currentSession) {
+      state.currentSession = {
+        ...state.currentSession,
+        insertionTargetStatus: 'unavailable',
+        plausibleTabs: undefined,
+      };
+    }
     panel.setRestoreState(buildCurrentRestoreState(state));
-    return { ok: false, message };
+    return { status: 'copied', message, targetStatus: 'unavailable' };
+  } catch {
+    const message = "Couldn't find a compose field. Use Copy instead.";
+    state.recaptureTrail = appendTrail(
+      state.recaptureTrail,
+      'recapture_failed',
+      'failed',
+      message,
+    );
+    panel.setInsertionTargetStatus({
+      status: 'unavailable',
+      message,
+      trail: state.recaptureTrail,
+    });
+    if (state.currentSession) {
+      state.currentSession = {
+        ...state.currentSession,
+        insertionTargetStatus: 'unavailable',
+        plausibleTabs: undefined,
+      };
+    }
+    panel.setRestoreState(buildCurrentRestoreState(state));
+    return { status: 'failed', message, targetStatus: 'unavailable' };
   }
 }
 
-export async function activateRecaptureTab(state: SidePanelState, panel: PanelController, tabId: number): Promise<VariantActionResult> {
-  if (!state.currentSession) {
-    state.recaptureTrail = appendTrail(state.recaptureTrail, 'tab_activation_failed', 'failed', 'Could not open tab: no active session.', tabId);
-    return { ok: false, message: 'No active Draftlet session.' };
-  }
+export function onInsertionInProgress(state: SidePanelState, panel: PanelController, message: string): void {
+  state.isInsertInProgress = true;
+  state.insertInProgressMessage = message;
 
-  state.recaptureTrail = appendTrail(state.recaptureTrail, 'tab_activation_requested', 'pending', 'Opening selected tab for recapture.', tabId);
-
-  try {
-    const response = await sendMessage<ActivateRecaptureTabResult>({
-      type: ACTIVATE_RECAPTURE_TAB,
-      sessionId: state.currentSession.sessionId,
-      tabId,
-    } satisfies DraftletMessage);
-
-    if (response.activated) {
-      const trail = appendTrail(state.recaptureTrail, 'tab_activated', 'success', response.message, response.tab?.tabId ?? tabId);
-      state.recaptureTrail = trail;
-      panel.setInsertionTargetStatus({
-        status: 'needs_focus',
-        outcome: 'needs_focused_compose_target',
-        selectedTab: response.tab,
-        message: response.message,
-        trail,
-      });
-      state.currentSession = {
-        ...state.currentSession,
-        tabId,
-        latestContext: {
-          ...state.currentSession.latestContext,
-          tabId,
-        },
-        insertionTargetStatus: 'needs_focus',
-        plausibleTabs: undefined,
-      };
-      panel.setRestoreState(buildCurrentRestoreState(state));
-      return { ok: true, message: response.message };
-    }
-
-    const trail = appendTrail(state.recaptureTrail, 'tab_activation_failed', 'failed', response.message, tabId);
-    state.recaptureTrail = trail;
-    panel.setInsertionTargetStatus({
-      status: 'unavailable',
-      message: response.message,
-      trail,
-    });
+  panel.setInsertionTargetStatus({
+    status: 'needs_focus',
+    message,
+    outcome: 'needs_focused_compose_target',
+    trail: state.recaptureTrail,
+  });
+  if (state.currentSession) {
     state.currentSession = {
       ...state.currentSession,
-      insertionTargetStatus: 'unavailable',
-      plausibleTabs: undefined,
+      insertionTargetStatus: 'needs_focus',
     };
-    panel.setRestoreState(buildCurrentRestoreState(state));
-    return { ok: false, message: response.message };
-  } catch {
-    const message = 'Draftlet could not open the selected tab. Switch to it manually, focus the compose field, then retry.';
-    const trail = appendTrail(state.recaptureTrail, 'tab_activation_failed', 'failed', message, tabId);
-    state.recaptureTrail = trail;
-    panel.setInsertionTargetStatus({
-      status: 'unavailable',
-      message,
-      trail,
-    });
-    state.currentSession = {
-      ...state.currentSession,
-      insertionTargetStatus: 'unavailable',
-      plausibleTabs: undefined,
-    };
-    panel.setRestoreState(buildCurrentRestoreState(state));
-    return { ok: false, message };
   }
+  panel.setRestoreState(buildCurrentRestoreState(state));
 }
 
 export async function cancelActiveGeneration(state: SidePanelState): Promise<void> {
@@ -775,6 +711,13 @@ export function onDraftletMessage(state: SidePanelState, panel: PanelController,
   if (message.type === CONVERSATION_THREAD_UPDATED) {
     if (state.currentSession?.sessionId === message.sessionId) {
       applyThreadSnapshot(state, panel, message.snapshot);
+    }
+    return;
+  }
+
+  if (message.type === INSERTION_IN_PROGRESS) {
+    if (state.currentSession?.sessionId === message.sessionId) {
+      onInsertionInProgress(state, panel, message.message);
     }
     return;
   }

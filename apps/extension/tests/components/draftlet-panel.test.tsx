@@ -5,7 +5,7 @@ import { mountDraftletPanel } from '../../ui/mount-panel';
 import type { ConversationThreadSnapshot, Turn, WorkspaceRestoreState } from '../../core/messages';
 import type { InsertionResult } from '../../core/types';
 
-describe('DraftletPanel recapture guidance', () => {
+describe('DraftletPanel insertion target recovery', () => {
   let mounted: ReturnType<typeof mountDraftletPanel> | null = null;
 
   afterEach(() => {
@@ -14,19 +14,14 @@ describe('DraftletPanel recapture guidance', () => {
     document.body.innerHTML = '';
   });
 
-  it('guides the user to focus the selected tab compose field and retry recapture', async () => {
+  it('renders a status pill only (no Recapture button) when the target needs focus', async () => {
     const container = document.createElement('div');
-    let activatedTabId: number | null = null;
     document.body.append(container);
 
     await act(async () => {
       mounted = mountDraftletPanel(container, {
         onGenerate() {},
-        onInsert: async (): Promise<InsertionResult> => ({ status: 'copied', message: 'Copied' }),
-        onActivateRecaptureTab: async (tabId) => {
-          activatedTabId = tabId;
-          return { ok: true, message: 'Selected tab opened. Focus the compose field there, then retry recapture.' };
-        },
+        onInsert: async (): Promise<InsertionResult> => ({ status: 'inserted', message: 'Inserted.' }),
         onCloseRequest() {},
         onAfterRender() {},
       });
@@ -39,67 +34,27 @@ describe('DraftletPanel recapture guidance', () => {
       mounted!.controller.setInsertionTargetStatus({
         status: 'needs_focus',
         outcome: 'needs_focused_compose_target',
-        message: 'Tab selected. Focus the compose field in that tab, then retry recapture.',
-        trail: [
-          {
-            event: 'recapture_requested',
-            level: 'pending',
-            message: 'Retrying recapture in the selected tab.',
-            tabId: 42,
-            at: '2026-01-01T00:00:00.000Z',
-          },
-          {
-            event: 'focus_required',
-            level: 'warning',
-            message: 'Tab selected. Focus the compose field in that tab, then retry recapture.',
-            tabId: 42,
-            at: '2026-01-01T00:00:01.000Z',
-          },
-        ],
-        selectedTab: {
-          tabId: 42,
-          windowId: 1,
-          title: 'Thread',
-          url: 'https://example.com/thread',
-          origin: 'https://example.com',
-          active: false,
-          currentWindow: true,
-          matchReason: 'target_url',
-        },
+        message: 'Click the compose field to insert.',
+        trail: [],
       });
     });
 
-    expect(container.textContent).toContain('Focus compose field');
-    expect(container.textContent).toContain('Selected: Thread');
-    expect(container.textContent).toContain('Tab selected. Focus the compose field in that tab, then retry recapture.');
-    expect(container.textContent).toContain('Retrying recapture in the selected tab.');
-    expect(container.textContent).toContain('Open tab');
-    expect(container.textContent).toContain('Retry recapture');
+    expect(container.textContent).toContain('Click the compose field to insert.');
 
-    const openTabButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Open tab'));
-
-    await act(async () => {
-      openTabButton?.click();
-    });
-
-    expect(activatedTabId).toBe(42);
-    expect(container.textContent).toContain('Selected tab opened. Focus the compose field there, then retry recapture.');
+    // The visible Recapture button must be gone.
+    const recaptureButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Recapture'));
+    expect(recaptureButton).toBeUndefined();
   });
 
-  it('shows interrupted generation recovery and retries from the existing thread', async () => {
+  it('shows the in-progress "Click the compose field to insert." copy and no Recapture button', async () => {
     const container = document.createElement('div');
-    let retriedTurnId: string | null = null;
     document.body.append(container);
 
     await act(async () => {
       mounted = mountDraftletPanel(container, {
         onGenerate() {},
-        onRetryInterruptedTurn: async (turnId) => {
-          retriedTurnId = turnId;
-          return { ok: true, message: 'Started a new run from this thread.' };
-        },
-        onInsert: async (): Promise<InsertionResult> => ({ status: 'copied', message: 'Copied' }),
+        onInsert: async (): Promise<InsertionResult> => ({ status: 'inserted', message: 'Inserted.' }),
         onCloseRequest() {},
         onAfterRender() {},
       });
@@ -109,40 +64,61 @@ describe('DraftletPanel recapture guidance', () => {
       mounted!.controller.open({
         selectedText: 'Can you reply to this thread?',
       });
-      mounted!.controller.setThreadSnapshot(interruptedThreadSnapshot());
-      mounted!.controller.setState('error', 'Draft generation was interrupted before completion.');
+      mounted!.controller.setInsertionTargetStatus({
+        status: 'needs_focus',
+        outcome: 'needs_focused_compose_target',
+        message: 'Click the compose field to insert.',
+        trail: [],
+      });
     });
 
-    expect(container.textContent).toContain('Interrupted runtime run');
-    expect(container.textContent).toContain('Run generation-2');
-    expect(container.textContent).toContain('Retry starts a new run from this thread');
-    expect(container.textContent).toContain('will not resume the old stream');
-    expect(container.textContent).toContain('Retry from thread');
-
-    const retryButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Retry from thread'));
-
-    await act(async () => {
-      retryButton?.click();
-    });
-
-    expect(retriedTurnId).toBe('turn-2');
-    expect(container.textContent).toContain('Started a new run from this thread.');
+    expect(container.textContent).not.toContain('Open the page with the compose field, focus it, and try again.');
+    expect(container.textContent).not.toContain('Recapture');
   });
 
-  it('shows restore conflict guidance and uses the projected primary recapture action', async () => {
+  it('shows the copied-fallback guidance when the insert path falls back to clipboard', async () => {
     const container = document.createElement('div');
-    let recaptured = false;
     document.body.append(container);
 
     await act(async () => {
       mounted = mountDraftletPanel(container, {
         onGenerate() {},
-        onRecaptureInsertionTarget: async () => {
-          recaptured = true;
-          return { ok: false, message: 'Focus a compose field and recapture.' };
-        },
-        onInsert: async (): Promise<InsertionResult> => ({ status: 'copied', message: 'Copied' }),
+        onInsert: async (): Promise<InsertionResult> => ({ status: 'copied', message: "Couldn't find a compose field, so the draft was copied." }),
+        onCloseRequest() {},
+        onAfterRender() {},
+      });
+    });
+
+    await act(async () => {
+      mounted!.controller.open({
+        selectedText: 'Can you reply to this thread?',
+      });
+      mounted!.controller.setInsertionTargetStatus({
+        status: 'unavailable',
+        message: "Couldn't find a compose field, so the draft was copied.",
+        trail: [
+          {
+            event: 'recapture_failed',
+            level: 'failed',
+            message: "Couldn't find a compose field, so the draft was copied.",
+            at: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      });
+    });
+
+    expect(container.textContent).toContain("Couldn't find a compose field, so the draft was copied.");
+    expect(container.textContent).not.toContain('Open the page with the compose field');
+  });
+
+  it('shows the recapture_target primary action as a passive label, not a button', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+
+    await act(async () => {
+      mounted = mountDraftletPanel(container, {
+        onGenerate() {},
+        onInsert: async (): Promise<InsertionResult> => ({ status: 'inserted', message: 'Inserted.' }),
         onCloseRequest() {},
         onAfterRender() {},
       });
@@ -157,17 +133,10 @@ describe('DraftletPanel recapture guidance', () => {
 
     expect(container.textContent).toContain('Restored thread is ready, but insertion needs target recovery.');
     expect(container.textContent).toContain('The saved compose target is stale after restore.');
-    expect(container.textContent).toContain('Recapture');
-
+    // The recapture_target primary action is now a passive label, not a button.
     const recaptureButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Recapture'));
-
-    await act(async () => {
-      recaptureButton?.click();
-    });
-
-    expect(recaptured).toBe(true);
-    expect(container.textContent).toContain('Focus a compose field and recapture.');
+      .find((button) => button.textContent?.trim() === 'Recapture');
+    expect(recaptureButton).toBeUndefined();
   });
 
   it('submits follow-up refinement instructions through the refinement form', async () => {
@@ -218,7 +187,24 @@ describe('DraftletPanel recapture guidance', () => {
   });
 });
 
-function interruptedThreadSnapshot(): ConversationThreadSnapshot {
+function completedThreadSnapshot(): ConversationThreadSnapshot {
+  const turn: Turn = {
+    turnId: 'turn-1',
+    threadId: 'thread-1',
+    instruction: 'Generate reply drafts',
+    source: {
+      selectedText: 'Can you reply to this thread?',
+      sourceUrl: 'https://example.com/thread',
+      sourceDomain: 'example.com',
+      pageTitle: 'Thread',
+    },
+    tone: 'professional',
+    generationStatus: 'completed',
+    generationStartedAt: '2026-01-01T00:00:00.000Z',
+    generationCompletedAt: '2026-01-01T00:00:01.000Z',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:01.000Z',
+  };
   return {
     thread: {
       threadId: 'thread-1',
@@ -227,59 +213,27 @@ function interruptedThreadSnapshot(): ConversationThreadSnapshot {
         selectedText: 'Can you reply to this thread?',
         sourceUrl: 'https://example.com/thread',
         sourceDomain: 'example.com',
-        pageTitle: 'Example',
+        pageTitle: 'Thread',
       },
       status: 'active',
       createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: '2026-01-01T00:02:00.000Z',
-      latestTurnId: 'turn-2',
+      updatedAt: '2026-01-01T00:00:01.000Z',
+      latestTurnId: 'turn-1',
     },
-    turns: [
-      turn('turn-1', 'Generate reply drafts', 'completed', '2026-01-01T00:01:00.000Z'),
-      turn('turn-2', 'Generate reply drafts', 'failed', '2026-01-01T00:02:00.000Z'),
-    ],
+    turns: [turn],
     variants: [
       {
         variantId: 'variant-1',
         turnId: 'turn-1',
-        tone: 'friendly',
-        content: 'Prior completed draft.',
-        rank: 0,
+        tone: 'professional',
+        content: 'Sure, happy to help.',
+        rank: 1,
         status: 'generated',
         isCurrent: true,
-        createdAt: '2026-01-01T00:01:10.000Z',
-        updatedAt: '2026-01-01T00:01:10.000Z',
+        createdAt: '2026-01-01T00:00:01.000Z',
+        updatedAt: '2026-01-01T00:00:01.000Z',
       },
     ],
-    latestRecoverableRun: {
-      runId: 'generation-2',
-      turnId: 'turn-2',
-      status: 'interrupted',
-      recoverable: true,
-      reason: 'generation_interrupted',
-      interruptedAt: '2026-01-01T00:02:30.000Z',
-      lastEventAt: '2026-01-01T00:02:31.000Z',
-      errorCode: 'generation_interrupted',
-      errorMessage: 'Draft generation was interrupted before completion.',
-    },
-  };
-}
-
-function completedThreadSnapshot(): ConversationThreadSnapshot {
-  const base = interruptedThreadSnapshot();
-
-  return {
-    ...base,
-    thread: {
-      ...base.thread,
-      latestTurnId: 'turn-1',
-      status: 'active',
-      updatedAt: '2026-01-01T00:01:00.000Z',
-    },
-    turns: [
-      turn('turn-1', 'Generate reply drafts', 'completed', '2026-01-01T00:01:00.000Z'),
-    ],
-    latestRecoverableRun: undefined,
   };
 }
 
@@ -313,38 +267,8 @@ function staleTargetRestoreState(): WorkspaceRestoreState {
         code: 'target_stale',
         severity: 'warning',
         message: 'The saved compose target is stale after restore.',
-        action: {
-          kind: 'recapture_target',
-          label: 'Recapture',
-          message: 'Recapture the compose field before inserting.',
-        },
+        threadId: 'thread-1',
       },
     ],
-  };
-}
-
-function turn(
-  turnId: string,
-  instruction: string,
-  generationStatus: Turn['generationStatus'],
-  createdAt: string,
-  error?: { code: string; message: string },
-): Turn {
-  return {
-    turnId,
-    threadId: 'thread-1',
-    instruction,
-    source: {
-      selectedText: 'Can you reply to this thread?',
-      sourceUrl: 'https://example.com/thread',
-      sourceDomain: 'example.com',
-      pageTitle: 'Example',
-    },
-    tone: 'friendly',
-    generationStatus,
-    generationErrorCode: error?.code,
-    generationErrorMessage: error?.message,
-    createdAt,
-    updatedAt: createdAt,
   };
 }

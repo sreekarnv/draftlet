@@ -77,15 +77,11 @@ export function usePanelViewState(callbacks: PanelCallbacks, controller: PanelCo
     callbacks.onViewChange?.(activeView);
   };
 
-  const recaptureInsertionTarget = async (tabId?: number) => {
-    if (!callbacks.onRecaptureInsertionTarget) {
-      setView((current) => ({ ...current, persistenceMessage: 'Target recapture is unavailable here.' }));
-      return;
-    }
-
-    setView((current) => ({ ...current, persistenceMessage: 'Recapturing target...' }));
-    const result = await callbacks.onRecaptureInsertionTarget(tabId);
-    setView((current) => ({ ...current, persistenceMessage: result.message }));
+  const recaptureInsertionTarget = async (_tabId?: number) => {
+    // The visible Recapture flow has been removed. Insert/Use owns the
+    // full target recovery path. This stub remains only so the function
+    // shape on the hook return value stays stable for any external callers.
+    setView((current) => ({ ...current, persistenceMessage: '' }));
   };
 
   const retryInterruptedTurn = async (turnId: string) => {
@@ -99,15 +95,10 @@ export function usePanelViewState(callbacks: PanelCallbacks, controller: PanelCo
     setView((current) => ({ ...current, persistenceMessage: result.message }));
   };
 
-  const activateRecaptureTab = async (tabId: number) => {
-    if (!callbacks.onActivateRecaptureTab) {
-      setView((current) => ({ ...current, persistenceMessage: 'Opening the selected tab is unavailable here.' }));
-      return;
-    }
-
-    setView((current) => ({ ...current, persistenceMessage: 'Opening selected tab...' }));
-    const result = await callbacks.onActivateRecaptureTab(tabId);
-    setView((current) => ({ ...current, persistenceMessage: result.message }));
+  const activateRecaptureTab = async (_tabId: number) => {
+    // The visible Recapture flow has been removed. This stub remains only
+    // so the function shape on the hook return value stays stable.
+    setView((current) => ({ ...current, persistenceMessage: '' }));
   };
 
   return {

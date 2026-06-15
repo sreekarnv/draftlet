@@ -18,10 +18,12 @@ export const START_DRAFT_GENERATION = 'draftlet:start-draft-generation';
 export const START_DRAFT_REFINEMENT = 'draftlet:start-draft-refinement';
 export const CANCEL_DRAFT_GENERATION = 'draftlet:cancel-draft-generation';
 export const INSERT_REPLY = 'draftlet:insert-reply';
+export const INSERTION_IN_PROGRESS = 'draftlet:insertion-in-progress';
 export const GET_INSERTION_TARGET_STATUS = 'draftlet:get-insertion-target-status';
 export const REVALIDATE_INSERTION_TARGET = 'draftlet:revalidate-insertion-target';
 export const RECAPTURE_INSERTION_TARGET = 'draftlet:recapture-insertion-target';
 export const ACTIVATE_RECAPTURE_TAB = 'draftlet:activate-recapture-tab';
+export const ACTIVATE_INSERTION_TAB = 'draftlet:activate-insertion-tab';
 export const SET_CURRENT_DRAFT_VARIANT = 'draftlet:set-current-draft-variant';
 export const ACCEPT_DRAFT_VARIANT = 'draftlet:accept-draft-variant';
 
@@ -288,7 +290,8 @@ export type RecaptureInsertionTargetFailureReason =
   | 'content_script_unavailable'
   | 'no_focused_compose_target'
   | 'target_stale'
-  | 'target_metadata_missing';
+  | 'target_metadata_missing'
+  | 'armed_capture_timeout';
 
 export type RecaptureInsertionTargetOutcome =
   | 'tab_choice_acknowledged'
@@ -360,10 +363,12 @@ export type DraftletMessage =
   | { type: typeof START_DRAFT_REFINEMENT; sessionId: string; instruction: string; tone?: Tone; activeView?: PanelView }
   | { type: typeof CANCEL_DRAFT_GENERATION; sessionId?: string; generationId?: string }
   | { type: typeof INSERT_REPLY; sessionId?: string; replyText: string; variantId?: string; target?: ComposeTargetRef }
+  | { type: typeof INSERTION_IN_PROGRESS; sessionId: string; message: string }
   | { type: typeof GET_INSERTION_TARGET_STATUS; sessionId?: string }
   | { type: typeof REVALIDATE_INSERTION_TARGET; sessionId: string; target?: ComposeTargetRef }
   | { type: typeof RECAPTURE_INSERTION_TARGET; sessionId: string; tabId?: number; target?: ComposeTargetRef }
   | { type: typeof ACTIVATE_RECAPTURE_TAB; sessionId: string; tabId: number }
+  | { type: typeof ACTIVATE_INSERTION_TAB; sessionId: string }
   | { type: typeof SET_CURRENT_DRAFT_VARIANT; sessionId: string; variantId: string }
   | { type: typeof ACCEPT_DRAFT_VARIANT; sessionId: string; variantId: string };
 

@@ -21,7 +21,7 @@ export function captureFocusedTarget(candidate: EventTarget | null = document.ac
     return captureTextControl(candidate);
   }
 
-  const editable = getContentEditableElement(candidate);
+  const editable = getEditableHost(candidate);
 
   if (editable) {
     return {
@@ -57,12 +57,31 @@ function captureTextControl(element: HTMLInputElement | HTMLTextAreaElement): Fo
   };
 }
 
-function getContentEditableElement(element: Element): HTMLElement | null {
-  if (element instanceof HTMLElement && element.isContentEditable) {
-    return element;
+function getEditableHost(element: Element): HTMLElement | null {
+  if (element instanceof HTMLElement) {
+    if (isContentEditableHost(element)) {
+      return element;
+    }
+
+    const ariaRole = element.getAttribute('role');
+    if ((ariaRole === 'textbox' || ariaRole === 'combobox') && !element.hasAttribute('contenteditable')) {
+      const explicit = element.getAttribute('aria-readonly');
+      if (explicit !== 'true') {
+        return element;
+      }
+    }
   }
 
   return element.closest<HTMLElement>('[contenteditable="true"], [contenteditable="plaintext-only"]');
+}
+
+function isContentEditableHost(element: HTMLElement): boolean {
+  if (element.isContentEditable) {
+    return true;
+  }
+
+  const value = element.getAttribute('contenteditable');
+  return value === 'true' || value === 'plaintext-only';
 }
 
 function getSelectionRangeInside(element: HTMLElement): Range | undefined {
@@ -150,6 +169,7 @@ function targetFingerprint(element: Element, selector = boundedSelector(element)
     element.id,
     element.getAttribute('aria-label'),
     element.getAttribute('role'),
+    element.getAttribute('contenteditable'),
     element instanceof HTMLInputElement ? element.type : '',
   ];
 
@@ -169,6 +189,7 @@ function targetLabel(element: Element): string | undefined {
     || element.getAttribute('placeholder')
     || element.getAttribute('name')
     || element.id
+    || element.getAttribute('data-placeholder')
     || element.getAttribute('role');
 
   return trimBounded(label, 120);

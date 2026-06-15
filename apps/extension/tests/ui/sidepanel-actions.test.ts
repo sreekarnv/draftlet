@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  ACTIVATE_RECAPTURE_TAB,
   CANCEL_DRAFT_GENERATION,
   GET_DOMAIN_HISTORY,
   GET_RUNTIME_STATUS,
+  INSERT_REPLY,
+  INSERTION_IN_PROGRESS,
   RESTORE_DOMAIN_THREAD,
   START_DRAFT_GENERATION,
   type DraftletMessage,
@@ -13,11 +14,11 @@ import {
 import { createInitialState } from '../../ui/sidepanel/state';
 import type { PanelController } from '../../ui/mount-panel';
 import {
-  activateRecaptureTab,
   cancelActiveGeneration,
   configureSendMessage,
+  insertIntoActivePage,
   loadDomainHistory,
-  recaptureInsertionTarget,
+  onInsertionInProgress,
   refreshHealth,
   restoreDomainHistoryItem,
   startDraftGenerationFromCurrentSession,
@@ -369,108 +370,270 @@ describe('restoreDomainHistoryItem', () => {
   });
 });
 
-describe('recaptureInsertionTarget', () => {
-  it('returns a failure with trail diagnostics when no session is active', async () => {
-    const { controller } = createPanelStub();
+describe('onInsertionInProgress', () => {
+  it('flips the panel into the needs_focus state with the in-progress message', () => {
+    const { controller, calls } = createPanelStub();
     const state = createInitialState('professional', 'replies');
+    state.currentSession = workspaceSession();
 
-    const result = await recaptureInsertionTarget(state, controller);
+    onInsertionInProgress(state, controller, 'Click the compose field to insert.');
 
-    expect(result.ok).toBe(false);
-    expect(result.message).toBe('No active Draftlet session.');
-    expect(state.recaptureTrail).toHaveLength(1);
-    expect(state.recaptureTrail[0]).toMatchObject({
-      event: 'recapture_failed',
-      level: 'failed',
-      message: 'Recapture failed: no active session.',
+    expect(state.isInsertInProgress).toBe(true);
+    expect(state.insertInProgressMessage).toBe('Click the compose field to insert.');
+
+    const statusCall = calls.find(
+      (call) => call.method === 'setInsertionTargetStatus',
+    );
+    expect(statusCall).toBeDefined();
+    expect(statusCall?.args[0]).toMatchObject({
+      status: 'needs_focus',
+      outcome: 'needs_focused_compose_target',
+      message: 'Click the compose field to insert.',
     });
   });
 
-  it('captures the request in the trail and updates the session on success', async () => {
+  it('never appends a trail item with the removed "Open the page" warning string', () => {
     const { controller } = createPanelStub();
     const state = createInitialState('professional', 'replies');
     state.currentSession = workspaceSession();
 
-    const target = {
-      targetId: 'compose-1',
-      kind: 'textarea',
-      pageUrl: 'https://mail.example.com/thread/1',
-      fingerprint: 'textarea|reply',
-      lastSeenAt: '2026-01-01T00:00:00.000Z',
-    };
+    onInsertionInProgress(state, controller, 'Click the compose field to insert.');
+
+    const allMessages = state.recaptureTrail.map((item) => item.message);
+    expect(allMessages.some((message) => message.includes('Open the page with the compose field'))).toBe(false);
+  });
+});
+
+describe('insertIntoActivePage', () => {
+  it('sends INSERT_REPLY without first calling GET_INSERTION_TARGET_STATUS', async () => {
+    const { controller } = createPanelStub();
+    const state = createInitialState('professional', 'replies');
+    state.currentSession = workspaceSession();
+
+    sendMock.mockImplementationOnce(async (message) => {
+      sent.push(message);
+      return { result: { status: 'inserted', message: 'Inserted.', targetStatus: 'live' } };
+    });
+
+    const result = await insertIntoActivePage(state, controller, 'Hello there', 'variant-1');
+
+    expect(result.status).toBe('inserted');
+    const insertMessages = messagesOfType(sent, INSERT_REPLY);
+    expect(insertMessages).toHaveLength(1);
+    expect(insertMessages[0]).toMatchObject({
+      type: INSERT_REPLY,
+      sessionId: 'session-1',
+      replyText: 'Hello there',
+      variantId: 'variant-1',
+    });
+    expect(sent.some((message) => message.type === 'draftlet:get-insertion-target-status')).toBe(false);
+    expect(state.currentSession?.insertionTargetStatus).toBe('live');
+  });
+
+  it('does not flip the side panel to unavailable when the side panel stole focus from the compose field', async () => {
+    const { controller, calls } = createPanelStub();
+    const state = createInitialState('professional', 'replies');
+    state.currentSession = workspaceSession({ insertionTargetStatus: 'live' });
+
+    sendMock.mockImplementationOnce(async (message) => {
+      sent.push(message);
+      return { result: { status: 'inserted', message: 'Inserted.', targetStatus: 'live' } };
+    });
+
+    const result = await insertIntoActivePage(state, controller, 'Hello there', 'variant-1');
+
+    expect(result.status).toBe('inserted');
+    const unavailableCall = calls.find(
+      (call) => call.method === 'setInsertionTargetStatus'
+        && (call.args[0] as { status?: string }).status === 'unavailable',
+    );
+    expect(unavailableCall).toBeUndefined();
+    expect(state.currentSession?.insertionTargetStatus).toBe('live');
+  });
+
+  it('surfaces a content-script reported unavailable target as a failure result', async () => {
+    const { controller } = createPanelStub();
+    const state = createInitialState('professional', 'replies');
+    state.currentSession = workspaceSession({ insertionTargetStatus: 'live' });
+
+    sendMock.mockImplementationOnce(async (message) => {
+      sent.push(message);
+      return { result: { status: 'failed', message: 'Target missing.', targetStatus: 'unavailable', errorCode: 'target_missing' } };
+    });
+
+    const result = await insertIntoActivePage(state, controller, 'Hello there', 'variant-1');
+
+    expect(result.status).toBe('failed');
+    expect(result.targetStatus).toBe('unavailable');
+    expect(state.currentSession?.insertionTargetStatus).toBe('unavailable');
+  });
+
+  it('falls back to clipboard copy when the background send rejects', async () => {
+    const { controller } = createPanelStub();
+    const state = createInitialState('professional', 'replies');
+    state.currentSession = workspaceSession();
+
+    sendMock.mockRejectedValueOnce(new Error('busy'));
+
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+
+    const result = await insertIntoActivePage(state, controller, 'Hello there');
+
+    expect(result.status).toBe('copied');
+    expect(writeText).toHaveBeenCalledWith('Hello there');
+  });
+
+  it('attempts a clipboard copy when the content-script times out and reports success', async () => {
+    const { controller } = createPanelStub();
+    const state = createInitialState('professional', 'replies');
+    state.currentSession = workspaceSession();
 
     sendMock.mockImplementationOnce(async (message) => {
       sent.push(message);
       return {
-        recaptured: true,
-        status: 'live' as InsertionTargetStatus,
-        outcome: 'recapture_succeeded',
-        target,
-        message: 'Recaptured.',
+        result: {
+          status: 'failed',
+          message: '',
+          targetStatus: 'unavailable',
+          errorCode: 'armed_capture_timeout',
+        },
       };
     });
 
-    const result = await recaptureInsertionTarget(state, controller);
-
-    expect(result.ok).toBe(true);
-    expect(result.message).toBe('Recaptured.');
-    expect(state.currentSession?.insertionTargetStatus).toBe('live');
-    expect(state.currentSession?.insertionTarget).toEqual(target);
-    expect(state.recaptureTrail).toHaveLength(2);
-    expect(state.recaptureTrail[0]).toMatchObject({ event: 'recapture_requested', level: 'pending' });
-    expect(state.recaptureTrail[1]).toMatchObject({ event: 'recapture_succeeded', level: 'success' });
-  });
-
-  it('surfaces a failure message and unavailable status when send rejects', async () => {
-    const { controller } = createPanelStub();
-    const state = createInitialState('professional', 'replies');
-    state.currentSession = workspaceSession();
-
-    sendMock.mockImplementationOnce(async () => {
-      throw new Error('offline');
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
     });
 
-    const result = await recaptureInsertionTarget(state, controller);
+    const result = await insertIntoActivePage(state, controller, 'Hello there');
 
-    expect(result.ok).toBe(false);
-    expect(result.message).toBe('Draftlet could not recapture the target. Copy still works.');
-    expect(state.currentSession?.insertionTargetStatus).toBe('unavailable');
-    expect(state.recaptureTrail.at(-1)).toMatchObject({ event: 'recapture_failed', level: 'failed' });
+    expect(result.status).toBe('copied');
+    expect(writeText).toHaveBeenCalledWith('Hello there');
+    const copiedTrail = state.recaptureTrail.filter((item) => item.message === "Couldn't find a compose field, so the draft was copied.");
+    expect(copiedTrail).toHaveLength(1);
+    const allMessages = state.recaptureTrail.map((item) => item.message);
+    expect(allMessages.some((message) => message.includes('Open the page with the compose field'))).toBe(false);
   });
-});
 
-describe('activateRecaptureTab', () => {
-  it('sends a tab activation message and marks the session for focus on success', async () => {
+  it('surfaces the manual-Copy guidance when the clipboard write rejects after timeout', async () => {
     const { controller } = createPanelStub();
     const state = createInitialState('professional', 'replies');
     state.currentSession = workspaceSession();
 
     sendMock.mockImplementationOnce(async (message) => {
       sent.push(message);
-      return { activated: true, message: 'Tab opened.' };
+      return {
+        result: {
+          status: 'failed',
+          message: '',
+          targetStatus: 'unavailable',
+          errorCode: 'armed_capture_timeout',
+        },
+      };
     });
 
-    const result = await activateRecaptureTab(state, controller, 42);
-
-    expect(result.ok).toBe(true);
-    expect(result.message).toBe('Tab opened.');
-    expect(sent.find((m) => m.type === ACTIVATE_RECAPTURE_TAB)).toMatchObject({
-      type: ACTIVATE_RECAPTURE_TAB,
-      sessionId: 'session-1',
-      tabId: 42,
+    const writeText = vi.fn(async () => {
+      throw new Error('permission denied');
     });
-    expect(state.currentSession?.insertionTargetStatus).toBe('needs_focus');
-    expect(state.recaptureTrail).toHaveLength(2);
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+
+    const result = await insertIntoActivePage(state, controller, 'Hello there');
+
+    expect(result.status).toBe('failed');
+    expect(result.message).toBe("Couldn't find a compose field. Use Copy instead.");
+    expect(writeText).toHaveBeenCalledWith('Hello there');
+    const copiedTrail = state.recaptureTrail.filter((item) => item.message === "Couldn't find a compose field. Use Copy instead.");
+    expect(copiedTrail).toHaveLength(1);
   });
 
-  it('returns failure when no session is set', async () => {
+  it('appends at most one copied-fallback trail item per consecutive retry (no duplicate warnings)', async () => {
     const { controller } = createPanelStub();
     const state = createInitialState('professional', 'replies');
+    state.currentSession = workspaceSession();
 
-    const result = await activateRecaptureTab(state, controller, 42);
+    sendMock.mockImplementation(async (message) => {
+      sent.push(message);
+      return {
+        result: {
+          status: 'failed',
+          message: '',
+          targetStatus: 'unavailable',
+          errorCode: 'armed_capture_timeout',
+        },
+      };
+    });
 
-    expect(result.ok).toBe(false);
-    expect(result.message).toBe('No active Draftlet session.');
-    expect(sendMock).not.toHaveBeenCalled();
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+
+    await insertIntoActivePage(state, controller, 'Hello there');
+    await insertIntoActivePage(state, controller, 'Hello there');
+
+    // The two consecutive retries produce the same trail message, so
+    // appendTrail's built-in dedupe collapses the second into the first.
+    const copiedTrail = state.recaptureTrail.filter(
+      (item) => item.message === "Couldn't find a compose field, so the draft was copied.",
+    );
+    expect(copiedTrail).toHaveLength(1);
+    expect(writeText).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not read document.activeElement during the insert recovery flow', async () => {
+    const { controller } = createPanelStub();
+    const state = createInitialState('professional', 'replies');
+    state.currentSession = workspaceSession();
+
+    const originalDescriptor = Object.getOwnPropertyDescriptor(document, 'activeElement');
+    Object.defineProperty(document, 'activeElement', {
+      configurable: true,
+      get: () => {
+        throw new Error('document.activeElement must not be read by the side-panel insert flow.');
+      },
+    });
+
+    try {
+      sendMock.mockImplementationOnce(async (message) => {
+        sent.push(message);
+        return { result: { status: 'inserted', message: 'Inserted.', targetStatus: 'live' } };
+      });
+
+      const result = await insertIntoActivePage(state, controller, 'Hello there');
+
+      expect(result.status).toBe('inserted');
+    } finally {
+      if (originalDescriptor) {
+        Object.defineProperty(document, 'activeElement', originalDescriptor);
+      } else {
+        delete (document as { activeElement?: unknown }).activeElement;
+      }
+    }
+  });
+
+  it('does not append any of the removed Recapture warning messages', async () => {
+    const { controller } = createPanelStub();
+    const state = createInitialState('professional', 'replies');
+    state.currentSession = workspaceSession();
+
+    sendMock.mockImplementationOnce(async (message) => {
+      sent.push(message);
+      return { result: { status: 'inserted', message: 'Inserted.', targetStatus: 'live' } };
+    });
+
+    await insertIntoActivePage(state, controller, 'Hello there');
+
+    const allMessages = state.recaptureTrail.map((item) => item.message);
+    expect(allMessages.some((message) => message.includes('Open the page with the compose field'))).toBe(false);
+    expect(allMessages.some((message) => message.includes('Draftlet is waiting for the next compose field focus'))).toBe(false);
   });
 });
