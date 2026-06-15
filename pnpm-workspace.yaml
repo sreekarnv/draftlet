@@ -1,7 +1,10 @@
 packages:
   - apps/extension
   - apps/desktop
+  - packages/*
 allowBuilds:
+  electron-winstaller: true
   esbuild: true
   spawn-sync: true
+blockExoticSubdeps: false
 nodeLinker: hoisted

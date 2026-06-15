@@ -1,5 +1,24 @@
 {
+  "name": "@draftlet/extension",
+  "version": "0.1.0",
   "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "prepare": "wxt prepare",
+    "test": "vitest run --environment jsdom"
+  },
+  "dependencies": {
+    "@draftlet/shared": "workspace:*",
+    "lucide-react": "^1.17.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-hook-form": "^7.79.0"
+  },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.0",
     "@types/react": "^19.2.16",
@@ -9,19 +28,5 @@
     "typescript": "^6.0.3",
     "vitest": "^4.1.8",
     "wxt": "^0.20.26"
-  },
-  "name": "@draftlet/extension",
-  "version": "0.1.1",
-  "private": true,
-  "scripts": {
-    "dev": "wxt",
-    "build": "wxt build",
-    "prepare": "wxt prepare",
-    "test": "vitest run --environment jsdom"
-  },
-  "dependencies": {
-    "lucide-react": "^1.17.0",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7"
   }
 }

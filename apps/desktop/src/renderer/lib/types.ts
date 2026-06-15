@@ -1,3 +1,6 @@
+import type { DesktopExtensionDiagnosticsBridgeResult } from '@draftlet/shared/contracts';
+import type { GenerationRunMaintenanceDiagnosticsResult } from '@draftlet/shared/contracts';
+
 export type CommandStatusCode =
   | 'ready'
   | 'missing'
@@ -39,9 +42,14 @@ export interface DraftletDesktopApi {
   checkServerHealth: () => Promise<CommandStatus>;
   startDraftletServer: () => Promise<CommandStatus>;
   stopDraftletServer: () => Promise<CommandStatus>;
+  getBrowserRecaptureDiagnosticsReport: () => Promise<DesktopExtensionDiagnosticsBridgeResult>;
+  getGenerationRunMaintenanceDiagnostics: () => Promise<GenerationRunMaintenanceDiagnosticsResult>;
   openOllamaInstallPage: () => Promise<CommandStatus>;
   openExtensionHelp: () => Promise<CommandStatus>;
 }
+
+export type BrowserDiagnosticsBridgeResult = DesktopExtensionDiagnosticsBridgeResult;
+export type RuntimeMaintenanceDiagnosticsResult = GenerationRunMaintenanceDiagnosticsResult;
 
 declare global {
   interface Window {

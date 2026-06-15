@@ -109,3 +109,6 @@ jobs:
 
       - name: Typecheck desktop
         run: pnpm --dir apps/desktop typecheck
+
+      - name: Test desktop
+        run: pnpm --dir apps/desktop test

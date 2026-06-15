@@ -3,44 +3,42 @@ export type ConnectionStatus = 'connected' | 'disconnected';
 export type PanelState = 'empty' | 'loading' | 'streaming' | 'success' | 'error';
 export type PanelView = 'replies' | 'history';
 
+export type GenerationMode = 'initial' | 'refinement';
+export type ComposeTargetKind = 'input' | 'textarea' | 'contenteditable';
+export type InsertionTargetStatus =
+  | 'live'
+  | 'stale'
+  | 'unavailable'
+  | 'needs_recapture'
+  | 'needs_focus'
+  | 'tab_disambiguation_required';
+
+export interface ComposeTargetRef {
+  targetId: string;
+  kind: ComposeTargetKind;
+  pageUrl: string;
+  origin?: string;
+  pageTitle?: string;
+  selector?: string;
+  fingerprint: string;
+  label?: string;
+  lastSeenAt: string;
+}
+
 export interface ReplyRequestPayload {
   selected_text: string;
   tone: Tone;
   model?: string;
   source_url?: string;
   source_domain?: string;
+  page_title?: string;
+  session_id?: string;
+  thread_id?: string;
+  turn_id?: string;
+  run_id?: string;
+  instruction?: string;
+  generation_mode?: GenerationMode;
 }
-
-export interface StreamedReply {
-  text: string;
-  replyId?: number;
-}
-
-export interface ReplyItem {
-  id: string;
-  text: string;
-  persistedId?: number;
-}
-
-export interface HistoryReply {
-  id: number;
-  reply_index: number;
-  text: string;
-  created_at: string;
-}
-
-export interface HistoryGeneration {
-  id: number;
-  selected_text: string;
-  tone: string;
-  model: string;
-  source_url: string | null;
-  source_domain: string | null;
-  status: string;
-  created_at: string;
-  replies: HistoryReply[];
-}
-
 
 export interface PreferenceItem {
   id: number;
@@ -62,4 +60,6 @@ export type InsertionStatus = 'inserted' | 'copied' | 'failed';
 export interface InsertionResult {
   status: InsertionStatus;
   message: string;
+  targetStatus?: InsertionTargetStatus;
+  errorCode?: string;
 }

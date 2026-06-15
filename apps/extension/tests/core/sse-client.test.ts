@@ -17,7 +17,7 @@ describe('streamSse', () => {
     ])));
 
     await streamSse({
-      url: 'http://127.0.0.1:47632/replies',
+      url: 'http://127.0.0.1:47632/replies/generation-1/events',
       onMessage(message) {
         messages.push({ data: message.data, id: message.id });
       },
@@ -34,7 +34,7 @@ describe('streamSse', () => {
     vi.stubGlobal('fetch', vi.fn(async () => createStreamResponse(['data: Final reply'])));
 
     await streamSse({
-      url: 'http://127.0.0.1:47632/replies',
+      url: 'http://127.0.0.1:47632/replies/generation-1/events',
       onMessage(message) {
         messages.push(message.data);
       },
@@ -47,7 +47,7 @@ describe('streamSse', () => {
     vi.stubGlobal('fetch', vi.fn(async () => createStreamResponse(['event: error\ndata: Ollama is unavailable\n\n'])));
 
     await expect(streamSse({
-      url: 'http://127.0.0.1:47632/replies',
+      url: 'http://127.0.0.1:47632/replies/generation-1/events',
       onMessage() {},
     })).rejects.toThrow('Ollama is unavailable');
   });
@@ -56,7 +56,7 @@ describe('streamSse', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 500 })));
 
     await expect(streamSse({
-      url: 'http://127.0.0.1:47632/replies',
+      url: 'http://127.0.0.1:47632/replies/generation-1/events',
       onMessage() {},
     })).rejects.toThrow('Request failed with 500');
   });

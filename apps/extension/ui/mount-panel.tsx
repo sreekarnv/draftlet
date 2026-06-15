@@ -3,17 +3,23 @@ import { createRoot, type Root } from 'react-dom/client';
 
 import { DEFAULT_PANEL_VIEW, DEFAULT_TONE } from '../core/constants';
 import type {
+  ConversationThreadSnapshot,
+  DomainHistoryItem,
+  InsertionStatusTrailItem,
+  RecaptureInsertionTargetOutcome,
+  WorkspaceRestoreState,
+} from '../core/messages';
+import type { PlausibleTabCandidate } from '../core/tab-disambiguation';
+import type {
   ConnectionStatus,
   InsertionResult,
+  InsertionTargetStatus,
   PanelState,
   PanelView,
-  ReplyItem,
-  StreamedReply,
   Tone,
 } from '../core/types';
-import { DraftletPanel } from '../components/panel/DraftletPanel';
+import { DraftletPanel } from '../components/panel/draftlet-panel';
 
-export type PanelSurface = 'overlay' | 'sidepanel';
 
 export interface PanelOpenOptions {
   selectedText: string;
@@ -21,14 +27,29 @@ export interface PanelOpenOptions {
   activeView?: PanelView;
 }
 
+export interface VariantActionResult {
+  ok: boolean;
+  message: string;
+}
+
+export interface InsertionTargetViewState {
+  status: InsertionTargetStatus;
+  message?: string;
+  outcome?: RecaptureInsertionTargetOutcome;
+  selectedTab?: PlausibleTabCandidate;
+  candidates?: PlausibleTabCandidate[];
+  trail?: InsertionStatusTrailItem[];
+}
+
 export type PanelAction =
   | { type: 'open'; options: PanelOpenOptions }
   | { type: 'setTone'; tone: Tone }
   | { type: 'setActiveView'; activeView: PanelView }
   | { type: 'setConnectionStatus'; status: ConnectionStatus }
+  | { type: 'setInsertionTargetStatus'; target: InsertionTargetViewState }
+  | { type: 'setRestoreState'; restoreState: WorkspaceRestoreState | null }
   | { type: 'setState'; state: PanelState; message: string }
-  | { type: 'clearReplies' }
-  | { type: 'addReply'; reply: ReplyItem };
+  | { type: 'setThreadSnapshot'; snapshot: ConversationThreadSnapshot | null };
 
 export interface PanelController {
   open(options: PanelOpenOptions): void;
@@ -37,20 +58,26 @@ export interface PanelController {
   setActiveView(activeView: PanelView): void;
   getActiveView(): PanelView;
   setConnectionStatus(status: ConnectionStatus): void;
+  setInsertionTargetStatus(target: InsertionTargetViewState): void;
+  setRestoreState(restoreState: WorkspaceRestoreState | null): void;
   setState(state: PanelState, message?: string): void;
-  clearReplies(): void;
-  addReply(reply: StreamedReply): void;
+  setThreadSnapshot(snapshot: ConversationThreadSnapshot | null): void;
   subscribe(listener: (action: PanelAction) => void): () => void;
 }
 
 export interface PanelCallbacks {
   initialTone?: Tone;
   initialView?: PanelView;
-  surface?: PanelSurface;
   onToneChange?: (tone: Tone) => void;
   onViewChange?: (activeView: PanelView) => void;
   onGenerate: () => void;
-  onInsert: (replyText: string) => Promise<InsertionResult>;
+  onRetryInterruptedTurn?: (turnId: string) => Promise<VariantActionResult>;
+  onRefine?: (instruction: string) => void;
+  onLoadHistory?: () => Promise<DomainHistoryItem[]>;
+  onRestoreHistoryItem?: (item: DomainHistoryItem) => Promise<VariantActionResult>;
+  onInsert: (replyText: string, variantId?: string) => Promise<InsertionResult>;
+  onSelectVariant?: (variantId: string) => Promise<VariantActionResult>;
+  onAcceptVariant?: (variantId: string) => Promise<VariantActionResult>;
   onCloseRequest: () => void;
   onAfterRender: () => void;
 }
@@ -129,21 +156,17 @@ function createPanelController(initialTone: Tone, initialView: PanelView): Panel
     setConnectionStatus(status) {
       emit({ type: 'setConnectionStatus', status });
     },
+    setInsertionTargetStatus(target) {
+      emit({ type: 'setInsertionTargetStatus', target });
+    },
+    setRestoreState(restoreState) {
+      emit({ type: 'setRestoreState', restoreState });
+    },
     setState(state, message = '') {
       emit({ type: 'setState', state, message });
     },
-    clearReplies() {
-      emit({ type: 'clearReplies' });
-    },
-    addReply(reply) {
-      emit({
-        type: 'addReply',
-        reply: {
-          id: reply.replyId ? `reply-${reply.replyId}` : crypto.randomUUID(),
-          text: reply.text,
-          persistedId: reply.replyId,
-        },
-      });
+    setThreadSnapshot(snapshot) {
+      emit({ type: 'setThreadSnapshot', snapshot });
     },
     subscribe(nextListener) {
       listener = nextListener;

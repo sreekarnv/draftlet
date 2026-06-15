@@ -1,222 +1,226 @@
 # AGENTS.md
 
-## Project
-Draftlet
+You are working on Draftlet.
 
-Privacy-first browser extension for generating local AI draft replies on any webpage.
+Draftlet is a local-first browser drafting assistant with:
+- a browser extension
+- a desktop app
+- a local runtime/daemon
+- shared contracts and UI primitives
 
-## Core stack
-- WXT
-- TypeScript
-- React for the panel UI only
-- Tailwind CSS for panel styling
-- Lightweight local UI primitives
-- Shadow DOM
-- FastAPI
-- Pydantic
-- httpx
-- Ollama
-- SSE
-- SQLite
-- SQLAlchemy 2.0
-- Alembic
-- Electron Forge for the desktop companion
+The current implementation is a POC. Treat it as a base to learn from, not as architecture that must be preserved.
 
-## Product goal
-Draftlet should feel like a serious, local-first drafting tool:
-- select text on a webpage
-- open Draftlet
-- generate draft replies
-- copy or insert a reply
-- revisit history and preferences
-- use the desktop companion to guide local runtime setup and readiness
+## Product direction
 
-## Working philosophy
-Do not overengineer.
+Draftlet v2 should behave like a browser-native assistant with a local runtime.
 
-Prefer:
-- explicit functions
-- small modules
-- thin route files
-- readable code
-- isolated complexity only where necessary
-- UI polish through structure, contrast, and hierarchy rather than heavy abstraction
+The webpage must not own the Draftlet workflow.
 
-Avoid:
-- Redux
-- WebSockets
-- dependency injection frameworks
-- repository pattern unless clearly necessary
-- generic plugin systems
-- giant utility files
-- unrelated refactors
-- dashboard-like UI bloat
+The page is only responsible for:
+- lightweight context capture
+- editable surface detection
+- small inline Draftlet affordances
+- best-effort insertion of approved drafts back into the page
 
-## Important constraints
-- React is allowed only for the Draftlet panel UI and its immediate child components
-- low-level browser/page integration logic must stay outside React
-- keep selection, focus capture, insertion, SSE, and content-script wiring outside React
-- preserve current working behavior during UI refactors
-- do not add side panel unless explicitly requested
-- do not change server behavior unless clearly required for the requested phase
+The primary Draftlet experience belongs in privileged surfaces:
+- extension side panel
+- extension popup
+- desktop app
+- local runtime/daemon
 
-## Architecture boundaries
+## Core product goals
 
-### React owns
-- panel rendering
-- panel-local UI state
-- tabs/views
-- reply cards
-- tone controls
-- status badge
-- copy/insert feedback display
-- history presentation
+- generate high-quality reply drafts from selected or detected context
+- support thread-aware drafting instead of one-shot stateless generation
+- allow follow-up instructions like:
+  - make this longer
+  - make this warmer
+  - answer all their questions
+  - make this more formal
+  - keep my wording but improve clarity
+- keep the user in control of insertion and final edits
+- work reliably with a local runtime
 
-### Non-React extension code owns
-- selection detection
-- floating trigger
-- focus capture
-- insertion logic
-- clipboard fallback helpers
-- API request helpers
-- SSE streaming client
-- Shadow DOM host creation/mounting
-- page event listeners
-- viewport-aware host positioning
+## Non-goals
 
-### Server owns
-- request validation
+- do not turn the content script into the main app
+- do not build large floating overlays as the primary UX
+- do not let the webpage directly own the local backend connection model
+- do not overengineer with generic frameworks or enterprise-style abstractions
+
+## Architecture principles
+
+- Do not overengineer.
+- Prefer explicit modules and understandable flow.
+- Prefer small services and thin orchestration layers.
+- Use typed contracts for cross-boundary communication.
+- Keep extension, desktop, and runtime responsibilities separate.
+- Avoid duplicate state across content script, popup, side panel, and desktop.
+- Keep business logic out of content scripts.
+- Do not silently invent new architecture patterns.
+- Avoid large, unrelated refactors in a single task.
+- When changing architecture, update the docs.
+
+## Default responsibility split
+
+### Content script
+Responsible for:
+- page integration
+- selection capture
+- editable target detection
+- lightweight inline affordances
+- insertion into the page
+- relaying messages to extension-owned surfaces
+
+Not responsible for:
+- business logic
+- model orchestration
+- session ownership
+- thread management
+- persistence logic
+- global app state
+
+### Extension service worker / background
+Responsible for:
+- command routing
+- tab/session coordination
+- permissions and capability checks
+- bridge orchestration to runtime or desktop
+- shared state bootstrapping where appropriate
+
+Not responsible for:
+- heavy UI rendering
+- page DOM operations
+- large business workflows that belong in runtime
+
+### Side panel
+Responsible for:
+- primary Draftlet workspace
+- thread view
+- generated drafts
+- follow-up chat-style refinement
+- user controls for tone, length, and coverage
+- session-aware drafting UX
+
+### Popup
+Responsible for:
+- quick actions
+- status
+- shortcuts
+- entry point into the side panel
+
+Not responsible for:
+- full drafting workflows
+- complex thread management
+
+### Desktop app
+Responsible for:
+- onboarding
+- runtime setup
+- tray behavior
+- settings
+- diagnostics/logs
+- advanced controls
+- future background capabilities
+
+### Local runtime / daemon
+Responsible for:
+- model access
 - prompt building
-- Ollama streaming client
-- delimiter-based parsing
-- SSE response emission
-- persistence
+- streaming generation
+- persistence for sessions/threads/turns/preferences
+- future retrieval or enrichment features if needed
 
-### Desktop companion owns
-- guided local runtime setup flow
-- Ollama install/running checks
-- OS-specific Ollama setup guidance
-- recommended model checks and install action
-- Draftlet server start/stop orchestration for local development
-- setup and help guidance
+## Product rules
 
-Desktop companion does not own the in-browser drafting UX.
+- Generated replies must scale with source complexity.
+- Long or multi-point emails must not receive shallow acknowledgment replies.
+- The system should support thread-aware refinement over one-shot generation.
+- The side panel should be the main drafting surface.
+- The desktop app should own setup, diagnostics, runtime lifecycle, and advanced controls.
+- Inline UI on pages must stay lightweight and unobtrusive.
 
-### Electron desktop companion owns
-- main-process runtime checks and local process control
-- preload-mediated IPC API exposure
-- renderer setup/status UI
+## Required behavior before coding
 
-Electron renderer code must not receive raw Node APIs. Keep `contextIsolation: true`, `nodeIntegration: false`, and expose only explicit preload APIs.
+For every non-trivial task:
+1. Restate the goal.
+2. List files likely to change.
+3. List files that must not change.
+4. State assumptions.
+5. State risks.
+6. Then implement only the requested scope.
 
-## UI Design Direction
-Draftlet panel UI should follow a **dark editorial utility** direction.
+If the task is architecture-heavy:
+- inspect the existing code first
+- propose a plan before changing code
+- keep the migration path realistic
 
-Design goals:
-- compact, premium, serious writing tool
-- dark graphite / charcoal surfaces
-- warm restrained accent
-- crisp but subtle borders
-- layered sections with clearer separation
-- strong typography hierarchy
-- readable text on dark backgrounds
-- compact but calm spacing
-- refined, not flashy
+If the task is implementation-heavy:
+- keep the diff tightly scoped
+- avoid unrelated cleanup
+- reuse existing conventions unless the task explicitly changes them
 
-Avoid:
-- generic AI assistant styling
-- purple gradient AI look
-- dashboard-like layout
-- too many outlined boxes
-- overly playful styling
-- low-contrast text on dark surfaces
-- oversized controls
-- noisy animation
-- visual clutter
+## Code change rules
 
-Preferred direction:
-- dark editorial workspace
-- fewer hard rectangles, more layered surfaces
-- brighter primary text
-- muted but readable secondary/meta text
-- unified top workspace block
-- reply cards as the visual focus
-- compact navigation tabs that feel intentional
-- subtle premium accent, not neon
+- Do not introduce repository patterns.
+- Do not add dependency injection frameworks.
+- Do not add generic pipeline abstractions.
+- Do not add dependencies unless clearly justified.
+- New manually created TypeScript and TSX source/test files must use `kebab-case` filenames. Keep exported React components and types in normal PascalCase where appropriate, but the file path itself should be lowercase with hyphens.
+- Do not move many unrelated files just to appear “clean”.
+- Do not rewrite working code without a clear migration reason.
+- Do not duplicate message contracts in multiple places.
+- Do not couple UI state to DOM state unnecessarily.
 
-## Layout guidance
-Prefer this hierarchy inside the panel:
-1. Header
-   - Draftlet
-   - subtle subtitle
-   - connection badge
-2. Workspace block
-   - selected text preview / source context
-   - tone selector
-   - primary action
-3. View navigation
-   - Replies
-   - History
-4. Main results area
-   - refined reply/history cards
+## React/UI structure rules
 
-Do not make the whole UI feel like one long stack of identical bordered boxes.
+- Do not keep growing large React files. For new or touched UI work, prefer extracting small components, hooks, helpers, and stores around clear feature boundaries.
+- Shared UI primitives, tokens, and reusable React utilities should move toward `packages/shared`; extension and desktop surfaces should reuse shared primitives where practical.
+- Use local `useState` for local widget state only. Cross-component UI/app state should prefer Zustand, or an equivalent small state manager if the repo later standardizes one, over prop chains and scattered mirrored state.
+- Non-trivial forms should prefer `react-hook-form`; keep validation, defaults, submit handling, and field wiring explicit and testable.
+- Use React Router when a surface has real page/view boundaries. Keep route/page files thin and move feature rendering, data orchestration, and helpers out of route files.
 
-## Color and typography guidance
-Aim for:
-- brighter primary text on dark backgrounds
-- clearer distinction between primary, secondary, and meta text
-- restrained warm accent
-- dark surfaces with enough separation to avoid visual flattening
+## State and domain expectations
 
-Typical hierarchy:
-- title: stronger and more prominent
-- subtitle/meta: smaller, muted, still readable
-- body/reply text: most readable text in the UI
-- feedback text: subdued but legible
-- tabs/buttons: compact and confident
+The system should move toward a domain model with concepts like:
+- WorkspaceSession
+- ConversationThread
+- Turn
+- DraftVariant
+- GenerationRun for runtime-owned execution control, lease freshness, cancellation intent, and stale-run reconciliation
+- user actions/events
 
-## File guidance
+When implementing features, prefer aligning with these concepts instead of inventing one-off structures.
 
-### Extension
-- `entrypoints/content.ts`: initialization, page wiring, orchestration only
-- `core/selection.ts`: selection logic
-- `core/focus.ts`: focus capture and restore helpers
-- `core/insertion.ts`: insertion strategies and clipboard fallback
-- `core/api.ts`: server request helpers
-- `core/sse-client.ts`: SSE handling
-- `ui/mount-panel.tsx`: React mount boundary into Shadow DOM
-- `components/panel/*`: React UI components only
+## Documentation expectations
 
-### Server
-- keep routes thin
-- keep orchestration in service files
-- do not change server structure during UI-only phases unless clearly necessary
+When architecture or boundaries change, update or create:
+- ARCHITECTURE.md
+- BOUNDARIES.md
+- EVENTS_AND_CONTRACTS.md
+- UI_PRINCIPLES.md
+- PHASE_PLAN.md
 
-### Desktop
-- `apps/desktop/src/main`: Electron main process and IPC handlers
-- `apps/desktop/src/preload`: safe renderer API bridge only
-- `apps/desktop/src/renderer`: React setup/status UI
-- keep IPC handlers explicit and small
-- do not expose raw Node APIs to renderer code
+## Testing expectations
 
-## Insertion rules
-Implement insertion in this order:
-1. input
-2. textarea
-3. contenteditable
-4. framework-controlled inputs later if needed
+Prefer targeted tests for:
+- message contracts
+- state transitions
+- prompt-building rules
+- streaming behavior
+- insertion behavior
+- critical failure/retry paths
 
-If insertion fails:
-- fall back to clipboard
-- show clear user feedback
+## Skills
 
-Do not claim universal support for all sites.
+Use the relevant skill file before making decisions in these areas:
+- draftlet architecture
+- extension surfaces
+- UI system
+- desktop/runtime boundaries
+- FastAPI daemon design
+- contracts and events
+- migration rules
+- React UI architecture
 
-## Delivery rules
-- implement only the requested phase or files
-- do not silently add new frameworks
-- do not introduce abstractions without a clear need
-- make the smallest clean change that improves the requested outcome
-- keep code easy to review file-by-file
-- preserve working behavior while improving UI
+If multiple skills apply, follow the most specific one for the area being changed.
