@@ -37,7 +37,7 @@ export async function checkOllamaInstalled(): Promise<CommandStatus> {
     const version = stdout.trim();
     return ok(version || 'Ollama is installed.', 'ready');
   } catch {
-    return fail('Ollama is not installed or is not available on PATH.', 'missing');
+    return fail('Ollama was not found on this machine. Install Ollama, then recheck.', 'missing');
   }
 }
 
@@ -45,7 +45,7 @@ export async function checkOllamaRunning(): Promise<CommandStatus> {
   const installed = await checkOllamaInstalled();
 
   if (!installed.ok) {
-    return fail('Install Ollama before checking whether it is running.', 'missing');
+    return fail('Ollama was not found on this machine. Install Ollama, then recheck.', 'missing');
   }
 
   const running = await checkHttpStatus('http://127.0.0.1:11434/api/tags', 'Ollama is running.', 'Ollama');
@@ -61,7 +61,7 @@ export async function checkRecommendedModelInstalled(): Promise<CommandStatus> {
   const installed = await checkOllamaInstalled();
 
   if (!installed.ok) {
-    return fail(`Install Ollama before checking ${RECOMMENDED_MODEL}.`, 'missing');
+    return fail('Ollama was not found on this machine. Install Ollama, then recheck.', 'missing');
   }
 
   try {
@@ -72,7 +72,7 @@ export async function checkRecommendedModelInstalled(): Promise<CommandStatus> {
       return ok(`${RECOMMENDED_MODEL} is installed.`, 'ready');
     }
 
-    return fail(`${RECOMMENDED_MODEL} is not installed yet.`, 'missing');
+    return fail(`${RECOMMENDED_MODEL} is not available in Ollama yet.`, 'missing');
   } catch {
     return fail('Could not list Ollama models. Start Ollama, then recheck.', 'not_running');
   }
@@ -124,7 +124,7 @@ export function pullRecommendedModel(): Promise<CommandStatus> {
     const child = spawn('ollama', ['pull', RECOMMENDED_MODEL], { stdio: 'ignore', windowsHide: true });
 
     child.once('error', () => {
-      resolve(fail('Could not start Ollama model pull. Is Ollama installed?', 'missing'));
+      resolve(fail('Could not start the Ollama model pull. Install Ollama, then recheck.', 'missing'));
     });
 
     child.once('exit', (code) => {

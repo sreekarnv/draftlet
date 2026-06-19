@@ -22,7 +22,7 @@ async function openOllamaInstallPage(): Promise<CommandStatus> {
 async function openExtensionHelp(): Promise<CommandStatus> {
   try {
     await shell.openExternal(EXTENSION_HELP_URL);
-    return ok('Opened Chrome extension loading instructions. Build Draftlet, then load apps/extension/.output/chrome-mv3 as unpacked.');
+    return ok('Opened Chrome extension loading instructions. Build Draftlet, load apps/extension/.output/chrome-mv3 as unpacked, then reload the page you are drafting on.');
   } catch (error) {
     return fail(`Could not open extension help: ${error instanceof Error ? error.message : String(error)}`);
   }

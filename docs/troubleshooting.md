@@ -1,10 +1,12 @@
 # Troubleshooting
 
-This guide covers the most common first-run and recurring issues. If something is missing here, the desktop companion and the runtime maintenance endpoint are good places to gather more information.
+This guide covers the most common first-run and recurring issues. If something is missing here, use the desktop companion diagnostics and the runtime maintenance endpoint to gather more information.
 
-## Verify the local stack first
+For the shortest install-to-first-draft walkthrough, start with [getting-started.md](getting-started.md).
 
-Before going deep, confirm each piece in order:
+## First checks
+
+Before going deep, confirm the two local services in order:
 
 ```bash
 curl http://127.0.0.1:11434/api/tags
@@ -13,7 +15,21 @@ curl http://127.0.0.1:47632/health
 
 If the first command fails, Ollama is the problem. If the second fails, the Draftlet server is the problem. The extension can only work when both are reachable.
 
+Also confirm the model is installed:
+
+```bash
+ollama list
+```
+
+What happened: Draftlet depends on a local Ollama service, a local Draftlet server, and an unpacked browser extension. If any one piece is missing or stale, drafting may stop before generation starts.
+
+What to do next: start with Ollama, then the Draftlet server, then reload the extension and the page you are drafting on.
+
 ## Ollama is missing
+
+What happened: the desktop companion could not find the `ollama` command on this machine.
+
+What to do next: install Ollama, then recheck from the desktop companion or terminal.
 
 Install Ollama from [ollama.com/download](https://ollama.com/download). On Linux, make sure the `ollama` binary is on your `PATH` (the installer usually puts it under `~/.local/bin` or `/usr/local/bin`).
 
@@ -24,6 +40,10 @@ ollama --version
 ```
 
 ## Ollama is installed but not running
+
+What happened: the `ollama` command exists, but the local service is not responding on `127.0.0.1:11434`.
+
+What to do next: start Ollama, then recheck.
 
 Start the Ollama app, or run:
 
@@ -39,6 +59,10 @@ curl http://127.0.0.1:11434/api/tags
 
 ## Recommended model is missing
 
+What happened: Ollama is reachable, but the recommended onboarding model is not installed.
+
+What to do next: pull `gemma3:4b`, or select another installed model in the desktop companion.
+
 `gemma3:4b` is the recommended default. Pull it manually:
 
 ```bash
@@ -48,6 +72,10 @@ ollama pull gemma3:4b
 Or use the desktop companion's **Pull Model** action. If a different model is already selected in the desktop companion, Draftlet will use that model instead.
 
 ## Draftlet server is not reachable
+
+What happened: the extension or desktop companion could not reach the local Draftlet server at `http://127.0.0.1:47632`.
+
+What to do next: start the server from the desktop companion or with `pnpm dev:server`, then check `/health`.
 
 Check the server health endpoint:
 
@@ -66,6 +94,10 @@ If the request fails:
 Another process is bound to the Draftlet server port. Stop that process, or change the port in your local dev command and update any client that points at it. The desktop companion only stops a process holding the port if `/health` identifies it as a Draftlet server, so it will not kill unrelated processes.
 
 ## Extension cannot connect to the runtime
+
+What happened: the browser extension cannot reach the local Draftlet server.
+
+What to do next: confirm the server is healthy, reload the unpacked extension, and reload the page you are drafting on.
 
 - Confirm the server is healthy with `curl http://127.0.0.1:47632/health`.
 - Confirm the extension is loaded. Open the browser's extensions page and check that Draftlet is enabled.
@@ -103,7 +135,11 @@ If the extension still behaves like the old build, remove the unpacked extension
 - Some sites override selection events. On those pages, Draftlet can fall back to copy. Use **Copy** and paste manually when capture is blocked.
 - If the page has re-rendered since you last selected, the previous target may be stale. Re-select the text and reopen the side panel.
 
-## Insert fails or needs recapture
+## Insert fails or the compose field is unavailable
+
+What happened: Draftlet generated a draft, but the original compose field could not be reached safely. The page may have re-rendered, navigated, moved focus, or used a rich editor Draftlet cannot insert into.
+
+What to do next: use **Copy** and paste manually, or focus the compose field on the original page and try insertion again when Draftlet asks for focus.
 
 Insertion is best-effort. Draftlet targets native inputs, textareas, and basic `contenteditable` editors first. Rich text editors, canvas surfaces, cross-origin iframes, and editors that listen to a custom input pipeline are likely to need manual paste.
 
@@ -169,6 +205,10 @@ The desktop companion registers a tray icon when it starts.
 If the desktop window never appears and no error is printed, run `pnpm --dir apps/desktop start` directly in a terminal so the Electron main-process output is visible.
 
 ## Electron dev fails on Linux sandbox setup
+
+What happened: Electron could not start its Chromium sandbox helper in local development.
+
+What to do next: set the helper ownership/mode with the recommended `sudo` commands below, or use the dev-only sandbox escape hatch when you cannot elevate.
 
 On Linux, `pnpm dev:desktop` launches the desktop companion through `electron-forge start`, which uses the Chromium SUID helper at:
 

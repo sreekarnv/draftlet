@@ -36,9 +36,10 @@ root.innerHTML = `
       <button class="icon-button" id="refresh" type="button" aria-label="Refresh">Refresh</button>
     </header>
     <section class="status-row" aria-label="Runtime status">
-      <span class="label">Runtime</span>
+      <span class="label">Local server</span>
       <span class="pill" id="runtime-status">Checking...</span>
     </section>
+    <div class="status-hint" id="runtime-hint"></div>
     ${
       diagnosticsEnabled
         ? `
@@ -61,6 +62,7 @@ root.innerHTML = `
 `;
 
 const runtimeStatus = requireElement('runtime-status');
+const runtimeHint = requireElement('runtime-hint');
 const refreshButton = requireElement('refresh') as HTMLButtonElement;
 
 let publishState: HTMLElement | null = null;
@@ -103,6 +105,7 @@ async function refreshPopup() {
   if (copyStatus) copyStatus.textContent = '';
   runtimeStatus.textContent = 'Checking...';
   runtimeStatus.className = 'pill';
+  runtimeHint.textContent = '';
   if (diagnosticsList) diagnosticsList.textContent = 'Loading...';
 
   const [runtime, diagnostics] = await Promise.all([
@@ -110,8 +113,9 @@ async function refreshPopup() {
     diagnosticsEnabled ? loadRecaptureDiagnostics() : Promise.resolve(emptyDiagnosticsResult()),
   ]);
 
-  runtimeStatus.textContent = runtime.status === 'connected' ? 'Connected' : 'Disconnected';
+  runtimeStatus.textContent = runtime.status === 'connected' ? 'Ready' : 'Server offline';
   runtimeStatus.className = `pill ${runtime.status === 'connected' ? 'success' : 'failed'}`;
+  runtimeHint.textContent = runtime.status === 'connected' ? '' : 'Start Draftlet from the desktop app, then refresh.';
   latestDiagnostics = diagnostics.entries;
   if (publishState) renderPublishState(diagnostics.publish);
   if (diagnosticsList) renderDiagnostics(diagnostics.entries);
@@ -385,6 +389,12 @@ function installStyles() {
     .status-row {
       grid-template-columns: 1fr auto;
       align-items: center;
+    }
+
+    .status-hint {
+      color: #64748b;
+      font-size: 12px;
+      line-height: 18px;
     }
 
     .label,

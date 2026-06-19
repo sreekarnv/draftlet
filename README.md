@@ -33,7 +33,7 @@ The desktop companion runs on the platforms Electron supports. The Linux desktop
 
 ## Quick start
 
-The full setup walkthrough lives in [docs/setup.md](docs/setup.md).
+The shortest first-run walkthrough lives in [docs/getting-started.md](docs/getting-started.md). Use [docs/setup.md](docs/setup.md) when you need the full command reference.
 
 1. Install Ollama and pull a model:
 
@@ -134,13 +134,14 @@ Draftlet is composed of six surfaces, each with a narrow responsibility:
 - **Desktop app** — first-run setup, runtime lifecycle, tray behavior, settings, and diagnostics.
 - **Local runtime** — Ollama streaming, prompt building, response parsing, SQLite persistence, and the bounded durable diagnostics relay.
 
-The full architecture, boundaries, and contracts are documented under [docs/](docs/):
+The full architecture, setup, troubleshooting, boundaries, and contracts are documented under [docs/](docs/):
 
 - [Architecture](docs/architecture/architecture.md)
 - [Boundaries](docs/architecture/boundaries.md)
 - [Events and contracts](docs/architecture/events-and-contracts.md)
 - [Current state and open cleanup notes](docs/architecture/phase-plan.md)
 - [UI principles](docs/ui/ui-principles.md)
+- [Getting started](docs/getting-started.md)
 - [Setup](docs/setup.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Public release checklist](docs/release-checklist.md)
@@ -183,6 +184,7 @@ uv run alembic upgrade head
 
 ## Troubleshooting
 
+- [Getting started](docs/getting-started.md)
 - [Setup walkthrough](docs/setup.md)
 - [Common failures and recipes](docs/troubleshooting.md) — Ollama, server health, port conflicts, extension loading, Linux Electron `chrome-sandbox`, stale or interrupted generation recovery
 - [Release checklist](docs/release-checklist.md) — the public-readiness pass we run before tagging a release

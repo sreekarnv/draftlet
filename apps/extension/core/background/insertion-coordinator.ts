@@ -159,7 +159,7 @@ export async function handleRecaptureInsertionTarget(sessionId: string, tabId?: 
       reason: 'tab_unavailable',
       message: tabId
         ? 'That tab is no longer available. Choose another tab or use Copy.'
-        : 'Could not find a compose field. Use Copy instead.',
+        : 'Draftlet cannot reach the original compose field. Use Copy and paste manually.',
     };
   }
 

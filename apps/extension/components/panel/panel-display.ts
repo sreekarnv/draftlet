@@ -45,19 +45,19 @@ export function targetStatusLabel(target: InsertionTargetViewState) {
   }
 
   if (target.status === 'stale') {
-    return 'Target stale';
+    return 'Will recheck';
   }
 
   if (target.status === 'unavailable') {
-    return 'Target unavailable';
+    return 'Use Copy';
   }
 
   if (target.status === 'needs_focus') {
-    return 'Click the compose field';
+    return 'Click compose field';
   }
 
   if (target.status === 'tab_disambiguation_required') {
-    return 'Original page not found';
+    return 'Use Copy';
   }
 
   return 'Needs a compose field';

@@ -2,6 +2,8 @@
 
 Detailed setup and command reference for Draftlet.
 
+For the shortest first-run path, start with [getting-started.md](getting-started.md). Use this page when you need the full command reference, local URLs, packaging notes, or reset commands.
+
 ## Prerequisites
 
 Install these before running Draftlet for the first time.
@@ -108,7 +110,7 @@ It exposes setup, runtime start/stop, model selection, diagnostics, and tray beh
 
 ### Linux (chrome-sandbox)
 
-On Linux, `pnpm dev:desktop` requires the Electron SUID helper at `apps/desktop/node_modules/electron/dist/chrome-sandbox` to be **root-owned** and mode `4755`. If those permissions are missing, the helper aborts on startup and the desktop companion never opens a window.
+On Linux, `pnpm dev:desktop` requires the Electron SUID helper at `apps/desktop/node_modules/electron/dist/chrome-sandbox` to be **root-owned** and mode `4755`. If those permissions are missing, the helper aborts on startup and the desktop companion never opens a window. The full recipe and trade-offs are in [troubleshooting.md](troubleshooting.md#electron-dev-fails-on-linux-sandbox-setup).
 
 Apply the fix from the repo root:
 
@@ -123,7 +125,7 @@ If you cannot elevate, the desktop companion has a **dev-only** escape hatch tha
 ELECTRON_DISABLE_SANDBOX=1 pnpm dev:desktop
 ```
 
-This is for local development only. Do not ship it and do not use it for workflows that handle untrusted content. The full recipe and trade-offs are in [troubleshooting.md](troubleshooting.md#electron-dev-fails-on-linux-sandbox-setup). The packaged build path (`pnpm make:desktop`) ships a correctly-permissioned helper and is unaffected.
+This is for local development only. Do not ship it and do not use it for workflows that handle untrusted content. The packaged build path (`pnpm make:desktop`) ships a correctly-permissioned helper and is unaffected.
 
 ## Verify the server is healthy
 

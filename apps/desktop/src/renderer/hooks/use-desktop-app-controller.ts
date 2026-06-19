@@ -82,7 +82,7 @@ export function useDesktopAppController() {
     setBusy(true);
     const result = await desktopApi.getBrowserRecaptureDiagnosticsReport();
     setBrowserDiagnostics(result);
-    setActionMessage(result.ok ? 'Loaded browser recapture diagnostics.' : result.error.message);
+    setActionMessage(result.ok ? 'Loaded browser insertion diagnostics.' : result.error.message);
     setBusy(false);
   };
 
@@ -90,7 +90,7 @@ export function useDesktopAppController() {
     setBusy(true);
     const result = await desktopApi.getGenerationRunMaintenanceDiagnostics();
     setMaintenanceDiagnostics(result);
-    setActionMessage(result.ok ? 'Loaded runtime maintenance diagnostics.' : result.error.message);
+    setActionMessage(result.ok ? 'Loaded draft recovery diagnostics.' : result.error.message);
     setBusy(false);
   };
 
@@ -115,9 +115,9 @@ export function useDesktopAppController() {
 
     try {
       await navigator.clipboard.writeText(serializeRecaptureDiagnosticsReport(browserDiagnostics.report));
-      setActionMessage('Copied browser recapture diagnostics.');
+      setActionMessage('Copied browser insertion diagnostics.');
     } catch {
-      setActionMessage('Could not copy browser recapture diagnostics.');
+      setActionMessage('Could not copy browser insertion diagnostics.');
     }
   };
 
@@ -205,19 +205,19 @@ function formatDiagnosticsRefreshMessage(
   maintenanceDiagnostics: RuntimeMaintenanceDiagnosticsResult,
 ) {
   if (browserDiagnostics.ok && maintenanceDiagnostics.ok) {
-    return 'Loaded browser and runtime diagnostics.';
+    return 'Loaded browser insertion and draft recovery diagnostics.';
   }
 
   if (browserDiagnostics.ok && !maintenanceDiagnostics.ok) {
-    return `Loaded browser diagnostics. Runtime maintenance unavailable: ${maintenanceDiagnostics.error.message}`;
+    return `Loaded browser insertion diagnostics. Draft recovery unavailable: ${maintenanceDiagnostics.error.message}`;
   }
 
   if (!browserDiagnostics.ok && maintenanceDiagnostics.ok) {
-    return `Loaded runtime maintenance diagnostics. Browser recapture unavailable: ${browserDiagnostics.error.message}`;
+    return `Loaded draft recovery diagnostics. Browser insertion unavailable: ${browserDiagnostics.error.message}`;
   }
 
   if (!browserDiagnostics.ok && !maintenanceDiagnostics.ok) {
-    return `Could not load diagnostics. Browser: ${browserDiagnostics.error.message} Runtime: ${maintenanceDiagnostics.error.message}`;
+    return `Could not load diagnostics. Browser insertion: ${browserDiagnostics.error.message} Draft recovery: ${maintenanceDiagnostics.error.message}`;
   }
 
   return 'Diagnostics refresh finished.';
@@ -230,7 +230,7 @@ function formatDiagnosticsExportMessage(payload: DesktopDiagnosticsExportPayload
   ].filter((status) => status === 'loaded').length;
 
   if (loadedCount === 2) {
-    return 'Copied diagnostics export with browser recapture and runtime maintenance diagnostics.';
+    return 'Copied diagnostics export with browser insertion and draft recovery diagnostics.';
   }
 
   if (loadedCount === 1) {

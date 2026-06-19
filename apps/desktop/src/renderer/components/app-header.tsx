@@ -14,7 +14,7 @@ export function AppHeader({ busy, onRefreshStatus }: AppHeaderProps) {
           Set up Draftlet locally
         </h1>
         <p className="m-0 mt-2 max-w-[650px] text-sm leading-6 text-slate-600">
-          Prepare Ollama, choose a model, start the bundled Draftlet server, and load the browser extension.
+          Draftlet runs on your machine. Use this companion to check Ollama, choose a local model, start the Draftlet server, and load the browser extension. Ollama is installed separately.
         </p>
       </div>
       <Button disabled={busy} onClick={() => void onRefreshStatus()} type="button">

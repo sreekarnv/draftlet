@@ -83,7 +83,7 @@ describe('DraftletPanel insertion target recovery', () => {
     await act(async () => {
       mounted = mountDraftletPanel(container, {
         onGenerate() {},
-        onInsert: async (): Promise<InsertionResult> => ({ status: 'copied', message: "Couldn't find a compose field, so the draft was copied." }),
+        onInsert: async (): Promise<InsertionResult> => ({ status: 'copied', message: 'Draftlet could not find a compose field, so it copied the draft.' }),
         onCloseRequest() {},
         onAfterRender() {},
       });
@@ -95,19 +95,19 @@ describe('DraftletPanel insertion target recovery', () => {
       });
       mounted!.controller.setInsertionTargetStatus({
         status: 'unavailable',
-        message: "Couldn't find a compose field, so the draft was copied.",
+        message: 'Draftlet could not find a compose field, so it copied the draft.',
         trail: [
           {
             event: 'recapture_failed',
             level: 'failed',
-            message: "Couldn't find a compose field, so the draft was copied.",
+            message: 'Draftlet could not find a compose field, so it copied the draft.',
             at: '2026-01-01T00:00:00.000Z',
           },
         ],
       });
     });
 
-    expect(container.textContent).toContain("Couldn't find a compose field, so the draft was copied.");
+    expect(container.textContent).toContain('Draftlet could not find a compose field, so it copied the draft.');
     expect(container.textContent).not.toContain('Open the page with the compose field');
   });
 

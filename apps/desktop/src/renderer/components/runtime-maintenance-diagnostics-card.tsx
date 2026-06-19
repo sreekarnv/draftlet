@@ -29,7 +29,7 @@ export function RuntimeMaintenanceDiagnosticsCard({
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase text-slate-500">Runtime diagnostics</p>
-          <h2 className="m-0 text-base font-bold leading-tight text-slate-900">Generation run maintenance</h2>
+          <h2 className="m-0 text-base font-bold leading-tight text-slate-900">Draft recovery diagnostics</h2>
         </div>
         <Badge tone={diagnostics?.ok ? 'success' : diagnostics ? 'danger' : 'neutral'}>
           {diagnostics?.ok ? 'Loaded' : diagnostics ? 'Unavailable' : ready ? 'Ready' : 'Server offline'}
@@ -37,7 +37,7 @@ export function RuntimeMaintenanceDiagnosticsCard({
       </div>
 
       <p className="m-0 text-sm leading-6 text-slate-600">
-        Read-only runtime maintenance status for startup interruption recovery, stale-run reconciliation, and durable replay pruning.
+        Read-only runtime status for interrupted draft recovery, stale generation cleanup, and bounded replay pruning.
       </p>
 
       <div className="grid gap-2 rounded-lg bg-slate-100 px-3 py-2 text-[13px] leading-6 text-slate-700 ring-1 ring-slate-200">
@@ -48,7 +48,7 @@ export function RuntimeMaintenanceDiagnosticsCard({
             {hasMaintenance ? null : <div>No generation-run maintenance outcomes are retained yet.</div>}
           </>
         ) : (
-          <div>{diagnostics?.error.message ?? 'Load runtime maintenance diagnostics to inspect recent cleanup and recovery outcomes.'}</div>
+          <div>{diagnostics?.error.message ?? 'Load draft recovery diagnostics to inspect recent cleanup and recovery outcomes.'}</div>
         )}
       </div>
 
@@ -77,7 +77,7 @@ export function RuntimeMaintenanceDiagnosticsCard({
 
       <div className="flex flex-wrap gap-2">
         <Button disabled={busy || !ready} onClick={() => void onLoadMaintenanceDiagnostics()} type="button">
-          {busy ? 'Loading...' : 'Load runtime maintenance'}
+          {busy ? 'Loading...' : 'Load draft recovery'}
         </Button>
       </div>
     </Card>

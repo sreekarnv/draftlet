@@ -32,7 +32,7 @@ export async function startDraftletServer(): Promise<CommandStatus> {
   }
 
   if (health.code === 'conflict' || await hasProcessOnDraftletPort()) {
-    return fail(`Port ${DRAFTLET_SERVER_PORT} is occupied by a non-Draftlet process. Stop that process or change its port before starting Draftlet.`, 'conflict');
+    return fail(`Another service is using Draftlet's port (${DRAFTLET_SERVER_PORT}). Stop that service or change its port before starting Draftlet.`, 'conflict');
   }
 
   if (serverProcess && serverProcess.exitCode === null) {
@@ -69,7 +69,7 @@ export async function stopDraftletServer(): Promise<CommandStatus> {
 
   if (!health.ok) {
     if (health.code === 'conflict') {
-      return fail('A non-Draftlet service is on the Draftlet port. Draftlet will not stop it.', 'conflict');
+      return fail('Another service is using Draftlet\'s port. Draftlet will not stop it.', 'conflict');
     }
 
     return ok('No Draftlet server is running.', 'stopped');

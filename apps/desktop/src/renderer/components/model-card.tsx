@@ -38,10 +38,14 @@ export function ModelCard({
 
       <div className="grid gap-1">
         <p className="m-0 text-sm leading-6 text-slate-600">
-          {activeModelInstalled ? 'Active model is installed and ready.' : 'Select or install a model to make Draftlet ready.'}
+          {activeModelInstalled
+            ? 'Draftlet will use the active Ollama model for drafts.'
+            : 'Select or install a local Ollama model before generating drafts.'}
         </p>
         <small className="text-[13px] leading-6 text-slate-500">Active model: <strong className="font-bold text-slate-800">{selectedModel}</strong></small>
-        <small className="text-[13px] leading-6 text-slate-500">Recommended onboarding model: <strong className="font-bold text-slate-800">{RECOMMENDED_MODEL}</strong></small>
+        <small className="text-[13px] leading-6 text-slate-500">
+          Recommended onboarding model: <strong className="font-bold text-slate-800">{RECOMMENDED_MODEL}</strong>. Another installed model is okay if you select it.
+        </small>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -67,7 +71,7 @@ export function ModelCard({
             </div>
           );
         }) : (
-          <p className="m-0 bg-white/90 p-3 text-sm leading-6 text-slate-600">No installed Ollama models were found. Pull the recommended model after Ollama is running.</p>
+          <p className="m-0 bg-white/90 p-3 text-sm leading-6 text-slate-600">No Ollama models found. Start Ollama, then pull {RECOMMENDED_MODEL}.</p>
         )}
       </div>
     </Card>
