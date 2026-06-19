@@ -8,17 +8,11 @@ import {
   createRecaptureDiagnosticsPublishRetryQueue,
   type RecaptureDiagnosticsPublishRetryQueue,
 } from '../recapture-diagnostics-publish-retry';
-import type { PlausibleTabCandidate } from '../tab-disambiguation';
 
 export interface LocalGenerationTransportHandle {
   sessionId: string;
   abortController: AbortController;
 }
-
-export type InsertionTabResolution =
-  | { status: 'resolved'; tab: Browser.tabs.Tab }
-  | { status: 'ambiguous'; candidates: PlausibleTabCandidate[] }
-  | { status: 'missing' };
 
 export const GENERATION_RUN_STALE_AFTER_SECONDS = 30;
 
