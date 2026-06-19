@@ -558,7 +558,7 @@ async function fallbackCopy(
 ): Promise<InsertionResult> {
   try {
     await navigator.clipboard.writeText(replyText);
-    const message = "Couldn't find a compose field, so the draft was copied.";
+    const message = 'Draftlet could not find a compose field, so it copied the draft.';
     state.insertionTrail = appendTrail(
       state.insertionTrail,
       'recapture_failed',
@@ -580,7 +580,7 @@ async function fallbackCopy(
     panel.setRestoreState(buildCurrentRestoreState(state));
     return { status: 'copied', message, targetStatus: 'unavailable' };
   } catch {
-    const message = "Couldn't find a compose field. Use Copy instead.";
+    const message = 'Draftlet could not find a compose field. Use Copy and paste manually.';
     state.insertionTrail = appendTrail(
       state.insertionTrail,
       'recapture_failed',

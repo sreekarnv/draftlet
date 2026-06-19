@@ -21,11 +21,12 @@ function readinessLabel(done: number, total: number): string {
 export function SetupChecklist({ runtime }: SetupChecklistProps) {
   const activeModelInstalled = runtime.installedModels.some((model) => model.name === runtime.selectedModel);
   const recommendedModelText = runtime.model.ok ? 'Recommended model installed' : 'Recommended model missing';
+  const ready = runtime.ollamaInstalled.ok && runtime.ollamaRunning.ok && activeModelInstalled && runtime.server.ok;
   const items = [
     { label: 'Ollama installed', ok: runtime.ollamaInstalled.ok },
     { label: 'Ollama running', ok: runtime.ollamaRunning.ok },
-    { label: `Active model available: ${runtime.selectedModel}`, ok: activeModelInstalled },
-    { label: 'Draftlet server ready', ok: runtime.server.ok },
+    { label: `Active model installed: ${runtime.selectedModel}`, ok: activeModelInstalled },
+    { label: 'Draftlet server reachable', ok: runtime.server.ok },
   ];
   const done = items.filter((item) => item.ok).length;
 
@@ -33,7 +34,7 @@ export function SetupChecklist({ runtime }: SetupChecklistProps) {
     <Card className="content-start bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.9))]">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase text-slate-500">Readiness</p>
+          <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase text-slate-500">Local setup readiness</p>
           <h2 className="m-0 text-base font-bold leading-tight text-slate-900">{readinessLabel(done, items.length)}</h2>
         </div>
         <Badge>{done}/{items.length}</Badge>
@@ -51,6 +52,9 @@ export function SetupChecklist({ runtime }: SetupChecklistProps) {
       </ul>
       <p className="m-0 rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold leading-5 text-slate-600 ring-1 ring-slate-200">
         {recommendedModelText}: {RECOMMENDED_MODEL}
+      </p>
+      <p className="m-0 text-xs leading-5 text-slate-600">
+        {ready ? 'Local setup is ready. Load the browser extension, select text on a page, and generate a draft.' : 'Complete the local setup checks, then load the browser extension and try a draft.'}
       </p>
     </Card>
   );

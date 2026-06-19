@@ -105,25 +105,25 @@ describe('insertionTargetMessage', () => {
 
   it('reports the stale target guidance when status is stale', () => {
     expect(insertionTargetMessage(workspaceSession({ insertionTargetStatus: 'stale' }))).toBe(
-      'Target stale; Draftlet will recheck before inserting.',
+      'Draftlet will recheck the compose field before inserting.',
     );
   });
 
   it('reports the unavailable target guidance when status is unavailable', () => {
     expect(insertionTargetMessage(workspaceSession({ insertionTargetStatus: 'unavailable' }))).toBe(
-      'Original page is not available. Use Copy for this reply.',
+      'Draftlet cannot reach the original compose field. Use Copy and paste manually.',
     );
   });
 
   it('reports the focus guidance when status is needs_focus', () => {
     expect(insertionTargetMessage(workspaceSession({ insertionTargetStatus: 'needs_focus' }))).toBe(
-      'Click the compose field on the original page to insert.',
+      'Click the compose field on the original page, then try inserting again.',
     );
   });
 
   it('reports the tab disambiguation guidance when status is tab_disambiguation_required', () => {
     expect(insertionTargetMessage(workspaceSession({ insertionTargetStatus: 'tab_disambiguation_required' }))).toBe(
-      'Original page is not available. Use Copy for this reply.',
+      'Draftlet cannot reach the original compose field. Use Copy and paste manually.',
     );
   });
 
@@ -140,10 +140,10 @@ describe('insertionTargetMessage', () => {
           },
         }),
       ),
-    ).toBe('Target stale; Draftlet will recheck before inserting.');
+    ).toBe('Draftlet will recheck the compose field before inserting.');
   });
 
   it('falls back to needs_recapture when no target and no status are set', () => {
-    expect(insertionTargetMessage(workspaceSession())).toBe('Click the compose field on the original page to insert.');
+    expect(insertionTargetMessage(workspaceSession())).toBe('Click the compose field on the original page, then try inserting again.');
   });
 });

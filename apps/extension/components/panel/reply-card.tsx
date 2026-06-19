@@ -155,15 +155,15 @@ function feedbackMessageFor(result: InsertionResult, previousTargetStatus: Inser
   }
 
   if (result.targetStatus === 'unavailable') {
-    return 'Target unavailable. Copy this reply to use it manually.';
+    return 'Draftlet cannot reach the compose field. Use Copy and paste manually.';
   }
 
   if (result.targetStatus === 'tab_disambiguation_required' || previousTargetStatus === 'tab_disambiguation_required') {
-    return 'Could not find the compose field on the original page. Use Copy instead.';
+    return 'Draftlet cannot reach the original compose field. Use Copy and paste manually.';
   }
 
   if (result.targetStatus === 'needs_focus' || previousTargetStatus === 'needs_focus') {
-    return 'Could not insert here. Use Copy instead.';
+    return 'Click the compose field on the original page, then try inserting again.';
   }
 
   return 'Could not insert or copy this reply.';

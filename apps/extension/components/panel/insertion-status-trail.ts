@@ -100,20 +100,20 @@ export function insertionTargetMessage(session: WorkspaceSession): string {
   }
 
   if (status === 'stale') {
-    return 'Target stale; Draftlet will recheck before inserting.';
+    return 'Draftlet will recheck the compose field before inserting.';
   }
 
   if (status === 'unavailable') {
-    return 'Original page is not available. Use Copy for this reply.';
+    return 'Draftlet cannot reach the original compose field. Use Copy and paste manually.';
   }
 
   if (status === 'needs_focus') {
-    return 'Click the compose field on the original page to insert.';
+    return 'Click the compose field on the original page, then try inserting again.';
   }
 
   if (status === 'tab_disambiguation_required') {
-    return 'Original page is not available. Use Copy for this reply.';
+    return 'Draftlet cannot reach the original compose field. Use Copy and paste manually.';
   }
 
-  return 'Click the compose field on the original page to insert.';
+  return 'Click the compose field on the original page, then try inserting again.';
 }

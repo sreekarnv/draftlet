@@ -514,7 +514,7 @@ describe('insertIntoActivePage', () => {
 
     expect(result.status).toBe('copied');
     expect(writeText).toHaveBeenCalledWith('Hello there');
-    const copiedTrail = state.insertionTrail.filter((item) => item.message === "Couldn't find a compose field, so the draft was copied.");
+    const copiedTrail = state.insertionTrail.filter((item) => item.message === 'Draftlet could not find a compose field, so it copied the draft.');
     expect(copiedTrail).toHaveLength(1);
     const allMessages = state.insertionTrail.map((item) => item.message);
     expect(allMessages.some((message) => message.includes('Open the page with the compose field'))).toBe(false);
@@ -548,9 +548,9 @@ describe('insertIntoActivePage', () => {
     const result = await insertIntoActivePage(state, controller, 'Hello there');
 
     expect(result.status).toBe('failed');
-    expect(result.message).toBe("Couldn't find a compose field. Use Copy instead.");
+    expect(result.message).toBe('Draftlet could not find a compose field. Use Copy and paste manually.');
     expect(writeText).toHaveBeenCalledWith('Hello there');
-    const copiedTrail = state.insertionTrail.filter((item) => item.message === "Couldn't find a compose field. Use Copy instead.");
+    const copiedTrail = state.insertionTrail.filter((item) => item.message === 'Draftlet could not find a compose field. Use Copy and paste manually.');
     expect(copiedTrail).toHaveLength(1);
   });
 
@@ -583,7 +583,7 @@ describe('insertIntoActivePage', () => {
     // The two consecutive retries produce the same trail message, so
     // appendTrail's built-in dedupe collapses the second into the first.
     const copiedTrail = state.insertionTrail.filter(
-      (item) => item.message === "Couldn't find a compose field, so the draft was copied.",
+      (item) => item.message === 'Draftlet could not find a compose field, so it copied the draft.',
     );
     expect(copiedTrail).toHaveLength(1);
     expect(writeText).toHaveBeenCalledTimes(2);

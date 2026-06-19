@@ -13,9 +13,10 @@ interface PopupGlobals {
   navigator: { clipboard: { writeText: ReturnType<typeof vi.fn> } };
 }
 
-function createPopupHarness(): { root: HTMLElement; sent: { type: string }[]; writeText: ReturnType<typeof vi.fn> } {
+function createPopupHarness(options: { runtimeStatus?: RuntimeStatusResult['status'] } = {}): { root: HTMLElement; sent: { type: string }[]; writeText: ReturnType<typeof vi.fn> } {
   const sent: { type: string }[] = [];
   const writeText = vi.fn(async () => undefined);
+  const runtimeStatus = options.runtimeStatus ?? 'connected';
 
   const root = document.createElement('div');
   root.id = 'root';
@@ -25,7 +26,7 @@ function createPopupHarness(): { root: HTMLElement; sent: { type: string }[]; wr
     sent.push(message);
 
     if (message.type === GET_RUNTIME_STATUS) {
-      return { status: 'connected' } satisfies RuntimeStatusResult;
+      return { status: runtimeStatus } satisfies RuntimeStatusResult;
     }
 
     if (message.type === GET_RECAPTURE_DIAGNOSTICS) {
@@ -115,7 +116,7 @@ describe('popup (default flow, DRAFTLET_DEBUG_INSERTION unset)', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(sent.some((message) => message.type === GET_RUNTIME_STATUS)).toBe(true);
-    expect(document.getElementById('runtime-status')?.textContent).toBe('Connected');
+    expect(document.getElementById('runtime-status')?.textContent).toBe('Ready');
   });
 
   it('does not call GET_RECAPTURE_DIAGNOSTICS when the flag is off', async () => {
@@ -126,6 +127,17 @@ describe('popup (default flow, DRAFTLET_DEBUG_INSERTION unset)', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(sent.some((message) => message.type === GET_RECAPTURE_DIAGNOSTICS)).toBe(false);
+  });
+
+  it('shows a local-server hint when disconnected', async () => {
+    setDebugFlag(undefined);
+    createPopupHarness({ runtimeStatus: 'disconnected' });
+    await import('../../ui/popup');
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(document.getElementById('runtime-status')?.textContent).toBe('Server offline');
+    expect(document.getElementById('runtime-hint')?.textContent).toBe('Start Draftlet from the desktop app, then refresh.');
   });
 });
 

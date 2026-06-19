@@ -16,18 +16,22 @@ function labelFor(status: CommandStatus) {
   }
 
   if (status.code === 'missing') {
-    return 'Missing';
+    return 'Needs install';
   }
 
   if (status.code === 'not_running') {
     return 'Not running';
   }
 
-  if (status.code === 'conflict') {
-    return 'Conflict';
+  if (status.code === 'offline') {
+    return 'Offline';
   }
 
-  return 'Needs setup';
+  if (status.code === 'conflict') {
+    return 'Port conflict';
+  }
+
+  return 'Needs attention';
 }
 
 export function StatusCard({ action, detail, index, status, title }: StatusCardProps) {

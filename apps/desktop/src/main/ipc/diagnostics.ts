@@ -66,7 +66,7 @@ export async function getBrowserRecaptureDiagnosticsReport(): Promise<DesktopExt
   } catch (error) {
     return createRecaptureDiagnosticsBridgeFailure(
       'transport_unavailable',
-      `Draftlet server is not reachable: ${error instanceof Error ? error.message : String(error)}`,
+      `Draftlet server is not running at ${SERVER_BASE_URL}. ${error instanceof Error ? error.message : String(error)}`,
       true,
     );
   }
@@ -95,7 +95,7 @@ export async function getGenerationRunMaintenanceDiagnostics(): Promise<Generati
   } catch (error) {
     return createGenerationRunMaintenanceDiagnosticsFailure(
       'transport_unavailable',
-      `Draftlet server is not reachable: ${error instanceof Error ? error.message : String(error)}`,
+      `Draftlet server is not running at ${SERVER_BASE_URL}. ${error instanceof Error ? error.message : String(error)}`,
       true,
     );
   }

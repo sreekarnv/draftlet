@@ -36,14 +36,14 @@ export function BrowserDiagnosticsCard({
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase text-slate-500">Diagnostics</p>
-          <h2 className="m-0 text-base font-bold leading-tight text-slate-900">Browser recapture diagnostics</h2>
+          <h2 className="m-0 text-base font-bold leading-tight text-slate-900">Browser insertion diagnostics</h2>
         </div>
         <Badge tone={diagnostics?.ok ? 'success' : diagnostics?.stale ? 'danger' : 'neutral'}>
           {diagnostics?.ok ? 'Report ready' : diagnostics?.stale ? 'Report expired' : ready ? 'Server ready' : 'Extension local'}
         </Badge>
       </div>
       <p className="m-0 text-sm leading-6 text-slate-600">
-        Recapture diagnostics are owned by the browser extension because they describe tab selection, content-script reachability, and focused compose targets.
+        Browser insertion diagnostics come from the extension. They describe selected text handling, reachable tabs, and compose-field checks.
       </p>
       <div className="grid gap-2 rounded-lg bg-slate-100 px-3 py-2 text-[13px] leading-6 text-slate-700 ring-1 ring-slate-200">
         {diagnostics?.ok ? (
@@ -56,8 +56,8 @@ export function BrowserDiagnosticsCard({
         {diagnostics?.staleAfterSeconds ? (
           <div>Reports expire after {Math.round(diagnostics.staleAfterSeconds / 60)} minutes.</div>
         ) : null}
-        <div>The extension publishes this report during recapture and insertion-target checks when the local runtime is reachable.</div>
-        <div>The report omits selected text and page content.</div>
+        <div>The extension publishes this report during insertion-target checks when the local runtime is reachable.</div>
+        <div>The report omits selected text, generated drafts, and page content.</div>
       </div>
       {summary?.currentTarget ? (
         <div className="grid gap-1.5 rounded-lg bg-white px-3 py-2 text-[13px] leading-5 text-slate-700 ring-1 ring-slate-200">

@@ -27,9 +27,10 @@ export async function checkServerHealth(): Promise<CommandStatus> {
       return ok(`Draftlet server is healthy (${data.version ?? 'unknown version'}).`, 'ready');
     }
 
-    return fail('A service responded on the Draftlet port, but it is not Draftlet.', 'conflict');
+    return fail('Another service is using Draftlet\'s port.', 'conflict');
   } catch (error) {
-    return fail(`Draftlet server is not reachable: ${error instanceof Error ? error.message : String(error)}`, 'offline');
+    const detail = error instanceof Error ? error.message : String(error);
+    return fail(`Draftlet server is not running at ${SERVER_BASE_URL}. ${detail}`, 'offline');
   }
 }
 
