@@ -3,7 +3,7 @@ import type {
   ConversationThread,
   ConversationThreadSnapshot,
   Turn,
-} from '../messages';
+} from '@draftlet/shared/contracts';
 import { getJson, putJson } from './transport';
 import {
   mapConversationThread,

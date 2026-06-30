@@ -3,7 +3,7 @@ import type {
   DomainHistoryItem,
   WorkspaceSession,
   WorkspaceSessionSnapshot,
-} from '../messages';
+} from '@draftlet/shared/contracts';
 import { getJson, putJson } from './transport';
 import {
   mapComposeTargetWrite,

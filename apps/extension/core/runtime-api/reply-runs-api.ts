@@ -1,37 +1,24 @@
 import { SERVER_BASE_URL } from '../constants';
 import { streamSse, type SseMessage } from '../sse-client';
 import type { ReplyRequestPayload } from '../types';
+import type {
+  DraftVariantStreamPayload,
+  ReplyGenerationRunExecutionStart,
+  StreamedDraftVariant,
+  StreamedGenerationControlEvent,
+} from '@draftlet/shared/contracts';
 import { postJson } from './transport';
 
-export interface StreamedDraftVariant {
-  text: string;
-  variantId?: string;
-  sequence?: number;
-}
-
-export interface StreamedGenerationControlEvent {
-  status: 'run_started' | 'run_completed' | 'run_cancelled' | 'run_failed';
-  message?: string;
-  sequence?: number;
-}
+export type {
+  ReplyGenerationRunExecutionStart,
+  StreamedDraftVariant,
+  StreamedGenerationControlEvent,
+} from '@draftlet/shared/contracts';
 
 export interface StreamReplyGenerationRunEventsOptions {
   signal?: AbortSignal;
   onReply: (variant: StreamedDraftVariant) => void;
   onControl?: (event: StreamedGenerationControlEvent) => void;
-}
-
-export interface ReplyGenerationRunExecutionStart {
-  runId: string;
-  started: boolean;
-  live: boolean;
-}
-
-interface DraftVariantStreamPayload {
-  reply: string;
-  variant_id: string;
-  turn_id?: string | null;
-  thread_id?: string | null;
 }
 
 interface ReplyGenerationRunExecutionStartRead {

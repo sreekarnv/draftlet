@@ -1,17 +1,6 @@
-import type { WorkspaceSession } from './messages';
+import type { PlausibleTabCandidate, PlausibleTabMatchReason, WorkspaceSession } from './messages';
 
-export type PlausibleTabMatchReason = 'target_url' | 'target_origin' | 'session_url';
-
-export interface PlausibleTabCandidate {
-  tabId: number;
-  windowId?: number;
-  title?: string;
-  url?: string;
-  origin?: string;
-  active?: boolean;
-  currentWindow?: boolean;
-  matchReason: PlausibleTabMatchReason;
-}
+export type { PlausibleTabCandidate, PlausibleTabMatchReason } from './messages';
 
 export interface CandidateTabInput {
   id?: number;

@@ -8,7 +8,7 @@ The hard rule is that the webpage must not own the Draftlet workflow. The page i
 
 Put code in content scripts when it directly touches the webpage.
 
-Content scripts own:
+Content scripts own capture and insertion only:
 - page integration
 - selection capture
 - editable target detection
@@ -50,13 +50,13 @@ It does not own:
 - durable domain persistence
 - large drafting workflows that belong in the side panel or runtime
 
-Keep it explicit. Avoid a giant background module that quietly becomes the application backend.
+Keep it explicit. The service worker/background owns coordination only; avoid a giant background module that quietly becomes the application backend.
 
-## Side Panel
+## Workshop
 
-Put code in the side panel when it is part of the primary drafting workflow.
+Put code in Workshop when it is part of the primary drafting workflow. In v0.2.0, Workshop is implemented by the extension side panel.
 
-The side panel owns:
+Workshop owns:
 - the main Draftlet workspace
 - session and thread display
 - source/context summary
@@ -67,13 +67,30 @@ The side panel owns:
 - insertion, copy, and replace actions
 - user-visible errors and retry controls
 
-The side panel does not own:
+Workshop does not own:
 - low-level page DOM logic
 - direct webpage runtime connection logic
 - runtime persistence internals
 - hidden transport concerns that belong in coordination or runtime layers
 
-The side panel should be the default destination for any workflow that takes more than a quick action.
+Workshop should be the default destination for any workflow that takes more than a quick action.
+
+## Command Surface
+
+Put code in the future Command Surface only when it is a lightweight Shadow DOM command affordance on the page.
+
+The Command Surface will own:
+- quick page-local commands
+- small browser-native entry points into Workshop
+- lightweight affordance state
+
+The Command Surface will not own:
+- primary drafting UX
+- session or thread lifecycle
+- prompt construction
+- runtime connection ownership
+- persistence
+- large overlays or app-like page UI
 
 ## Popup
 
@@ -103,6 +120,7 @@ The desktop app owns:
 - runtime setup
 - checking local dependencies
 - starting and stopping runtime processes
+- runtime lifecycle
 - tray behavior
 - logs and diagnostics
 - advanced settings
@@ -127,6 +145,7 @@ The runtime owns:
 - prompt building
 - generation orchestration
 - streaming responses
+- model selection
 - request validation
 - service-level business rules
 - persistence for sessions, threads, turns, drafts, and preferences
@@ -155,7 +174,7 @@ Avoid mirrored mutable state across content script, popup, side panel, desktop, 
 
 ## Messaging Ownership
 
-Cross-surface communication must use typed contracts.
+Cross-surface communication must use typed contracts centralized in `packages/shared/src/contracts/` and exported through `@draftlet/shared/contracts`.
 
 New manually created TypeScript and TSX source/test files should use `kebab-case` filenames. This keeps import paths predictable across extension, desktop, and shared contract code while allowing exported symbols to keep idiomatic TypeScript naming.
 
@@ -169,6 +188,8 @@ Use shared schemas for messages between:
 Desktop-extension diagnostics messages are explicit and diagnostics-only. Browser recapture state remains extension-owned; the desktop may display the latest bounded, privacy-safe diagnostics report published by the extension through the runtime relay, but it must not activate tabs, retry recapture, or infer live DOM state. The popup's recapture diagnostics surface is dev-only and gated behind `DRAFTLET_DEBUG_INSERTION=1`; it is not part of the default user flow.
 
 The service worker should coordinate extension message routing. The runtime should expose stable request/response and streaming interfaces. No surface should invent ad hoc payloads for the same concept.
+
+FastAPI Pydantic schemas remain the server-side validation layer. Shared TypeScript contracts describe cross-boundary shapes for extension, desktop, and TypeScript consumers; they do not replace runtime request validation.
 
 ## Persistence Ownership
 

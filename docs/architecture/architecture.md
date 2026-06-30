@@ -16,21 +16,25 @@ Draftlet is composed of six major surfaces. Each one has a narrow responsibility
 
 ### Content script
 
-The content script is the page integration layer. It detects editable surfaces, captures selection or nearby context, shows tiny inline affordances, performs best-effort insertion, and relays structured messages to extension-owned surfaces.
+The content script is the page integration layer. It owns capture and insertion only: detecting editable surfaces, capturing selection or nearby context, showing tiny inline affordances, performing best-effort insertion, and relaying structured messages to extension-owned surfaces.
 
 It must stay lightweight. It must not own prompt logic, model orchestration, persistence, thread state, or the local runtime connection.
 
 ### Extension service worker / background
 
-The service worker coordinates extension-level behavior. It routes commands, manages browser lifecycle concerns, coordinates tab/session identity, checks capabilities, and brokers communication between extension surfaces and the local runtime.
+The service worker coordinates extension-level behavior only. It routes commands, manages browser lifecycle concerns, coordinates tab/session identity, checks capabilities, and brokers communication between extension surfaces and the local runtime.
 
 It keeps browser-level state minimal and explicit. It is not a second backend or a catch-all business logic module.
 
-### Side panel
+### Workshop
 
-The side panel is the primary Draftlet workflow surface. It owns the extension drafting workspace: session context, thread view, streaming drafts, follow-up instructions, variant comparison, review, and insertion controls.
+Workshop is the primary Draftlet workflow surface. In v0.2.0 it is implemented as the extension side-panel workspace, and it owns session context, thread view, streaming drafts, follow-up instructions, variant comparison, review, and insertion controls.
 
-The side panel is where the user spends time drafting. It is not a thin wrapper around a webpage overlay.
+Workshop is where the user spends time drafting. It is not a thin wrapper around a webpage overlay.
+
+### Command Surface
+
+The Command Surface is a future lightweight Shadow DOM page affordance. It will provide quick browser-native commands and entry points, but it will not own the drafting workflow, thread state, prompt construction, persistence, or runtime transport.
 
 ### Popup
 
@@ -40,13 +44,13 @@ The popup must not become the full drafting app. The popup exposes recapture dia
 
 ### Desktop app
 
-The desktop app owns machine-local and operational concerns: first-run onboarding, runtime setup, local dependency checks, tray behavior, logs, diagnostics, settings, and advanced controls.
+The desktop app owns machine-local and operational concerns: first-run onboarding, runtime setup, runtime lifecycle, local dependency checks, tray behavior, logs, diagnostics, settings, and advanced controls.
 
 It may act as the operator-facing shell for the runtime. It must not own page-specific workflows or compete with the side panel as the main drafting surface.
 
 ### Local runtime / daemon
 
-The local runtime owns model access, prompt building, streaming generation, persistence for sessions, threads, turns, draft variants, generation runs, preferences, and bounded diagnostics relay.
+The local runtime owns model selection, model access, prompt building, generation orchestration, streaming generation, persistence for sessions, threads, turns, draft variants, generation runs, preferences, and bounded diagnostics relay.
 
 FastAPI routes stay thin. Runtime behavior is organized through explicit services, schemas, storage modules, and streaming helpers rather than generic frameworks.
 
@@ -89,7 +93,7 @@ Extension storage can hold lightweight browser coordination state. Desktop stora
 
 ## Messaging ownership
 
-Cross-surface communication uses typed contracts.
+Cross-surface communication uses typed contracts centralized in `packages/shared/src/contracts/` and exported through `@draftlet/shared/contracts`.
 
 - Content script to service worker
 - Side panel to service worker
@@ -99,7 +103,7 @@ Cross-surface communication uses typed contracts.
 
 Desktop-extension diagnostics messages are explicit and diagnostics-only. Browser recapture state remains extension-owned; the desktop may display the latest bounded, privacy-safe diagnostics report published by the extension through the runtime relay, but it must not activate tabs, retry recapture, or infer live DOM state.
 
-The service worker coordinates extension message routing. The runtime exposes stable request/response and streaming interfaces. No surface invents ad hoc payloads for the same concept.
+The service worker coordinates extension message routing. The runtime exposes stable request/response and streaming interfaces while keeping FastAPI Pydantic schemas as the server-side validation layer. No surface invents ad hoc payloads for the same concept.
 
 ## Design principles
 

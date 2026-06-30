@@ -4,6 +4,23 @@ Draftlet crosses several boundaries: page to extension, extension surface to ser
 
 This document is a practical convention guide, not a full protocol spec.
 
+## v0.2.0 Shared Contract Layer
+
+The v0.2.0 TypeScript contract source of truth is `packages/shared/src/contracts/`, exported as `@draftlet/shared/contracts` and re-exported from `@draftlet/shared`.
+
+The minimal shared layer currently covers:
+- `WorkspaceSession`
+- `ConversationThread`
+- `Turn`
+- `DraftVariant`
+- `GenerationRun`
+- generation stream events and progress snapshots
+- runtime status
+- insertion request/result and compose target refs
+- structured `DraftletError`
+
+FastAPI Pydantic schemas in `apps/server/app/schemas/` remain the server-side validation layer. The shared TypeScript contracts are for typed cross-boundary consumption; Zod is not used in this phase because no new runtime validation boundary was added on the TypeScript side.
+
 ## Contract Principles
 
 Contracts should be:
@@ -255,15 +272,17 @@ DOM references should not cross long-lived boundaries as live objects. Send snap
 ## Suggested Shared Entities
 
 The shared contracts should evolve around these entities:
-- `SessionRef`
-- `ThreadRef`
-- `TurnRef`
-- `DraftVariantRef`
+- `WorkspaceSession`
+- `ConversationThread`
+- `Turn`
+- `DraftVariant`
+- `GenerationRun`
 - `ComposeTargetRef`
 - `SourceSnapshot`
-- `GenerationOptions`
 - `RuntimeStatus`
+- `InsertionRequest`
 - `InsertionResult`
+- `DraftletError`
 
 These names can adapt to existing repo conventions, but the concepts should remain stable.
 

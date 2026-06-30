@@ -4,7 +4,7 @@ import type {
   GenerationRunExecutionState,
   GenerationRunProgressSnapshot,
   GenerationRunStatus,
-} from '../messages';
+} from '@draftlet/shared/contracts';
 import { getJson, patchJson, postJson, putJson } from './transport';
 import {
   mapGenerationRun,

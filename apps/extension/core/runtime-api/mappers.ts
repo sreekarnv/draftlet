@@ -13,8 +13,8 @@ import type {
   Turn,
   WorkspaceSession,
   WorkspaceSessionSnapshot,
-} from '../messages';
-import type { ComposeTargetRef } from '../types';
+  ComposeTargetRef,
+} from '@draftlet/shared/contracts';
 import {
   isGenerationRunLiveFeedAttachmentMode,
   isGenerationRunStatus,

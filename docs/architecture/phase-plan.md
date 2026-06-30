@@ -8,12 +8,12 @@ Draftlet runs locally on the developer's machine and is composed of six surfaces
 
 - a browser extension with a content script, a background service worker, a side panel workspace, and a popup
 - an Electron desktop companion for setup, runtime lifecycle, tray behavior, and diagnostics
-- a local FastAPI server for Ollama streaming, prompt building, response parsing, and SQLite persistence
-- shared typed contracts across the extension, desktop, and runtime boundaries
+- a local FastAPI server for Ollama streaming, prompt building, model selection, response parsing, and SQLite persistence
+- shared typed contracts in `packages/shared/src/contracts/` across the extension, desktop, and runtime boundaries
 - a local SQLite database (via Alembic migrations) for sessions, threads, turns, draft variants, generation runs, preferences, and bounded browser recapture diagnostics
 - Ollama, installed and run separately by the user
 
-The runtime owns the `WorkspaceSession` / `ConversationThread` / `Turn` / `DraftVariant` / `GenerationRun` data model. The side panel is the primary drafting surface. Insertion is best-effort page integration owned by the content script; the side panel's `Insert` / `Use` action owns the full target recovery chain (cached target → arm listener → activate tab → await capture → focus, restore selection, and insert). A `DRAFTLET_DEBUG_INSERTION=1` env var gates the popup's recapture diagnostics surface for dev-only debugging.
+The runtime owns the `WorkspaceSession` / `ConversationThread` / `Turn` / `DraftVariant` / `GenerationRun` data model. Workshop is the primary drafting surface and is currently implemented by the extension side panel. Insertion is best-effort page integration owned by the content script; Workshop's `Insert` / `Use` action owns the full target recovery chain (cached target → arm listener → activate tab → await capture → focus, restore selection, and insert). A `DRAFTLET_DEBUG_INSERTION=1` env var gates the popup's recapture diagnostics surface for dev-only debugging. The future Command Surface is a lightweight Shadow DOM command affordance only; it is not the primary drafting UX.
 
 ## Open cleanup notes
 
@@ -51,8 +51,7 @@ Test coverage for the highest-risk orchestration paths is in place:
 
 ## Files not changed
 
-- `apps/server/**` runtime behavior or contracts.
-- `apps/extension/core/messages.ts` message contract split (the typed contract surface stays as one file).
+- `apps/server/**` runtime behavior or Pydantic schemas.
+- extension UI behavior.
 - `apps/extension/core/recapture-diagnostics*.ts` and the `recordRecaptureDiagnostic` calls in `insertion-coordinator.ts` — the diagnostics data layer and the desktop relay consumer stay in place.
-- `packages/shared` exports.
 - Alembic migrations.

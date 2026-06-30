@@ -1,5 +1,5 @@
 import { SERVER_BASE_URL } from '../constants';
-import type { ConversationThreadSnapshot, DraftVariant } from '../messages';
+import type { ConversationThreadSnapshot, DraftVariant } from '@draftlet/shared/contracts';
 import { patchJson, putJson } from './transport';
 import {
   mapConversationThreadSnapshot,

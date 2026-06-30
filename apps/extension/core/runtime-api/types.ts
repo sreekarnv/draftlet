@@ -3,7 +3,7 @@ import type {
   GenerationRunLiveFeedAttachment,
   GenerationRunStatus,
   Turn,
-} from '../messages';
+} from '@draftlet/shared/contracts';
 
 export function isTone(value: string): value is DraftVariant['tone'] {
   return value === 'professional' || value === 'friendly' || value === 'concise';

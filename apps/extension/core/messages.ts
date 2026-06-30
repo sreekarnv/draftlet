@@ -1,7 +1,66 @@
-import type { ComposeTargetRef, ConnectionStatus, InsertionResult, InsertionTargetStatus, PanelView, Tone } from './types';
-import type { PlausibleTabCandidate } from './tab-disambiguation';
 import type { BrowserDiagnosticsPublishReliabilityState } from './recapture-diagnostics-publish-retry';
-import type { DesktopExtensionDiagnosticsBridgeResult } from '@draftlet/shared/contracts';
+import type {
+  ComposeTargetRef,
+  ConversationThreadSnapshot,
+  DesktopExtensionDiagnosticsBridgeResult,
+  DomainHistoryItem,
+  DraftletError,
+  DraftletSidePanelContext,
+  InsertionRequest,
+  InsertionResult,
+  InsertionTargetStatus,
+  PanelView,
+  PlausibleTabCandidate,
+  RuntimeStatus,
+  Tone,
+  WorkspaceRestoreStatus,
+  WorkspaceRestoreState,
+  WorkspaceSession,
+} from '@draftlet/shared/contracts';
+
+export type {
+  ComposeTargetKind,
+  ComposeTargetRef,
+  ConnectionStatus,
+  ConversationThread,
+  ConversationThreadSnapshot,
+  ConversationThreadStatus,
+  DomainHistoryItem,
+  DraftletError,
+  DraftletSidePanelContext,
+  DraftVariant,
+  DraftVariantStatus,
+  GenerationRun,
+  GenerationRunExecutionState,
+  GenerationRunLiveFeedAttachment,
+  GenerationRunLiveFeedAttachmentMode,
+  GenerationRunProgressEvent,
+  GenerationRunProgressSnapshot,
+  GenerationRunRestoreCandidate,
+  GenerationRunStatus,
+  InsertionRequest,
+  InsertionResult,
+  InsertionStatus,
+  InsertionTargetStatus,
+  PlausibleTabCandidate,
+  PlausibleTabMatchReason,
+  RecoverableRunProjection,
+  RuntimeStatus,
+  SourceSnapshot,
+  Turn,
+  TurnGenerationStatus,
+  WorkspaceRecoveryAction,
+  WorkspaceRecoveryActionKind,
+  WorkspaceRestoreIssue,
+  WorkspaceRestoreIssueCode,
+  WorkspaceRestoreIssueSeverity,
+  WorkspaceRestoreSource,
+  WorkspaceRestoreState,
+  WorkspaceRestoreStatus,
+  WorkspaceSession,
+  WorkspaceSessionSnapshot,
+  WorkspaceSessionStatus,
+} from '@draftlet/shared/contracts';
 
 export type { BrowserDiagnosticsPublishReliabilityState } from './recapture-diagnostics-publish-retry';
 
@@ -26,262 +85,6 @@ export const ACTIVATE_RECAPTURE_TAB = 'draftlet:activate-recapture-tab';
 export const ACTIVATE_INSERTION_TAB = 'draftlet:activate-insertion-tab';
 export const SET_CURRENT_DRAFT_VARIANT = 'draftlet:set-current-draft-variant';
 export const ACCEPT_DRAFT_VARIANT = 'draftlet:accept-draft-variant';
-
-export interface DraftletSidePanelContext {
-  selectedText: string;
-  tone?: Tone;
-  activeView?: PanelView;
-  sourceUrl: string;
-  sourceDomain?: string;
-  pageTitle?: string;
-  tabId?: number;
-  windowId?: number;
-  composeTarget?: ComposeTargetRef;
-}
-
-export type WorkspaceSessionStatus = 'active' | 'stale';
-export type GenerationRunStatus = 'active' | 'streaming' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
-
-export type WorkspaceRestoreSource = 'current_tab' | 'history' | 'session_update';
-export type WorkspaceRestoreStatus = 'ready' | 'restored' | 'needs_action' | 'conflict';
-export type WorkspaceRestoreIssueSeverity = 'info' | 'warning' | 'error';
-export type WorkspaceRecoveryActionKind =
-  | 'choose_tab'
-  | 'recapture_target'
-  | 'retry_interrupted_run'
-  | 'wait_for_active_run'
-  | 'copy_fallback';
-
-export type WorkspaceRestoreIssueCode =
-  | 'restored_session'
-  | 'restored_thread'
-  | 'active_run_restored'
-  | 'active_run_replay_only'
-  | 'active_run_reconciled'
-  | 'active_run_recovery_failed'
-  | 'active_context_mismatch'
-  | 'tab_choice_required'
-  | 'target_stale'
-  | 'target_unavailable'
-  | 'target_needs_focus'
-  | 'target_needs_recapture'
-  | 'interrupted_run_retryable';
-
-export interface WorkspaceRecoveryAction {
-  kind: WorkspaceRecoveryActionKind;
-  label: string;
-  message: string;
-  turnId?: string;
-}
-
-export interface WorkspaceRestoreIssue {
-  code: WorkspaceRestoreIssueCode;
-  severity: WorkspaceRestoreIssueSeverity;
-  message: string;
-  action?: WorkspaceRecoveryAction;
-  candidateCount?: number;
-  runId?: string;
-  threadId?: string;
-  turnId?: string;
-}
-
-export interface WorkspaceRestoreState {
-  source: WorkspaceRestoreSource;
-  status: WorkspaceRestoreStatus;
-  summary: string;
-  primaryAction?: WorkspaceRecoveryAction;
-  issues: WorkspaceRestoreIssue[];
-  restoredSession: boolean;
-  restoredThread: boolean;
-  activeThreadId?: string;
-  activeTurnId?: string;
-  activeRunId?: string;
-}
-
-export interface WorkspaceSession {
-  sessionId: string;
-  tabId: number;
-  windowId?: number;
-  pageUrl: string;
-  pageTitle?: string;
-  latestContext: DraftletSidePanelContext;
-  status: WorkspaceSessionStatus;
-  createdAt: string;
-  updatedAt: string;
-  activeThreadId?: string;
-  activeTurnId?: string;
-  activeRunId?: string;
-  insertionTarget?: ComposeTargetRef;
-  insertionTargetStatus?: InsertionTargetStatus;
-  plausibleTabs?: PlausibleTabCandidate[];
-  restoreState?: WorkspaceRestoreState;
-}
-
-export interface SourceSnapshot {
-  selectedText: string;
-  sourceUrl: string;
-  sourceDomain?: string;
-  pageTitle?: string;
-}
-
-export type ConversationThreadStatus = 'active' | 'archived';
-export type TurnGenerationStatus = 'queued' | 'started' | 'streaming' | 'completed' | 'failed' | 'cancelled';
-export type DraftVariantStatus = 'generated' | 'accepted' | 'rejected';
-
-export interface ConversationThread {
-  threadId: string;
-  sessionId: string;
-  source: SourceSnapshot;
-  status: ConversationThreadStatus;
-  createdAt: string;
-  updatedAt: string;
-  latestTurnId?: string;
-}
-
-export interface Turn {
-  turnId: string;
-  threadId: string;
-  instruction: string;
-  source: SourceSnapshot;
-  tone: Tone;
-  generationStatus: TurnGenerationStatus;
-  generationStartedAt?: string;
-  generationCompletedAt?: string;
-  generationFailedAt?: string;
-  generationCancelledAt?: string;
-  generationErrorCode?: string;
-  generationErrorMessage?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface DraftVariant {
-  variantId: string;
-  turnId: string;
-  tone: Tone;
-  length?: string;
-  content: string;
-  rank: number;
-  status: DraftVariantStatus;
-  isCurrent: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface GenerationRun {
-  runId: string;
-  sessionId: string;
-  threadId: string;
-  turnId: string;
-  status: GenerationRunStatus;
-  leaseOwner: string;
-  claimedAt: string;
-  heartbeatAt?: string;
-  releasedAt?: string;
-  completedAt?: string;
-  cancelledAt?: string;
-  interruptedAt?: string;
-  failedAt?: string;
-  errorCode?: string;
-  errorMessage?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface RecoverableRunProjection {
-  runId: string;
-  turnId: string;
-  status: GenerationRunStatus;
-  recoverable: boolean;
-  reason?: string;
-  interruptedAt?: string;
-  lastEventAt?: string;
-  errorCode?: string;
-  errorMessage?: string;
-}
-
-export interface GenerationRunProgressEvent {
-  sequence: number;
-  eventType: 'generation_run_status' | 'draft_variant_generated' | string;
-  runId: string;
-  sessionId: string;
-  threadId: string;
-  turnId: string;
-  status?: string;
-  variantId?: string;
-  at?: string;
-}
-
-export type GenerationRunLiveFeedAttachmentMode = 'live_attached' | 'replay_only' | 'stale';
-
-export interface GenerationRunLiveFeedAttachment {
-  mode: GenerationRunLiveFeedAttachmentMode;
-  liveAttached: boolean;
-  replayAvailable: boolean;
-  subscriberCount: number;
-  reason?: string;
-}
-
-export interface GenerationRunRestoreCandidate {
-  runId: string;
-  sessionId: string;
-  threadId: string;
-  turnId: string;
-  status: GenerationRunStatus;
-  leaseOwner: string;
-  restoreMode: GenerationRunLiveFeedAttachmentMode;
-  liveAttached: boolean;
-  replayAvailable: boolean;
-  subscriberCount: number;
-  recoverable: boolean;
-  stale: boolean;
-  interrupted: boolean;
-  reason?: string;
-  claimedAt: string;
-  heartbeatAt?: string;
-  interruptedAt?: string;
-  lastActivityAt?: string;
-  updatedAt: string;
-}
-
-export interface ConversationThreadSnapshot {
-  thread: ConversationThread;
-  turns: Turn[];
-  variants: DraftVariant[];
-  latestRecoverableRun?: RecoverableRunProjection;
-}
-
-export interface GenerationRunProgressSnapshot {
-  checkedAt: string;
-  run: GenerationRun;
-  thread: ConversationThreadSnapshot | null;
-  events: GenerationRunProgressEvent[];
-  replayCursor: number;
-  liveFeedAttachment?: GenerationRunLiveFeedAttachment;
-}
-
-export interface GenerationRunExecutionState {
-  checkedAt: string;
-  staleAfterSeconds: number;
-  restoreCandidates: GenerationRunRestoreCandidate[];
-}
-
-export interface WorkspaceSessionSnapshot {
-  session: WorkspaceSession;
-  thread: ConversationThreadSnapshot | null;
-}
-
-export interface DomainHistoryItem {
-  session: WorkspaceSession;
-  thread: ConversationThreadSnapshot;
-}
-
-export interface DraftletError {
-  code: string;
-  message: string;
-  retryable: boolean;
-  correlationId?: string;
-}
 
 export type RecaptureInsertionTargetFailureReason =
   | 'session_not_found'
@@ -362,7 +165,7 @@ export type DraftletMessage =
   | { type: typeof START_DRAFT_GENERATION; sessionId: string; tone?: Tone; activeView?: PanelView }
   | { type: typeof START_DRAFT_REFINEMENT; sessionId: string; instruction: string; tone?: Tone; activeView?: PanelView }
   | { type: typeof CANCEL_DRAFT_GENERATION; sessionId?: string; generationId?: string }
-  | { type: typeof INSERT_REPLY; sessionId?: string; replyText: string; variantId?: string; target?: ComposeTargetRef }
+  | ({ type: typeof INSERT_REPLY } & InsertionRequest)
   | { type: typeof INSERTION_IN_PROGRESS; sessionId: string; message: string }
   | { type: typeof GET_INSERTION_TARGET_STATUS; sessionId?: string }
   | { type: typeof REVALIDATE_INSERTION_TARGET; sessionId: string; target?: ComposeTargetRef }
@@ -385,7 +188,7 @@ export interface WorkspaceSessionResult {
 }
 
 export interface RuntimeStatusResult {
-  status: ConnectionStatus;
+  status: RuntimeStatus['status'];
 }
 
 export interface DomainHistoryResult {
