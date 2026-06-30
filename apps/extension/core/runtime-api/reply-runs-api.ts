@@ -17,8 +17,14 @@ export type {
 
 export interface StreamReplyGenerationRunEventsOptions {
   signal?: AbortSignal;
+  onText?: (chunk: StreamedDraftTextChunk) => void;
   onReply: (variant: StreamedDraftVariant) => void;
   onControl?: (event: StreamedGenerationControlEvent) => void;
+}
+
+export interface StreamedDraftTextChunk {
+  text: string;
+  sequence?: number;
 }
 
 interface ReplyGenerationRunExecutionStartRead {
@@ -42,6 +48,17 @@ function parseStreamedDraftVariant(message: SseMessage): StreamedDraftVariant | 
   }
 
   return null;
+}
+
+function parseStreamedDraftTextChunk(message: SseMessage): StreamedDraftTextChunk | null {
+  if (message.eventType) {
+    return null;
+  }
+
+  return {
+    text: message.data,
+    sequence: parseSseSequence(message.id),
+  };
 }
 
 function parseStreamedGenerationControlEvent(message: SseMessage): StreamedGenerationControlEvent | null {
@@ -94,6 +111,7 @@ export async function streamReplyGenerationRunEvents(
   {
     signal,
     afterSequence = 0,
+    onText,
     onReply,
     onControl,
   }: StreamReplyGenerationRunEventsOptions & { afterSequence?: number },
@@ -103,6 +121,13 @@ export async function streamReplyGenerationRunEvents(
     url: `${SERVER_BASE_URL}/replies/${encodeURIComponent(runId)}/events${query}`,
     signal,
     onMessage(message) {
+      const text = parseStreamedDraftTextChunk(message);
+
+      if (text?.text) {
+        onText?.(text);
+        return;
+      }
+
       const variant = parseStreamedDraftVariant(message);
 
       if (variant?.text) {

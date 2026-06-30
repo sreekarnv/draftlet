@@ -1,5 +1,5 @@
 import { act } from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { mountDraftletPanel } from '../../ui/mount-panel';
 import type { ConversationThreadSnapshot, Turn, WorkspaceRestoreState } from '../../core/messages';
@@ -185,6 +185,65 @@ describe('DraftletPanel insertion target recovery', () => {
 
     expect(refinementInstruction).toBe('Make this warmer');
   });
+
+  it('cancels generation on Escape', async () => {
+    const container = document.createElement('div');
+    const cancelGeneration = vi.fn();
+    document.body.append(container);
+
+    await act(async () => {
+      mounted = mountDraftletPanel(container, {
+        onGenerate() {},
+        onCancelGeneration: cancelGeneration,
+        onInsert: async (): Promise<InsertionResult> => ({ status: 'copied', message: 'Copied' }),
+        onCloseRequest() {},
+        onAfterRender() {},
+      });
+    });
+
+    await act(async () => {
+      mounted!.controller.open({ selectedText: 'Can you reply to this thread?' });
+      mounted!.controller.setState('streaming', '');
+    });
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+
+    expect(cancelGeneration).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves buffered partial draft text after cancellation', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+
+    await act(async () => {
+      mounted = mountDraftletPanel(container, {
+        onGenerate() {},
+        onInsert: async (): Promise<InsertionResult> => ({ status: 'copied', message: 'Copied' }),
+        onCloseRequest() {},
+        onAfterRender() {},
+      });
+    });
+
+    await act(async () => {
+      mounted!.controller.open({ selectedText: 'Can you reply to this thread?' });
+      mounted!.controller.setThreadSnapshot(streamingThreadSnapshot());
+      mounted!.controller.setState('streaming', '');
+      mounted!.controller.appendDraftTextDelta({
+        sessionId: 'session-1',
+        generationId: 'generation-1',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        text: 'Thanks for reaching out. I can take a closer look',
+      });
+      mounted!.controller.setState('error', 'Draft generation was cancelled.');
+    });
+
+    const textarea = container.querySelector('textarea[aria-label="Preserved partial draft text"]') as HTMLTextAreaElement | null;
+
+    expect(textarea?.value).toBe('Thanks for reaching out. I can take a closer look');
+  });
 });
 
 function completedThreadSnapshot(): ConversationThreadSnapshot {
@@ -234,6 +293,39 @@ function completedThreadSnapshot(): ConversationThreadSnapshot {
         updatedAt: '2026-01-01T00:00:01.000Z',
       },
     ],
+  };
+}
+
+function streamingThreadSnapshot(): ConversationThreadSnapshot {
+  const turn: Turn = {
+    turnId: 'turn-1',
+    threadId: 'thread-1',
+    instruction: 'Generate reply drafts',
+    source: {
+      selectedText: 'Can you reply to this thread?',
+      sourceUrl: 'https://example.com/thread',
+      sourceDomain: 'example.com',
+      pageTitle: 'Thread',
+    },
+    tone: 'professional',
+    generationStatus: 'streaming',
+    generationStartedAt: '2026-01-01T00:00:00.000Z',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  };
+
+  return {
+    thread: {
+      threadId: 'thread-1',
+      sessionId: 'session-1',
+      source: turn.source,
+      status: 'active',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      latestTurnId: 'turn-1',
+    },
+    turns: [turn],
+    variants: [],
   };
 }
 

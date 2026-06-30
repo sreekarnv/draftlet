@@ -1,5 +1,5 @@
 import { X } from 'lucide-react';
-import { useLayoutEffect } from 'react';
+import { useEffect, useLayoutEffect } from 'react';
 
 import type { PanelCallbacks, PanelController } from '../../ui/mount-panel';
 import { ComposerWorkspace } from './composer-workspace';
@@ -28,6 +28,26 @@ export function DraftletPanel({ callbacks, controller }: DraftletPanelProps) {
   useLayoutEffect(() => {
     callbacks.onAfterRender();
   });
+
+  useEffect(() => {
+    const isGenerating = view.state === 'loading' || view.state === 'streaming';
+
+    if (!isGenerating || !callbacks.onCancelGeneration) {
+      return undefined;
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') {
+        return;
+      }
+
+      event.preventDefault();
+      callbacks.onCancelGeneration?.();
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [callbacks, view.state]);
 
   return (
     <section

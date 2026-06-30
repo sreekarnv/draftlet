@@ -74,6 +74,9 @@ export function createSidePanelController(options: SidePanelControllerOptions): 
     onInsert: (replyText, variantId) => insertIntoActivePage(state, panel, replyText, variantId),
     onSelectVariant: (variantId) => setVariantCurrent(state, panel, variantId),
     onAcceptVariant: (variantId) => acceptVariant(state, panel, variantId),
+    onCancelGeneration: () => {
+      void cancelActiveGeneration(state);
+    },
     onCloseRequest: () => {
       void closeSidePanel(state);
     },

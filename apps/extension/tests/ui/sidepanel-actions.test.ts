@@ -49,6 +49,7 @@ function createPanelStub(): { controller: PanelController; calls: PanelCall[] } 
     setRestoreState: record('setRestoreState'),
     setState: record('setState') as unknown as (state: PanelState, message?: string) => void,
     setThreadSnapshot: record('setThreadSnapshot'),
+    appendDraftTextDelta: record('appendDraftTextDelta'),
     subscribe: () => () => {},
   };
 

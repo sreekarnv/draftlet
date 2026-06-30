@@ -49,7 +49,17 @@ export type PanelAction =
   | { type: 'setInsertionTargetStatus'; target: InsertionTargetViewState }
   | { type: 'setRestoreState'; restoreState: WorkspaceRestoreState | null }
   | { type: 'setState'; state: PanelState; message: string }
-  | { type: 'setThreadSnapshot'; snapshot: ConversationThreadSnapshot | null };
+  | { type: 'setThreadSnapshot'; snapshot: ConversationThreadSnapshot | null }
+  | { type: 'appendDraftTextDelta'; delta: DraftTextDeltaView };
+
+export interface DraftTextDeltaView {
+  sessionId: string;
+  generationId: string;
+  threadId: string;
+  turnId: string;
+  text: string;
+  sequence?: number;
+}
 
 export interface PanelController {
   open(options: PanelOpenOptions): void;
@@ -62,6 +72,7 @@ export interface PanelController {
   setRestoreState(restoreState: WorkspaceRestoreState | null): void;
   setState(state: PanelState, message?: string): void;
   setThreadSnapshot(snapshot: ConversationThreadSnapshot | null): void;
+  appendDraftTextDelta(delta: DraftTextDeltaView): void;
   subscribe(listener: (action: PanelAction) => void): () => void;
 }
 
@@ -78,6 +89,7 @@ export interface PanelCallbacks {
   onInsert: (replyText: string, variantId?: string) => Promise<InsertionResult>;
   onSelectVariant?: (variantId: string) => Promise<VariantActionResult>;
   onAcceptVariant?: (variantId: string) => Promise<VariantActionResult>;
+  onCancelGeneration?: () => void;
   onCloseRequest: () => void;
   onAfterRender: () => void;
 }
@@ -167,6 +179,9 @@ function createPanelController(initialTone: Tone, initialView: PanelView): Panel
     },
     setThreadSnapshot(snapshot) {
       emit({ type: 'setThreadSnapshot', snapshot });
+    },
+    appendDraftTextDelta(delta) {
+      emit({ type: 'appendDraftTextDelta', delta });
     },
     subscribe(nextListener) {
       listener = nextListener;

@@ -1,4 +1,5 @@
 import { RefreshCw } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 import type { ConversationThreadSnapshot, RecoverableRunProjection } from '../../core/messages';
 import type { PanelCallbacks } from '../../ui/mount-panel';
@@ -11,6 +12,7 @@ import {
 } from './panel-display';
 import type { PanelViewState } from './panel-types';
 import { ReplyCard } from './reply-card';
+import { sentenceBufferText } from './sentence-buffer';
 import { SourceContext } from './source-context';
 import { StatePill } from './state-pill';
 import { Button, cn } from './ui';
@@ -107,6 +109,7 @@ function TurnGroup({
 }) {
   const isGenerating = view.state === 'loading' || view.state === 'streaming';
   const waitingForVariants = group.isLatest && isGenerating && group.variants.length === 0;
+  const streamingDraft = view.streamingDraft?.turnId === group.turn.turnId ? view.streamingDraft : null;
   const projectedRecoverableRun = recoverableRunForTurn(snapshot.latestRecoverableRun, group);
   const fallbackRecoverableInterruption = !snapshot.latestRecoverableRun && group.isLatest && isRecoverableInterruptedTurn(group.turn);
   const recoverableInterruption = Boolean(projectedRecoverableRun) || fallbackRecoverableInterruption;
@@ -160,7 +163,8 @@ function TurnGroup({
           </Button>
         </div>
       ) : null}
-      {waitingForVariants ? <div className="rounded-md bg-white/65 p-3 text-[13px] leading-6 text-slate-500 ring-1 ring-slate-200/70">Waiting for streamed variants...</div> : null}
+      {streamingDraft ? <StreamingDraftCard isGenerating={isGenerating} view={view} /> : null}
+      {waitingForVariants && !streamingDraft ? <div className="rounded-md bg-white/65 p-3 text-[13px] leading-6 text-slate-500 ring-1 ring-slate-200/70">Waiting for streamed variants...</div> : null}
       {group.variants.length > 0 ? (
         <div className="grid gap-2.5">
           {group.variants.map((variant, variantIndex) => (
@@ -177,6 +181,84 @@ function TurnGroup({
         </div>
       ) : null}
     </section>
+  );
+}
+
+function StreamingDraftCard({ isGenerating, view }: { isGenerating: boolean; view: PanelViewState }) {
+  const draft = view.streamingDraft;
+  const [showSkeleton, setShowSkeleton] = useState(false);
+  const [editableText, setEditableText] = useState('');
+
+  useEffect(() => {
+    if (!draft || draft.buffer.segments.length > 0 || draft.isFinal) {
+      setShowSkeleton(false);
+      return undefined;
+    }
+
+    const timeout = window.setTimeout(() => setShowSkeleton(true), 300);
+    return () => window.clearTimeout(timeout);
+  }, [draft?.generationId, draft?.turnId, draft?.buffer.segments.length, draft?.isFinal]);
+
+  useEffect(() => {
+    if (!draft?.isFinal) {
+      return;
+    }
+
+    setEditableText(sentenceBufferText(draft.buffer));
+  }, [draft?.generationId, draft?.turnId, draft?.isFinal]);
+
+  if (!draft) {
+    return null;
+  }
+
+  const visibleText = sentenceBufferText(draft.buffer);
+
+  if (draft.isFinal) {
+    return (
+      <div className="grid gap-2 rounded-md bg-white p-3.5 shadow-sm shadow-slate-200/80 ring-1 ring-slate-200/80">
+        <div className="text-[11px] font-semibold uppercase tracking-normal text-slate-500">Partial draft preserved</div>
+        <textarea
+          aria-label="Preserved partial draft text"
+          className="min-h-28 resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-[14px] leading-[1.65] text-slate-900 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+          onChange={(event) => setEditableText(event.currentTarget.value)}
+          value={editableText}
+        />
+      </div>
+    );
+  }
+
+  if (showSkeleton && !visibleText) {
+    return <StreamingSkeleton />;
+  }
+
+  if (!visibleText) {
+    return null;
+  }
+
+  return (
+    <div className="grid gap-2 rounded-md bg-white/80 p-3.5 text-[14px] leading-[1.65] text-slate-900 shadow-sm shadow-slate-200/80 ring-1 ring-slate-200/80" aria-live="polite">
+      <div className="text-[11px] font-semibold uppercase tracking-normal text-slate-500">
+        {isGenerating ? 'Streaming draft' : 'Partial draft'}
+      </div>
+      <p className="m-0 whitespace-pre-wrap">
+        {draft.buffer.segments.map((segment, index) => (
+          <span className="draftlet-sentence-fragment" key={`${draft.generationId}-${index}`}>{segment} </span>
+        ))}
+      </p>
+    </div>
+  );
+}
+
+function StreamingSkeleton() {
+  return (
+    <div className="grid gap-2 rounded-md bg-white/70 p-3.5 ring-1 ring-slate-200/70" aria-label="Draft generation loading">
+      <div className="h-3 w-24 animate-pulse rounded-full bg-slate-200" />
+      <div className="grid gap-2">
+        <div className="h-3.5 w-full animate-pulse rounded-full bg-slate-200" />
+        <div className="h-3.5 w-11/12 animate-pulse rounded-full bg-slate-200" />
+        <div className="h-3.5 w-3/4 animate-pulse rounded-full bg-slate-200" />
+      </div>
+    </div>
   );
 }
 

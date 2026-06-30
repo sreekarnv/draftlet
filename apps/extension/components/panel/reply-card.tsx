@@ -1,5 +1,5 @@
 import { Check, Copy, CornerDownLeft, MousePointer2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import type { DraftVariant } from '../../core/messages';
 import type { InsertionResult, InsertionTargetStatus } from '../../core/types';
@@ -23,6 +23,11 @@ export function ReplyCard({ variant, index, onInsert, onSelectVariant, onAcceptV
   const [feedback, setFeedback] = useState('');
   const [isError, setIsError] = useState(false);
   const [isInserting, setIsInserting] = useState(false);
+  const [draftText, setDraftText] = useState(variant.content);
+
+  useEffect(() => {
+    setDraftText((current) => current === variant.content ? current : variant.content);
+  }, [variant.content, variant.variantId]);
 
   const showFeedback = (message: string, error = false) => {
     setFeedback(message);
@@ -38,7 +43,7 @@ export function ReplyCard({ variant, index, onInsert, onSelectVariant, onAcceptV
 
   const copyReply = async () => {
     try {
-      await navigator.clipboard.writeText(variant.content);
+      await navigator.clipboard.writeText(draftText);
       showFeedback('Copied to clipboard.');
       flashButtonLabel(setCopyLabel, 'Copied', 'Copy');
     } catch {
@@ -52,7 +57,7 @@ export function ReplyCard({ variant, index, onInsert, onSelectVariant, onAcceptV
     showFeedback('Trying to insert...');
 
     try {
-      const result = await onInsert(variant.content, variant.variantId);
+      const result = await onInsert(draftText, variant.variantId);
       showFeedback(feedbackMessageFor(result, targetStatus), result.status === 'failed');
       flashButtonLabel(setInsertLabel, buttonMessageFor(result), 'Insert');
     } finally {
@@ -90,7 +95,12 @@ export function ReplyCard({ variant, index, onInsert, onSelectVariant, onAcceptV
           {variant.status === 'accepted' ? <StateBadge label="Accepted" tone="emerald" /> : null}
         </div>
       </div>
-      <p className="m-0 whitespace-pre-wrap text-[14px] leading-[1.65] text-slate-900">{variant.content}</p>
+      <textarea
+        aria-label={`Draft ${index + 1} text`}
+        className="min-h-28 resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-[14px] leading-[1.65] text-slate-900 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+        onChange={(event) => setDraftText(event.currentTarget.value)}
+        value={draftText}
+      />
       <div className="flex flex-wrap items-center gap-2 pt-0.5">
         {onSelectVariant ? (
           <Button disabled={variant.isCurrent} onClick={() => void updateVariantState('select')} type="button" variant="secondary">

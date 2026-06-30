@@ -1,6 +1,7 @@
 import {
   ACCEPT_DRAFT_VARIANT,
   CONVERSATION_THREAD_UPDATED,
+  DRAFT_TEXT_DELTA_RECEIVED,
   INSERTION_IN_PROGRESS,
   SET_CURRENT_DRAFT_VARIANT,
   WORKSPACE_SESSION_UPDATED,
@@ -173,6 +174,13 @@ export function onDraftletMessage(state: SidePanelState, panel: PanelController,
   if (message.type === CONVERSATION_THREAD_UPDATED) {
     if (state.currentSession?.sessionId === message.sessionId) {
       applyThreadSnapshot(state, panel, message.snapshot);
+    }
+    return;
+  }
+
+  if (message.type === DRAFT_TEXT_DELTA_RECEIVED) {
+    if (state.currentSession?.sessionId === message.sessionId) {
+      panel.appendDraftTextDelta(message);
     }
     return;
   }

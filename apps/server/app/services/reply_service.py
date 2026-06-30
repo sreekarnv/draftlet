@@ -65,6 +65,12 @@ async def generate_reply_events(request: ReplyRequest) -> AsyncIterator[ReplyEve
 
                 heartbeat_runtime_generation(session, request)
 
+                yield ReplyEvent(
+                    reply=chunk,
+                    turn_id=turn.turn_id if turn else None,
+                    thread_id=request.thread_id,
+                )
+
                 for reply in parser.feed(chunk):
                     variant = persist_variant_for_reply(session, request, turn.turn_id if turn else None, reply_index, reply)
                     reply_index += 1

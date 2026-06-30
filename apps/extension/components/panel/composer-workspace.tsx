@@ -57,6 +57,16 @@ export function ComposerWorkspace({
           {hasDrafts ? <RefreshCw aria-hidden="true" className="h-3.5 w-3.5" /> : <Sparkles aria-hidden="true" className="h-3.5 w-3.5" />}
           {hasDrafts ? 'Regenerate' : 'Generate'}
         </Button>
+        {isGenerating && callbacks.onCancelGeneration ? (
+          <Button
+            className="w-full px-3.5"
+            onClick={callbacks.onCancelGeneration}
+            type="button"
+            variant="secondary"
+          >
+            Cancel generation
+          </Button>
+        ) : null}
         {hasDrafts && callbacks.onRefine ? (
           <RefinementForm disabled={isGenerating} onRefine={callbacks.onRefine} />
         ) : null}

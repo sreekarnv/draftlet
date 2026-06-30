@@ -1,4 +1,5 @@
 import { getConversationThreadSnapshot, getGenerationRunProgress, getWorkspaceSessionSnapshot, patchGenerationRunStatus, patchTurnStatus, reconcileGenerationRuns, streamReplyGenerationRunEvents } from '../runtime-api';
+import { DRAFT_TEXT_DELTA_RECEIVED } from '../messages';
 import type {
   ConversationThreadSnapshot,
   DraftletSidePanelContext,
@@ -7,7 +8,7 @@ import type {
   WorkspaceSession,
 } from '../messages';
 import { sessions, threads, localGenerationTransportByRunId } from './state';
-import { emitConversationThreadUpdated, emitWorkspaceSessionUpdated, getActiveTabId } from './shared-helpers';
+import { emitConversationThreadUpdated, emitDraftletMessage, emitWorkspaceSessionUpdated, getActiveTabId } from './shared-helpers';
 
 export function cancelLocalGenerationTransport(runId: string): void {
   localGenerationTransportByRunId.get(runId)?.abortController.abort();
@@ -181,6 +182,28 @@ export async function streamRuntimeRunEvents(
   await streamReplyGenerationRunEvents(runId, {
     signal,
     afterSequence,
+    onText(chunk) {
+      if (!hasLocalGenerationTransport(sessionId, runId) || !threadId) {
+        return;
+      }
+
+      const session = sessions.getBySessionId(sessionId);
+      const turnId = session?.activeRunId === runId ? session.activeTurnId : undefined;
+
+      if (!turnId) {
+        return;
+      }
+
+      void emitDraftletMessage({
+        type: DRAFT_TEXT_DELTA_RECEIVED,
+        sessionId,
+        generationId: runId,
+        threadId,
+        turnId,
+        text: chunk.text,
+        sequence: chunk.sequence,
+      });
+    },
     onReply(reply) {
       if (!hasLocalGenerationTransport(sessionId, runId)) {
         return;

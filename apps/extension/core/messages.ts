@@ -76,6 +76,7 @@ export const GET_RUNTIME_STATUS = 'draftlet:get-runtime-status';
 export const START_DRAFT_GENERATION = 'draftlet:start-draft-generation';
 export const START_DRAFT_REFINEMENT = 'draftlet:start-draft-refinement';
 export const CANCEL_DRAFT_GENERATION = 'draftlet:cancel-draft-generation';
+export const DRAFT_TEXT_DELTA_RECEIVED = 'draftlet:draft-text-delta-received';
 export const INSERT_REPLY = 'draftlet:insert-reply';
 export const INSERTION_IN_PROGRESS = 'draftlet:insertion-in-progress';
 export const GET_INSERTION_TARGET_STATUS = 'draftlet:get-insertion-target-status';
@@ -165,6 +166,7 @@ export type DraftletMessage =
   | { type: typeof START_DRAFT_GENERATION; sessionId: string; tone?: Tone; activeView?: PanelView }
   | { type: typeof START_DRAFT_REFINEMENT; sessionId: string; instruction: string; tone?: Tone; activeView?: PanelView }
   | { type: typeof CANCEL_DRAFT_GENERATION; sessionId?: string; generationId?: string }
+  | { type: typeof DRAFT_TEXT_DELTA_RECEIVED; sessionId: string; generationId: string; threadId: string; turnId: string; text: string; sequence?: number }
   | ({ type: typeof INSERT_REPLY } & InsertionRequest)
   | { type: typeof INSERTION_IN_PROGRESS; sessionId: string; message: string }
   | { type: typeof GET_INSERTION_TARGET_STATUS; sessionId?: string }
