@@ -13,30 +13,12 @@ import { getSendMessage } from './message-client';
 import { applySession, applyThreadSnapshot } from './thread-actions';
 
 export function setTone(state: SidePanelState, panel: PanelController, storage: SidePanelStorage, tone: Tone): void {
-  state.currentTone = tone;
-  if (state.currentSession) {
-    state.currentSession = {
-      ...state.currentSession,
-      latestContext: {
-        ...state.currentSession.latestContext,
-        tone,
-      },
-    };
-  }
+  state.ui.currentTone = tone;
   void storage.saveTone(tone);
 }
 
 export function setActiveView(state: SidePanelState, panel: PanelController, storage: SidePanelStorage, activeView: PanelView): void {
-  state.currentPanelView = activeView;
-  if (state.currentSession) {
-    state.currentSession = {
-      ...state.currentSession,
-      latestContext: {
-        ...state.currentSession.latestContext,
-        activeView,
-      },
-    };
-  }
+  state.ui.currentPanelView = activeView;
   void storage.savePanelView(activeView);
 }
 
@@ -60,8 +42,8 @@ export async function initializeSidePanel(
   storage: SidePanelStorage,
 ): Promise<void> {
   const [tone, panelView] = await Promise.all([storage.getSavedTone(), storage.getSavedPanelView()]);
-  state.currentTone = tone;
-  state.currentPanelView = panelView;
+  state.ui.currentTone = tone;
+  state.ui.currentPanelView = panelView;
   panel.setTone(tone);
   panel.setActiveView(panelView);
 
@@ -87,7 +69,7 @@ export async function initializeSidePanel(
 
   panel.open({
     selectedText: 'Select text on a page and click Draftlet to begin.',
-    tone: state.currentTone,
-    activeView: state.currentPanelView,
+    tone: state.ui.currentTone,
+    activeView: state.ui.currentPanelView,
   });
 }

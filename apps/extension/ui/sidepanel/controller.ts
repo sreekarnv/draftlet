@@ -54,8 +54,8 @@ export function createSidePanelController(options: SidePanelControllerOptions): 
   const state = createInitialState(DEFAULT_TONE, DEFAULT_PANEL_VIEW);
   let panel: PanelController;
   const mounted = mountDraftletPanel(root, {
-    initialTone: state.currentTone,
-    initialView: state.currentPanelView,
+    initialTone: state.ui.currentTone,
+    initialView: state.ui.currentPanelView,
     onToneChange: (tone) => {
       setTone(state, panel, storage, tone);
     },

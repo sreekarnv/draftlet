@@ -31,28 +31,24 @@ export function applySession(
   session: WorkspaceSession,
   restoreState?: WorkspaceRestoreState,
 ): void {
-  const previousSession = state.currentSession;
-  const tone = session.latestContext.tone ?? state.currentTone;
-  const activeView = session.latestContext.activeView ?? state.currentPanelView;
+  const previousSession = state.runtime.currentSession;
+  const tone = session.latestContext.tone ?? state.ui.currentTone;
+  const activeView = session.latestContext.activeView ?? state.ui.currentPanelView;
   const shouldOpenSession = !previousSession
     || previousSession.sessionId !== session.sessionId
     || previousSession.pageUrl !== session.pageUrl
     || previousSession.latestContext.selectedText !== session.latestContext.selectedText;
 
-  state.currentSession = {
-    ...session,
-    latestContext: {
-      ...session.latestContext,
-      tone,
-      activeView,
-    },
-  };
-  state.currentTone = tone;
-  state.currentPanelView = activeView;
+  state.runtime.currentSession = session;
+  state.ui.currentTone = tone;
+  state.ui.currentPanelView = activeView;
+  state.ui.selectedThreadId = session.activeThreadId ?? null;
 
   if (previousSession?.sessionId !== session.sessionId) {
-    state.insertionTrail = [];
-    state.currentThreadSnapshot = null;
+    state.ui.insertionTrail = [];
+    state.ui.selectedVariantId = null;
+    state.ui.draftEditBuffers = {};
+    state.runtime.currentThreadSnapshot = null;
   }
 
   if (shouldOpenSession) {
@@ -64,7 +60,7 @@ export function applySession(
   }
 
   setSessionInsertionTargetStatus(state, panel);
-  panel.setRestoreState(restoreState ?? state.currentSession.restoreState ?? buildCurrentRestoreState(state));
+  panel.setRestoreState(restoreState ?? state.runtime.currentSession.restoreState ?? buildCurrentRestoreState(state));
 
   if (shouldOpenSession) {
     void refreshInsertionTargetStatus(state, panel, getSendMessage());
@@ -72,20 +68,23 @@ export function applySession(
 }
 
 export function applyThreadSnapshot(state: SidePanelState, panel: PanelController, snapshot: ConversationThreadSnapshot): void {
-  state.currentThreadSnapshot = snapshot;
+  state.runtime.currentThreadSnapshot = snapshot;
+  state.ui.selectedThreadId = snapshot.thread.threadId;
+  state.ui.selectedVariantId = snapshot.variants.find((variant) => variant.isCurrent)?.variantId
+    ?? state.ui.selectedVariantId;
   panel.setThreadSnapshot(snapshot);
   panel.setRestoreState(buildCurrentRestoreState(state));
   applyPanelStateFromThread(state, panel, snapshot);
 }
 
 export function applyPanelStateFromThread(state: SidePanelState, panel: PanelController, snapshot: ConversationThreadSnapshot): void {
-  const activeTurn = state.currentSession?.activeTurnId
-    ? snapshot.turns.find((turn) => turn.turnId === state.currentSession?.activeTurnId)
+  const activeTurn = state.runtime.currentSession?.activeTurnId
+    ? snapshot.turns.find((turn) => turn.turnId === state.runtime.currentSession?.activeTurnId)
     : undefined;
   const latestTurn = activeTurn ?? [...snapshot.turns].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).at(0);
 
   if (!latestTurn) {
-    if (state.currentSession?.activeRunId) {
+    if (state.runtime.currentSession?.activeRunId) {
       panel.setState('loading');
     }
 
@@ -138,14 +137,14 @@ async function updateVariantState(
   type: typeof SET_CURRENT_DRAFT_VARIANT | typeof ACCEPT_DRAFT_VARIANT,
   successMessage: string,
 ): Promise<VariantActionResult> {
-  if (!state.currentSession) {
+  if (!state.runtime.currentSession) {
     return { ok: false, message: 'No active Draftlet session.' };
   }
 
   try {
     const response = await getSendMessage()<DraftVariantStateResult>({
       type,
-      sessionId: state.currentSession.sessionId,
+      sessionId: state.runtime.currentSession.sessionId,
       variantId,
     } satisfies DraftletMessage);
 
@@ -172,21 +171,21 @@ export function onDraftletMessage(state: SidePanelState, panel: PanelController,
   }
 
   if (message.type === CONVERSATION_THREAD_UPDATED) {
-    if (state.currentSession?.sessionId === message.sessionId) {
+    if (state.runtime.currentSession?.sessionId === message.sessionId) {
       applyThreadSnapshot(state, panel, message.snapshot);
     }
     return;
   }
 
   if (message.type === DRAFT_TEXT_DELTA_RECEIVED) {
-    if (state.currentSession?.sessionId === message.sessionId) {
+    if (state.runtime.currentSession?.sessionId === message.sessionId) {
       panel.appendDraftTextDelta(message);
     }
     return;
   }
 
   if (message.type === INSERTION_IN_PROGRESS) {
-    if (state.currentSession?.sessionId === message.sessionId) {
+    if (state.runtime.currentSession?.sessionId === message.sessionId) {
       onInsertionInProgress(state, panel, message.message);
     }
     return;

@@ -15,7 +15,7 @@ export async function startDraftGenerationFromCurrentSession(
   panel: PanelController,
   options: { missingContextMessage?: string; startErrorMessage?: string; successMessage?: string } = {},
 ): Promise<ActionResult> {
-  if (!state.currentSession?.latestContext.selectedText) {
+  if (!state.runtime.currentSession?.latestContext.selectedText) {
     const message = options.missingContextMessage ?? 'Select text on a page before generating replies.';
     panel.setState('error', message);
     return { ok: false, message };
@@ -28,9 +28,9 @@ export async function startDraftGenerationFromCurrentSession(
   try {
     const response = await getSendMessage()<StartDraftGenerationResult>({
       type: START_DRAFT_GENERATION,
-      sessionId: state.currentSession.sessionId,
-      tone: state.currentTone,
-      activeView: state.currentPanelView,
+      sessionId: state.runtime.currentSession.sessionId,
+      tone: state.ui.currentTone,
+      activeView: state.ui.currentPanelView,
     } satisfies DraftletMessage);
 
     if (!response.started || !response.generationId || !response.sessionId) {
@@ -39,11 +39,11 @@ export async function startDraftGenerationFromCurrentSession(
       return { ok: false, message };
     }
 
-    if (state.currentSession) {
-      state.currentSession = {
-        ...state.currentSession,
-        activeThreadId: response.threadId ?? state.currentSession.activeThreadId,
-        activeTurnId: response.turnId ?? state.currentSession.activeTurnId,
+    if (state.runtime.currentSession) {
+      state.runtime.currentSession = {
+        ...state.runtime.currentSession,
+        activeThreadId: response.threadId ?? state.runtime.currentSession.activeThreadId,
+        activeTurnId: response.turnId ?? state.runtime.currentSession.activeTurnId,
         activeRunId: response.generationId,
       };
     }
@@ -74,7 +74,7 @@ export async function retryInterruptedTurn(state: SidePanelState, panel: PanelCo
 }
 
 export async function refineReplies(state: SidePanelState, panel: PanelController, instruction: string): Promise<void> {
-  if (!state.currentSession?.latestContext.selectedText) {
+  if (!state.runtime.currentSession?.latestContext.selectedText) {
     panel.setState('error', 'Select text on a page before refining replies.');
     return;
   }
@@ -93,10 +93,10 @@ export async function refineReplies(state: SidePanelState, panel: PanelControlle
   try {
     const response = await getSendMessage()<StartDraftGenerationResult>({
       type: START_DRAFT_REFINEMENT,
-      sessionId: state.currentSession.sessionId,
+      sessionId: state.runtime.currentSession.sessionId,
       instruction: trimmedInstruction,
-      tone: state.currentTone,
-      activeView: state.currentPanelView,
+      tone: state.ui.currentTone,
+      activeView: state.ui.currentPanelView,
     } satisfies DraftletMessage);
 
     if (!response.started || !response.generationId || !response.sessionId) {
@@ -104,11 +104,11 @@ export async function refineReplies(state: SidePanelState, panel: PanelControlle
       return;
     }
 
-    if (state.currentSession) {
-      state.currentSession = {
-        ...state.currentSession,
-        activeThreadId: response.threadId ?? state.currentSession.activeThreadId,
-        activeTurnId: response.turnId ?? state.currentSession.activeTurnId,
+    if (state.runtime.currentSession) {
+      state.runtime.currentSession = {
+        ...state.runtime.currentSession,
+        activeThreadId: response.threadId ?? state.runtime.currentSession.activeThreadId,
+        activeTurnId: response.turnId ?? state.runtime.currentSession.activeTurnId,
         activeRunId: response.generationId,
       };
     }
@@ -122,14 +122,14 @@ export async function refineReplies(state: SidePanelState, panel: PanelControlle
 }
 
 export async function cancelActiveGeneration(state: SidePanelState): Promise<void> {
-  const session = state.currentSession;
+  const session = state.runtime.currentSession;
   const generationId = session?.activeRunId;
 
   if (!session || !generationId) {
     return;
   }
 
-  state.currentSession = {
+  state.runtime.currentSession = {
     ...session,
     activeRunId: undefined,
   };

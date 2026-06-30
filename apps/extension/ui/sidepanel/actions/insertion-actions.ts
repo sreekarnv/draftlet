@@ -17,11 +17,11 @@ import { getSendMessage } from './message-client';
 import { buildCurrentRestoreState } from './restore-state';
 
 export async function refreshInsertionTargetStatus(state: SidePanelState, panel: PanelController, send: SendMessage): Promise<void> {
-  if (!state.currentSession) {
+  if (!state.runtime.currentSession) {
     panel.setInsertionTargetStatus({
       status: 'needs_recapture',
       message: 'Open Draftlet from a compose field to enable insertion.',
-      trail: state.insertionTrail,
+      trail: state.ui.insertionTrail,
     });
     return;
   }
@@ -29,18 +29,18 @@ export async function refreshInsertionTargetStatus(state: SidePanelState, panel:
   try {
     const response = await send<InsertionTargetStatusResult>({
       type: GET_INSERTION_TARGET_STATUS,
-      sessionId: state.currentSession.sessionId,
+      sessionId: state.runtime.currentSession.sessionId,
     } satisfies DraftletMessage);
 
     panel.setInsertionTargetStatus({
       status: response.status,
       message: response.message,
       candidates: response.candidates,
-      trail: state.insertionTrail,
+      trail: state.ui.insertionTrail,
     });
-    state.currentSession = {
-      ...state.currentSession,
-      insertionTarget: response.target ?? state.currentSession.insertionTarget,
+    state.runtime.currentSession = {
+      ...state.runtime.currentSession,
+      insertionTarget: response.target ?? state.runtime.currentSession.insertionTarget,
       insertionTargetStatus: response.status,
       plausibleTabs: response.candidates,
     };
@@ -49,11 +49,11 @@ export async function refreshInsertionTargetStatus(state: SidePanelState, panel:
     panel.setInsertionTargetStatus({
       status: 'unavailable',
       message: 'Insertion target is unavailable.',
-      trail: state.insertionTrail,
+      trail: state.ui.insertionTrail,
     });
-    if (state.currentSession) {
-      state.currentSession = {
-        ...state.currentSession,
+    if (state.runtime.currentSession) {
+      state.runtime.currentSession = {
+        ...state.runtime.currentSession,
         insertionTargetStatus: 'unavailable',
         plausibleTabs: undefined,
       };
@@ -63,15 +63,16 @@ export async function refreshInsertionTargetStatus(state: SidePanelState, panel:
 }
 
 export function setSessionInsertionTargetStatus(state: SidePanelState, panel: PanelController): void {
-  if (!state.currentSession) {
+  if (!state.runtime.currentSession) {
     return;
   }
 
   panel.setInsertionTargetStatus({
-    status: state.currentSession.insertionTargetStatus ?? (state.currentSession.insertionTarget ? 'stale' : 'needs_recapture'),
-    message: insertionTargetMessage(state.currentSession),
-    candidates: state.currentSession.plausibleTabs,
-    trail: state.insertionTrail,
+    status: state.runtime.currentSession.insertionTargetStatus
+      ?? (state.runtime.currentSession.insertionTarget ? 'stale' : 'needs_recapture'),
+    message: insertionTargetMessage(state.runtime.currentSession),
+    candidates: state.runtime.currentSession.plausibleTabs,
+    trail: state.ui.insertionTrail,
   });
 }
 
@@ -81,13 +82,13 @@ export async function insertIntoActivePage(
   replyText: string,
   variantId?: string,
 ): Promise<InsertionResult> {
-  state.isInsertInProgress = true;
-  state.insertInProgressMessage = 'Click the compose field to insert.';
+  state.ui.isInsertInProgress = true;
+  state.ui.insertInProgressMessage = 'Click the compose field to insert.';
 
   try {
     const response = await getSendMessage()<InsertReplyResult>({
       type: INSERT_REPLY,
-      sessionId: state.currentSession?.sessionId,
+      sessionId: state.runtime.currentSession?.sessionId,
       replyText,
       variantId,
     } satisfies DraftletMessage);
@@ -98,8 +99,8 @@ export async function insertIntoActivePage(
     // one-shot clipboard copy; show the corresponding message.
     return fallbackCopy(state, panel, replyText);
   } finally {
-    state.isInsertInProgress = false;
-    state.insertInProgressMessage = '';
+    state.ui.isInsertInProgress = false;
+    state.ui.insertInProgressMessage = '';
   }
 }
 
@@ -113,11 +114,11 @@ function applyInsertionResult(
     panel.setInsertionTargetStatus({
       status: 'live',
       message: 'Inserted into the focused field.',
-      trail: state.insertionTrail,
+      trail: state.ui.insertionTrail,
     });
-    if (state.currentSession) {
-      state.currentSession = {
-        ...state.currentSession,
+    if (state.runtime.currentSession) {
+      state.runtime.currentSession = {
+        ...state.runtime.currentSession,
         insertionTargetStatus: 'live',
         plausibleTabs: undefined,
       };
@@ -130,11 +131,11 @@ function applyInsertionResult(
     panel.setInsertionTargetStatus({
       status: result.targetStatus ?? 'unavailable',
       message: result.message,
-      trail: state.insertionTrail,
+      trail: state.ui.insertionTrail,
     });
-    if (state.currentSession) {
-      state.currentSession = {
-        ...state.currentSession,
+    if (state.runtime.currentSession) {
+      state.runtime.currentSession = {
+        ...state.runtime.currentSession,
         insertionTargetStatus: result.targetStatus ?? 'unavailable',
         plausibleTabs: undefined,
       };
@@ -152,11 +153,11 @@ function applyInsertionResult(
     panel.setInsertionTargetStatus({
       status: result.targetStatus,
       message: result.message,
-      trail: state.insertionTrail,
+      trail: state.ui.insertionTrail,
     });
-    if (state.currentSession) {
-      state.currentSession = {
-        ...state.currentSession,
+    if (state.runtime.currentSession) {
+      state.runtime.currentSession = {
+        ...state.runtime.currentSession,
         insertionTargetStatus: result.targetStatus,
         plausibleTabs: undefined,
       };
@@ -175,8 +176,8 @@ async function fallbackCopy(
   try {
     await navigator.clipboard.writeText(replyText);
     const message = 'Draftlet could not find a compose field, so it copied the draft.';
-    state.insertionTrail = appendTrail(
-      state.insertionTrail,
+    state.ui.insertionTrail = appendTrail(
+      state.ui.insertionTrail,
       'recapture_failed',
       'failed',
       message,
@@ -184,11 +185,11 @@ async function fallbackCopy(
     panel.setInsertionTargetStatus({
       status: 'unavailable',
       message,
-      trail: state.insertionTrail,
+      trail: state.ui.insertionTrail,
     });
-    if (state.currentSession) {
-      state.currentSession = {
-        ...state.currentSession,
+    if (state.runtime.currentSession) {
+      state.runtime.currentSession = {
+        ...state.runtime.currentSession,
         insertionTargetStatus: 'unavailable',
         plausibleTabs: undefined,
       };
@@ -197,8 +198,8 @@ async function fallbackCopy(
     return { status: 'copied', message, targetStatus: 'unavailable' };
   } catch {
     const message = 'Draftlet could not find a compose field. Use Copy and paste manually.';
-    state.insertionTrail = appendTrail(
-      state.insertionTrail,
+    state.ui.insertionTrail = appendTrail(
+      state.ui.insertionTrail,
       'recapture_failed',
       'failed',
       message,
@@ -206,11 +207,11 @@ async function fallbackCopy(
     panel.setInsertionTargetStatus({
       status: 'unavailable',
       message,
-      trail: state.insertionTrail,
+      trail: state.ui.insertionTrail,
     });
-    if (state.currentSession) {
-      state.currentSession = {
-        ...state.currentSession,
+    if (state.runtime.currentSession) {
+      state.runtime.currentSession = {
+        ...state.runtime.currentSession,
         insertionTargetStatus: 'unavailable',
         plausibleTabs: undefined,
       };
@@ -221,18 +222,18 @@ async function fallbackCopy(
 }
 
 export function onInsertionInProgress(state: SidePanelState, panel: PanelController, message: string): void {
-  state.isInsertInProgress = true;
-  state.insertInProgressMessage = message;
+  state.ui.isInsertInProgress = true;
+  state.ui.insertInProgressMessage = message;
 
   panel.setInsertionTargetStatus({
     status: 'needs_focus',
     message,
     outcome: 'needs_focused_compose_target',
-    trail: state.insertionTrail,
+    trail: state.ui.insertionTrail,
   });
-  if (state.currentSession) {
-    state.currentSession = {
-      ...state.currentSession,
+  if (state.runtime.currentSession) {
+    state.runtime.currentSession = {
+      ...state.runtime.currentSession,
       insertionTargetStatus: 'needs_focus',
     };
   }

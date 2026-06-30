@@ -3,30 +3,48 @@ import type { PanelView, Tone } from '../../core/types';
 
 export const MAX_INSERTION_TRAIL_ITEMS = 4;
 
-export interface SidePanelState {
+export interface SidePanelRuntimeState {
   currentSession: WorkspaceSession | null;
   currentThreadSnapshot: ConversationThreadSnapshot | null;
+}
+
+export interface SidePanelUiState {
   currentTone: Tone;
   currentPanelView: PanelView;
+  selectedThreadId: string | null;
+  selectedVariantId: string | null;
+  draftEditBuffers: Record<string, string>;
   insertionTrail: InsertionStatusTrailItem[];
   isInsertInProgress: boolean;
   insertInProgressMessage: string;
 }
 
+export interface SidePanelState {
+  runtime: SidePanelRuntimeState;
+  ui: SidePanelUiState;
+}
+
 export function createInitialState(initialTone: Tone, initialView: PanelView): SidePanelState {
   return {
-    currentSession: null,
-    currentThreadSnapshot: null,
-    currentTone: initialTone,
-    currentPanelView: initialView,
-    insertionTrail: [],
-    isInsertInProgress: false,
-    insertInProgressMessage: '',
+    runtime: {
+      currentSession: null,
+      currentThreadSnapshot: null,
+    },
+    ui: {
+      currentTone: initialTone,
+      currentPanelView: initialView,
+      selectedThreadId: null,
+      selectedVariantId: null,
+      draftEditBuffers: {},
+      insertionTrail: [],
+      isInsertInProgress: false,
+      insertInProgressMessage: '',
+    },
   };
 }
 
 export function shouldApplySessionUpdate(state: SidePanelState, session: WorkspaceSession): boolean {
-  return !state.currentSession
-    || state.currentSession.sessionId === session.sessionId
-    || state.currentSession.tabId === session.tabId;
+  return !state.runtime.currentSession
+    || state.runtime.currentSession.sessionId === session.sessionId
+    || state.runtime.currentSession.tabId === session.tabId;
 }

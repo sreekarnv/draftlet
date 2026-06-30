@@ -59,6 +59,8 @@ Put code in Workshop when it is part of the primary drafting workflow. In v0.2.0
 Workshop owns:
 - the main Draftlet workspace
 - session and thread display
+- the latest runtime projection received by the side panel
+- Workshop-only UI state such as selected thread/variant IDs, local draft edit buffers, view state, loading/error display state, and insertion progress/trail display
 - source/context summary
 - streaming draft display
 - follow-up instructions
@@ -168,6 +170,7 @@ Keep one clear owner for each class of state.
 - Extension coordination state belongs in the service worker/background.
 - Drafting workflow UI state belongs in the side panel.
 - Durable session, thread, turn, draft, prompt, generation, and preference state should move toward runtime ownership.
+- The side panel may keep a local runtime projection for rendering and restore-state calculation, but Workshop-only UI state must stay separate from durable runtime snapshots.
 - Machine-local operational state belongs in the desktop app.
 
 Avoid mirrored mutable state across content script, popup, side panel, desktop, and runtime. Share identifiers, snapshots, and typed events instead.
