@@ -1,8 +1,10 @@
 import { getConversationThreadSnapshot, getDomainHistory, getWorkspaceSessionSnapshot, putWorkspaceSession } from '../runtime-api';
 import { buildWorkspaceRestoreState } from '../restore-conflict';
 import type {
+  CreateCommandSurfaceSessionResult,
   DomainHistoryResult,
   DraftletSidePanelContext,
+  DraftletError,
   LaunchSidePanelResult,
   RestoreDomainThreadResult,
   WorkspaceSession,
@@ -24,33 +26,16 @@ export async function handleLaunchSidePanel(
   context: DraftletSidePanelContext,
   sender: Browser.runtime.MessageSender,
 ): Promise<LaunchSidePanelResult> {
-  const tabId = sender.tab?.id ?? context.tabId;
+  const result = await upsertPageWorkspaceSession(context, sender);
 
-  if (typeof tabId !== 'number') {
+  if (!result.session) {
     return {
       opened: false,
-      message: 'No active tab for Draftlet session.',
+      message: result.error?.message ?? 'No active tab for Draftlet session.',
     };
   }
 
-  const previousSession = sessions.getByTabId(tabId);
-  let session = sessions.upsertFromPageContext({
-    context,
-    tabId,
-    windowId: sender.tab?.windowId ?? context.windowId,
-  });
-
-  const previousGenerationId = previousSession?.activeRunId;
-  if (previousSession && previousGenerationId) {
-    void handleCancelDraftGeneration(previousSession.sessionId, previousGenerationId);
-    session = sessions.getBySessionId(session.sessionId) ?? session;
-  }
-
-  void persistWorkspaceSession(session).then((persisted) => {
-    if (persisted) {
-      emitWorkspaceSessionUpdated(persisted);
-    }
-  });
+  const { session } = result;
 
   try {
     await openSidePanel(session);
@@ -64,6 +49,23 @@ export async function handleLaunchSidePanel(
       message: error instanceof Error ? error.message : 'Could not open side panel.',
     };
   }
+}
+
+export async function handleCreateCommandSurfaceSession(
+  context: DraftletSidePanelContext,
+  sender: Browser.runtime.MessageSender,
+): Promise<CreateCommandSurfaceSessionResult> {
+  const result = await upsertPageWorkspaceSession(context, sender);
+
+  if (!result.session) {
+    return {
+      created: false,
+      error: result.error,
+    };
+  }
+
+  void emitWorkspaceSessionUpdated(result.session);
+  return { created: true, session: result.session };
 }
 
 export async function handleGetCurrentWorkspaceSession(tabId?: number): Promise<WorkspaceSessionResult> {
@@ -187,4 +189,38 @@ export async function persistWorkspaceSession(session: WorkspaceSession): Promis
   } catch {
     return null;
   }
+}
+
+async function upsertPageWorkspaceSession(
+  context: DraftletSidePanelContext,
+  sender: Browser.runtime.MessageSender,
+): Promise<{ session: WorkspaceSession; error?: undefined } | { session?: undefined; error: DraftletError }> {
+  const tabId = sender.tab?.id ?? context.tabId;
+
+  if (typeof tabId !== 'number') {
+    return {
+      error: createDraftletError('tab_not_found', 'No active tab for Draftlet session.', true),
+    };
+  }
+
+  const previousSession = sessions.getByTabId(tabId);
+  let session = sessions.upsertFromPageContext({
+    context,
+    tabId,
+    windowId: sender.tab?.windowId ?? context.windowId,
+  });
+
+  const previousGenerationId = previousSession?.activeRunId;
+  if (previousSession && previousGenerationId) {
+    void handleCancelDraftGeneration(previousSession.sessionId, previousGenerationId);
+    session = sessions.getBySessionId(session.sessionId) ?? session;
+  }
+
+  void persistWorkspaceSession(session).then((persisted) => {
+    if (persisted) {
+      emitWorkspaceSessionUpdated(persisted);
+    }
+  });
+
+  return { session };
 }

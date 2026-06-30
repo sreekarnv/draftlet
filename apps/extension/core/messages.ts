@@ -65,6 +65,7 @@ export type {
 export type { BrowserDiagnosticsPublishReliabilityState } from './recapture-diagnostics-publish-retry';
 
 export const LAUNCH_SIDE_PANEL = 'draftlet:launch-side-panel';
+export const CREATE_COMMAND_SURFACE_SESSION = 'draftlet:create-command-surface-session';
 export const GET_CURRENT_WORKSPACE_SESSION = 'draftlet:get-current-workspace-session';
 export const GET_DOMAIN_HISTORY = 'draftlet:get-domain-history';
 export const GET_RECAPTURE_DIAGNOSTICS = 'draftlet:get-recapture-diagnostics';
@@ -155,6 +156,7 @@ export interface RecaptureDiagnosticEntry {
 
 export type DraftletMessage =
   | { type: typeof LAUNCH_SIDE_PANEL; context: DraftletSidePanelContext }
+  | { type: typeof CREATE_COMMAND_SURFACE_SESSION; context: DraftletSidePanelContext }
   | { type: typeof GET_CURRENT_WORKSPACE_SESSION; tabId?: number }
   | { type: typeof GET_DOMAIN_HISTORY; limit?: number }
   | { type: typeof GET_RECAPTURE_DIAGNOSTICS; sessionId?: string; limit?: number }
@@ -181,6 +183,12 @@ export interface LaunchSidePanelResult {
   opened: boolean;
   session?: WorkspaceSession;
   message?: string;
+}
+
+export interface CreateCommandSurfaceSessionResult {
+  created: boolean;
+  session?: WorkspaceSession;
+  error?: DraftletError;
 }
 
 export interface WorkspaceSessionResult {

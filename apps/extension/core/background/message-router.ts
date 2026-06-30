@@ -3,6 +3,7 @@ import {
   ACTIVATE_INSERTION_TAB,
   ACTIVATE_RECAPTURE_TAB,
   CANCEL_DRAFT_GENERATION,
+  CREATE_COMMAND_SURFACE_SESSION,
   GET_CURRENT_WORKSPACE_SESSION,
   GET_DOMAIN_HISTORY,
   GET_INSERTION_TARGET_STATUS,
@@ -35,6 +36,7 @@ import {
 import {
   handleGetDomainHistory,
   handleGetCurrentWorkspaceSession,
+  handleCreateCommandSurfaceSession,
   handleLaunchSidePanel,
   handleRestoreDomainThread,
 } from './workspace-session-coordinator';
@@ -50,6 +52,10 @@ export function registerMessageRouter(
   events.addListener((message, sender) => {
     if (message.type === LAUNCH_SIDE_PANEL) {
       return handleLaunchSidePanel(message.context, sender);
+    }
+
+    if (message.type === CREATE_COMMAND_SURFACE_SESSION) {
+      return handleCreateCommandSurfaceSession(message.context, sender);
     }
 
     if (message.type === GET_CURRENT_WORKSPACE_SESSION) {

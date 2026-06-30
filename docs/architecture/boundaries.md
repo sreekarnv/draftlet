@@ -79,20 +79,24 @@ Workshop should be the default destination for any workflow that takes more than
 
 ## Command Surface
 
-Put code in the future Command Surface only when it is a lightweight Shadow DOM command affordance on the page.
+Put code in the Command Surface only when it is a lightweight Shadow DOM command affordance on the page.
 
-The Command Surface will own:
+The Command Surface owns:
 - quick page-local commands
 - small browser-native entry points into Workshop
 - lightweight affordance state
+- keyboard-triggered context capture for fast drafting
+- temporary draft editing state for the currently open overlay
 
-The Command Surface will not own:
+The Command Surface does not own:
 - primary drafting UX
 - session or thread lifecycle
 - prompt construction
 - runtime connection ownership
 - persistence
 - large overlays or app-like page UI
+
+The Command Surface uses the content script only for capture, Shadow DOM mounting, and insertion back into the page. Generation still flows through the service worker/background and runtime-owned `WorkspaceSession`, `ConversationThread`, `Turn`, `DraftVariant`, and `GenerationRun` state.
 
 ## Popup
 

@@ -44,6 +44,14 @@ export function emitDraftletMessage(message: DraftletMessage): Promise<unknown> 
   return browser.runtime.sendMessage(message).catch(() => {});
 }
 
+export function emitDraftletTabMessage(tabId: number | undefined, message: DraftletMessage): Promise<unknown> {
+  if (typeof tabId !== 'number' || tabId < 0) {
+    return Promise.resolve();
+  }
+
+  return Promise.resolve(browser.tabs.sendMessage(tabId, message)).catch(() => {});
+}
+
 export function emitWorkspaceSessionUpdated(session: WorkspaceSession): Promise<unknown> {
   return emitDraftletMessage({
     type: WORKSPACE_SESSION_UPDATED,
@@ -52,11 +60,17 @@ export function emitWorkspaceSessionUpdated(session: WorkspaceSession): Promise<
 }
 
 export function emitConversationThreadUpdated(sessionId: string, snapshot: ConversationThreadSnapshot): Promise<unknown> {
-  return emitDraftletMessage({
+  const message = {
     type: CONVERSATION_THREAD_UPDATED,
     sessionId,
     snapshot,
-  });
+  } satisfies DraftletMessage;
+  const session = sessions.getBySessionId(sessionId);
+
+  return Promise.all([
+    emitDraftletMessage(message),
+    emitDraftletTabMessage(session?.tabId, message),
+  ]);
 }
 
 export function createDraftletError(

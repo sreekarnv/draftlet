@@ -1,11 +1,16 @@
 import { createFloatingButton } from '../components/floating-button';
 import {
   ACTIVATE_INSERTION_TAB,
+  CANCEL_DRAFT_GENERATION,
+  CREATE_COMMAND_SURFACE_SESSION,
+  GET_INSERTION_TARGET_STATUS,
   INSERT_REPLY,
   INSERTION_IN_PROGRESS,
   LAUNCH_SIDE_PANEL,
   RECAPTURE_INSERTION_TARGET,
   REVALIDATE_INSERTION_TARGET,
+  START_DRAFT_GENERATION,
+  type CreateCommandSurfaceSessionResult,
   type DraftletMessage,
   type DraftletSidePanelContext,
   type InsertionTargetStatusResult,
@@ -13,18 +18,39 @@ import {
   type LaunchSidePanelResult,
   type RecaptureInsertionTargetFailureReason,
   type RecaptureInsertionTargetResult,
+  type StartDraftGenerationResult,
 } from '../core/messages';
 import { createInsertionTargetStore, type InsertionTargetStore } from '../core/insertion-target-store';
 import { logTargetEvent } from '../core/draftlet-log';
 import { restoreTargetFromRef, type FocusSnapshot } from '../core/focus';
 import { insertReply } from '../core/insertion';
 import { getPageSelection, type PageSelection } from '../core/selection';
+import { createCommandSurface } from '../ui/command-surface/command-surface';
+import { isCommandSurfaceShortcut } from '../ui/command-surface/shortcut';
 
 export default defineContentScript({
   matches: ['<all_urls>'],
   main(ctx) {
     const targetStore = createInsertionTargetStore();
     let activeSelection: PageSelection | null = null;
+
+    const createCommandSession = async (context: DraftletSidePanelContext): Promise<CreateCommandSurfaceSessionResult> => {
+      try {
+        return await browser.runtime.sendMessage({
+          type: CREATE_COMMAND_SURFACE_SESSION,
+          context,
+        } satisfies DraftletMessage) as CreateCommandSurfaceSessionResult;
+      } catch (error) {
+        return {
+          created: false,
+          error: {
+            code: 'command_surface_session_failed',
+            message: error instanceof Error ? error.message : 'Could not create a Draftlet session.',
+            retryable: true,
+          },
+        };
+      }
+    };
 
     const launchSidePanel = async (): Promise<boolean> => {
       if (!activeSelection) {
@@ -63,6 +89,69 @@ export default defineContentScript({
       },
     });
 
+    const commandSurface = createCommandSurface({
+      async createSession(context) {
+        const response = await createCommandSession(context);
+        return {
+          created: response.created,
+          session: response.session,
+          message: response.error?.message,
+        };
+      },
+      async startGeneration(sessionId) {
+        return await browser.runtime.sendMessage({
+          type: START_DRAFT_GENERATION,
+          sessionId,
+        } satisfies DraftletMessage) as StartDraftGenerationResult;
+      },
+      async cancelGeneration(sessionId, generationId) {
+        await browser.runtime.sendMessage({
+          type: CANCEL_DRAFT_GENERATION,
+          sessionId,
+          generationId,
+        } satisfies DraftletMessage).catch(() => undefined);
+      },
+      async insertDraft(sessionId, replyText) {
+        await browser.runtime.sendMessage({
+          type: GET_INSERTION_TARGET_STATUS,
+          sessionId,
+        } satisfies DraftletMessage).catch(() => undefined);
+
+        const response = await browser.runtime.sendMessage({
+          type: INSERT_REPLY,
+          sessionId,
+          replyText,
+        } satisfies DraftletMessage) as InsertReplyResult;
+
+        if (response.result.status !== 'failed') {
+          return response.result;
+        }
+
+        try {
+          await navigator.clipboard.writeText(replyText);
+          return {
+            status: 'copied',
+            message: response.result.message || 'Draftlet could not insert, so it copied the draft.',
+            targetStatus: response.result.targetStatus ?? 'unavailable',
+            errorCode: response.result.errorCode,
+          };
+        } catch {
+          return response.result;
+        }
+      },
+      async openWorkshop(context) {
+        try {
+          const response = await browser.runtime.sendMessage({
+            type: LAUNCH_SIDE_PANEL,
+            context,
+          } satisfies DraftletMessage) as LaunchSidePanelResult;
+          return response.opened;
+        } catch {
+          return false;
+        }
+      },
+    });
+
     const updateSelection = () => {
       activeSelection = getPageSelection();
 
@@ -88,6 +177,21 @@ export default defineContentScript({
     const onPointerDown = (event: PointerEvent) => {
       targetStore.notePointerDown(event.target);
       dismiss(event);
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (isCommandSurfaceShortcut(event)) {
+        event.preventDefault();
+        event.stopPropagation();
+        targetStore.noteFocusIn(event.target);
+        const selection = getPageSelection(event.target);
+        activeSelection = selection;
+        commandSurface.open(createCommandSurfaceContext(selection?.text ?? '', targetStore.getLiveSnapshot()));
+        trigger.hide();
+        return;
+      }
+
+      targetStore.notePointerDown(event.target);
     };
 
     const resolveInsertionTarget = (targetRef?: FocusSnapshot['targetRef']): FocusSnapshot | null => {
@@ -318,6 +422,8 @@ export default defineContentScript({
     const handleRuntimeMessage = (
       message: DraftletMessage,
     ): Promise<InsertReplyResult | InsertionTargetStatusResult | RecaptureInsertionTargetResult> | undefined => {
+      commandSurface.handleMessage(message);
+
       if (message.type === REVALIDATE_INSERTION_TARGET) {
         return Promise.resolve(revalidateInsertionTarget(message.target));
       }
@@ -337,7 +443,7 @@ export default defineContentScript({
 
     document.addEventListener('focusin', (event) => targetStore.noteFocusIn(event.target), true);
     document.addEventListener('pointerdown', onPointerDown, true);
-    document.addEventListener('keydown', (event) => targetStore.notePointerDown(event.target), true);
+    document.addEventListener('keydown', onKeyDown, true);
     document.addEventListener('input', (event) => targetStore.noteInput(event.target), true);
     document.addEventListener('selectionchange', () => {
       targetStore.noteSelectionChange();
@@ -349,7 +455,9 @@ export default defineContentScript({
     ctx.onInvalidated(() => {
       browser.runtime.onMessage.removeListener(handleRuntimeMessage);
       targetStore.cancelArm();
+      document.removeEventListener('keydown', onKeyDown, true);
       trigger.remove();
+      commandSurface.remove();
     });
   },
 });
@@ -362,6 +470,10 @@ function createSidePanelContext(selectedText: string, target: FocusSnapshot | nu
     pageTitle: document.title || undefined,
     composeTarget: target?.targetRef,
   };
+}
+
+function createCommandSurfaceContext(selectedText: string, target: FocusSnapshot | null): DraftletSidePanelContext {
+  return createSidePanelContext(selectedText, target);
 }
 
 export type { InsertionTargetStore };

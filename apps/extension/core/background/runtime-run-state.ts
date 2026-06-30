@@ -8,7 +8,7 @@ import type {
   WorkspaceSession,
 } from '../messages';
 import { sessions, threads, localGenerationTransportByRunId } from './state';
-import { emitConversationThreadUpdated, emitDraftletMessage, emitWorkspaceSessionUpdated, getActiveTabId } from './shared-helpers';
+import { emitConversationThreadUpdated, emitDraftletMessage, emitDraftletTabMessage, emitWorkspaceSessionUpdated, getActiveTabId } from './shared-helpers';
 
 export function cancelLocalGenerationTransport(runId: string): void {
   localGenerationTransportByRunId.get(runId)?.abortController.abort();
@@ -190,11 +190,11 @@ export async function streamRuntimeRunEvents(
       const session = sessions.getBySessionId(sessionId);
       const turnId = session?.activeRunId === runId ? session.activeTurnId : undefined;
 
-      if (!turnId) {
+      if (!session || !turnId) {
         return;
       }
 
-      void emitDraftletMessage({
+      const message = {
         type: DRAFT_TEXT_DELTA_RECEIVED,
         sessionId,
         generationId: runId,
@@ -202,7 +202,10 @@ export async function streamRuntimeRunEvents(
         turnId,
         text: chunk.text,
         sequence: chunk.sequence,
-      });
+      } satisfies Parameters<typeof emitDraftletMessage>[0];
+
+      void emitDraftletMessage(message);
+      void emitDraftletTabMessage(session.tabId, message);
     },
     onReply(reply) {
       if (!hasLocalGenerationTransport(sessionId, runId)) {
