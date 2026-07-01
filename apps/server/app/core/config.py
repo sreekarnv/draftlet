@@ -1,5 +1,7 @@
 from functools import lru_cache
+from pathlib import Path
 import os
+import tomllib
 
 from pydantic import BaseModel
 
@@ -26,6 +28,34 @@ DEFAULT_CORS_ALLOW_ORIGINS: tuple[str, ...] = (
 # `DRAFTLET_CORS_ALLOW_ORIGINS` list instead.
 DEFAULT_CORS_ALLOW_ORIGIN_REGEX: str | None = r"chrome-extension://[a-z]+"
 
+# Server port that the FastAPI app is expected to bind to. Mirrored in
+# `app/packaged_main.py`; both share the same env override.
+DEFAULT_SERVER_PORT = 47632
+
+# Schema and API versions for the Draftlet runtime contract. These are
+# bumped when the public surface area changes; the runtime version comes
+# from pyproject.toml.
+SCHEMA_VERSION = "0.2.0"
+API_VERSION = "0.2.0"
+
+
+def _resolve_runtime_version() -> str:
+    candidates = [
+        Path(__file__).resolve().parent.parent.parent / "pyproject.toml",
+        Path.cwd() / "pyproject.toml",
+    ]
+
+    for candidate in candidates:
+        if candidate.is_file():
+            with candidate.open("rb") as handle:
+                data = tomllib.load(handle)
+            return str(data["project"]["version"])
+
+    return "0.0.0"
+
+
+RUNTIME_VERSION = _resolve_runtime_version()
+
 
 class Settings(BaseModel):
     app_name: str = "Draftlet Server"
@@ -49,6 +79,30 @@ def get_settings() -> Settings:
             os.getenv("DRAFTLET_CORS_ALLOW_ORIGIN_REGEX")
         ),
     )
+
+
+def get_server_port() -> int:
+    raw = os.getenv("DRAFTLET_SERVER_PORT")
+
+    if raw is None or not raw.strip():
+        return DEFAULT_SERVER_PORT
+
+    try:
+        return int(raw.strip())
+    except ValueError:
+        return DEFAULT_SERVER_PORT
+
+
+def get_runtime_version() -> str:
+    return RUNTIME_VERSION
+
+
+def get_schema_version() -> str:
+    return SCHEMA_VERSION
+
+
+def get_api_version() -> str:
+    return API_VERSION
 
 
 def _parse_cors_allow_origins(raw: str | None) -> list[str]:

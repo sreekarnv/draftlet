@@ -77,6 +77,47 @@ def list_recent_domain_history(session: Session, limit: int = 20) -> list[Domain
     return items
 
 
+def list_threads_paginated(
+    session: Session,
+    limit: int,
+    offset: int,
+    source_domain: str | None = None,
+    status: str | None = None,
+) -> tuple[list[DomainHistoryItem], int]:
+    statement = select(ConversationThread).options(
+        selectinload(ConversationThread.session),
+        selectinload(ConversationThread.turns).selectinload(Turn.variants),
+    )
+
+    if source_domain:
+        statement = statement.where(ConversationThread.source_domain == source_domain)
+    if status:
+        statement = statement.where(ConversationThread.status == status)
+
+    threads = session.scalars(statement).all()
+    sorted_threads = sorted(threads, key=latest_thread_activity, reverse=True)
+    total = len(sorted_threads)
+    bounded = sorted_threads[offset:offset + limit]
+    items: list[DomainHistoryItem] = []
+
+    for thread in bounded:
+        turns = list(thread.turns)
+        variants = [variant for turn in turns for variant in turn.variants]
+        items.append(
+            DomainHistoryItem(
+                session=thread.session,
+                thread=ConversationThreadSnapshot(
+                    thread=thread,
+                    turns=turns,
+                    variants=variants,
+                    latest_recoverable_run=build_latest_recoverable_run_projection(session, thread.thread_id),
+                ),
+            )
+        )
+
+    return items, total
+
+
 def latest_thread_activity(thread: ConversationThread) -> object:
     timestamps = [thread.updated_at, thread.created_at]
 

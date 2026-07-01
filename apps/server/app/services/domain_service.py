@@ -76,6 +76,7 @@ from app.services.domain.snapshots import (
     latest_generation_run_event_at,
     latest_thread_activity,
     list_recent_domain_history,
+    list_threads_paginated,
 )
 from app.services.domain.threads import create_or_update_thread
 from app.services.domain.turns import apply_turn_lifecycle, create_or_update_turn, update_turn_lifecycle, update_turn_status
@@ -147,6 +148,7 @@ __all__ = [
     "list_active_generation_runs",
     "list_generation_run_events",
     "list_recent_domain_history",
+    "list_threads_paginated",
     "prune_generation_run_events",
     "prune_terminal_generation_run_events",
     "reconcile_stale_generation_runs",

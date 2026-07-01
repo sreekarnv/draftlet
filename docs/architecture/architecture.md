@@ -129,3 +129,46 @@ The service worker coordinates extension message routing. The runtime exposes st
 - The popup is not the full drafting workspace.
 - No repository patterns, dependency injection frameworks, or generic pipeline abstractions for simple local flows.
 - No broad rewrites without a realistic migration path.
+
+## v3 Backend Capability Model
+
+The runtime exposes a typed Capability registry at GET /capabilities. Each capability describes a runtime-supported action: id, surface, title, description, payloadSchema, resultSchema, optional icon, version, optional deprecatedSince. The list is static for v3.1; it becomes dynamic in v3.5+ when the desktop starts registering user capabilities.
+
+The list is the single source of truth for:
+- The desktop's capability registry (which reads it on startup).
+- The future MCP server (which iterates it to expose MCP tools).
+
+## v3 Backend Endpoint Inventory
+
+Read endpoints (consumed by desktop, future MCP):
+- GET /capabilities
+- GET /version
+- GET /health
+- GET /domain/history?limit=20
+- GET /domain/sessions/{sessionId}
+- GET /domain/threads/{threadId}
+- GET /threads?limit=20&offset=0 (v3.1)
+- GET /search?q=&limit=20&scope= (v3.3)
+- GET /diagnostics/browser-recapture
+- GET /diagnostics/generation-runs/maintenance
+- GET /diagnostics/support-bundle (v3.1)
+- GET /models/ollama
+- GET /preferences
+
+Write endpoints (consumed by extension):
+- PUT /domain/sessions/{sessionId}
+- PUT /domain/threads/{threadId}
+- PUT /domain/turns/{turnId}
+- PATCH /domain/turns/{turnId}/status
+- PUT /domain/generation-runs/{runId}
+- PATCH /domain/generation-runs/{runId}/heartbeat
+- PATCH /domain/generation-runs/{runId}/status
+- POST /domain/generation-runs/reconcile
+- PUT /domain/variants/{variantId}
+- PATCH /domain/variants/{variantId}/state
+- PUT /preferences
+- PUT /diagnostics/browser-recapture
+- POST /replies/{runId}/start
+- POST /replies/{runId}/cancel
+- GET /replies/{runId}/events (SSE)
+- GET /domain/generation-runs/{runId}/progress

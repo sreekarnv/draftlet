@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.capabilities import router as capabilities_router
 from app.api.domain import router as domain_router
 from app.api.diagnostics import router as diagnostics_router
 from app.api.health import router as health_router
@@ -84,6 +85,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(health_router)
+app.include_router(capabilities_router)
 app.include_router(replies_router)
 app.include_router(domain_router)
 app.include_router(preferences_router)

@@ -1,14 +1,19 @@
 import json
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import SessionLocal
 from app.db.models import (
     BrowserRecaptureDiagnosticEventRecord,
     BrowserRecaptureDiagnosticsReportRecord,
+    ConversationThread,
+    DraftVariant,
+    GenerationRun,
     GenerationRunMaintenanceOutcomeRecord,
+    Turn,
+    WorkspaceSession,
 )
 
 from app.schemas.diagnostics import (
@@ -429,3 +434,18 @@ def clear_generation_run_maintenance_status(session: Session | None = None) -> N
 
     with SessionLocal() as local_session:
         clear_generation_run_maintenance_status(local_session)
+
+
+def count_durable_records(session: Session) -> dict[str, int]:
+    workspace_sessions = int(session.scalar(select(func.count()).select_from(WorkspaceSession)) or 0)
+    conversation_threads = int(session.scalar(select(func.count()).select_from(ConversationThread)) or 0)
+    turns = int(session.scalar(select(func.count()).select_from(Turn)) or 0)
+    draft_variants = int(session.scalar(select(func.count()).select_from(DraftVariant)) or 0)
+    generation_runs = int(session.scalar(select(func.count()).select_from(GenerationRun)) or 0)
+    return {
+        "workspace_sessions": workspace_sessions,
+        "conversation_threads": conversation_threads,
+        "turns": turns,
+        "draft_variants": draft_variants,
+        "generation_runs": generation_runs,
+    }

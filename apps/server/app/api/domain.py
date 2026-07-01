@@ -21,6 +21,7 @@ from app.schemas.domain import (
     GenerationRunReconcileRequest,
     GenerationRunRestoreCandidate,
     GenerationRunStatusUpdate,
+    PaginatedThreads,
     TurnCreate,
     TurnRead,
     TurnStatusUpdate,
@@ -43,6 +44,7 @@ from app.services.domain_service import (
     is_generation_run_stale,
     list_active_generation_runs,
     list_recent_domain_history,
+    list_threads_paginated,
     reconcile_stale_generation_runs,
     update_generation_run_status,
     update_variant_state,
@@ -60,6 +62,24 @@ def get_domain_history(
     session: Session = Depends(get_session),
 ) -> list[DomainHistoryItem]:
     return list_recent_domain_history(session, limit=limit)
+
+
+@router.get("/threads", response_model=PaginatedThreads)
+def get_paginated_threads(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    source_domain: str | None = None,
+    status: str | None = None,
+    session: Session = Depends(get_session),
+) -> PaginatedThreads:
+    items, total = list_threads_paginated(
+        session,
+        limit=limit,
+        offset=offset,
+        source_domain=source_domain,
+        status=status,
+    )
+    return PaginatedThreads(items=items, total=total, limit=limit, offset=offset)
 
 
 @router.put("/sessions/{session_id}", response_model=WorkspaceSessionRead)

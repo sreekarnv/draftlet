@@ -273,6 +273,23 @@ Types that already follow this rule include `RuntimeErrorInfo`, `CommandStatus`,
 
 Field-name convention: the shared contract uses camelCase. Pydantic field names use snake_case (`apps/server/app/schemas/domain.py`) when the type is part of the durable domain model (where Python convention wins) and camelCase (`apps/server/app/schemas/diagnostics.py`) when the type is a cross-boundary payload (where the TypeScript contract is the source of truth and the wire format must match). Mappers in `apps/extension/core/runtime-api/mappers.ts` translate domain responses to TS contract field names at the boundary; do not duplicate shape definitions inside mappers.
 
+## Capability Contract (v3.1)
+
+```ts
+type CapabilitySurface = 'desktop' | 'extension' | 'runtime';
+type Capability = {
+  id: string;             // e.g. 'thread.list'
+  surface: CapabilitySurface;
+  title: string;
+  description?: string;
+  payloadSchema: JSONSchema;
+  resultSchema: JSONSchema;
+  icon?: string;
+  version: string;        // semver
+  deprecatedSince?: string;
+};
+```
+
 ## Identifier Guidance
 
 Use stable identifiers to keep cross-boundary state coherent.

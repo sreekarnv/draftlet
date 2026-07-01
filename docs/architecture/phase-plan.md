@@ -59,3 +59,54 @@ Test coverage for the highest-risk orchestration paths is in place:
 - extension UI behavior.
 - `apps/extension/core/recapture-diagnostics*.ts` and the `recordRecaptureDiagnostic` calls in `insertion-coordinator.ts` — the diagnostics data layer and the desktop relay consumer stay in place.
 - Alembic migrations.
+
+## v3.0 (in design, backend only)
+
+Goals: complete the data layer, replace the desktop diagnostic page with a real support bundle, enable platform-aware prompt guidance, add FTS5 search, measure parser reliability. Backend only; extension and desktop are deferred.
+
+### v3.1 — Capabilities, support-bundle, version, /threads
+
+- GET /capabilities
+- GET /diagnostics/support-bundle
+- GET /version
+- GET /threads
+- TS contracts: capabilities.ts, support-bundle.ts
+- ~250-400 LoC, one PR, no migration, no new deps
+
+### v3.2 — Platform-aware prompt guidance
+
+- ReplyRequest.platform_id (optional)
+- build_platform_instruction
+- TS: platforms.ts
+- ~150 LoC, one PR, no migration, no new deps
+
+### v3.3 — FTS5 full-text search
+
+- GET /search?q=&limit=20&scope=
+- migration 0013_fts5_search.py
+- TS: search.ts
+- ~300-400 LoC, one PR, one migration, no new deps (FTS5 is built into SQLite)
+
+### v3.4 — Parser reliability measurement
+
+- Real gemma3:4b output fixtures
+- Local-only smoke test
+- Optional CLI: scripts/measure_parser_reliability.py
+- ~100-200 LoC, no new deps
+
+## v3.5 (deferred, extension + desktop)
+
+- Platform adapters, Zustand for side panel, capability registry desktop integration
+- History browser, thread deep view, support-bundle UI
+
+## v4 (deferred)
+
+- sqlite-vec + Ollama embeddings for semantic search and RAG
+- New dep: sqlite-vec only (deferred because the API is pre-v1 and the user corpus needs to grow)
+- BAML and Pinecone: explicitly rejected. See the v3.0 decision log in docs/architecture/decisions.md (or inline below).
+
+## Decision log
+
+- v3.0.1 — Reject BAML. The 73-line parser works; the 4B model is unreliable for JSON schema; the streaming protocol would need a rewrite. Revisit if the model changes or the streaming protocol is rewritten.
+- v3.0.2 — Reject Pinecone. Hosted; breaks local-first. Local alternative (sqlite-vec) is strictly better.
+- v3.0.3 — Defer sqlite-vec and RAG to v4. Pre-v1 API, small corpus, fits better after v3 lands.
