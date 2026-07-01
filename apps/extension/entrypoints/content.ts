@@ -18,6 +18,7 @@ import {
   type LaunchSidePanelResult,
   type RecaptureInsertionTargetFailureReason,
   type RecaptureInsertionTargetResult,
+  type ReplySurface,
   type StartDraftGenerationResult,
 } from '../core/messages';
 import { createInsertionTargetStore, type InsertionTargetStore } from '../core/insertion-target-store';
@@ -79,13 +80,16 @@ export default defineContentScript({
         }
 
         targetStore.rememberTriggerCapture();
+        const selection = activeSelection;
+        const context = createCommandSurfaceContext(selection.text, targetStore.getLiveSnapshot());
 
         if (await launchSidePanel()) {
           trigger.hide();
           return;
         }
 
-        console.warn('Draftlet side panel could not be opened by the extension.');
+        commandSurface.open(context);
+        trigger.hide();
       },
     });
 
@@ -98,10 +102,12 @@ export default defineContentScript({
           message: response.error?.message,
         };
       },
-      async startGeneration(sessionId) {
+      async startGeneration(sessionId, options) {
         return await browser.runtime.sendMessage({
           type: START_DRAFT_GENERATION,
           sessionId,
+          replySurface: options.replySurface,
+          replyStyle: options.replyStyle,
         } satisfies DraftletMessage) as StartDraftGenerationResult;
       },
       async cancelGeneration(sessionId, generationId) {
@@ -475,12 +481,17 @@ export default defineContentScript({
 });
 
 function createSidePanelContext(selectedText: string, target: FocusSnapshot | null): DraftletSidePanelContext {
+  const detectedReplySurface = detectReplySurface(target);
+
   return {
     selectedText,
     sourceUrl: window.location.href,
     sourceDomain: window.location.hostname || undefined,
     pageTitle: document.title || undefined,
     composeTarget: target?.targetRef,
+    detectedReplySurface,
+    replySurface: detectedReplySurface,
+    replyStyle: defaultReplyStyleForSurface(detectedReplySurface),
   };
 }
 
@@ -489,3 +500,49 @@ function createCommandSurfaceContext(selectedText: string, target: FocusSnapshot
 }
 
 export type { InsertionTargetStore };
+
+function detectReplySurface(target: FocusSnapshot | null): ReplySurface {
+  const hostname = window.location.hostname.toLowerCase();
+  const title = document.title.toLowerCase();
+  const label = target?.targetRef?.label?.toLowerCase() ?? '';
+  const selector = target?.targetRef?.selector?.toLowerCase() ?? '';
+  const text = `${hostname} ${title} ${label} ${selector}`;
+
+  if (/gmail|mail\.google|outlook|office365|proton\.me|protonmail|mail\.yahoo|hey\.com|fastmail|superhuman/.test(text)) {
+    return 'email';
+  }
+
+  if (/whatsapp|messages\.google|messenger|telegram|signal|imessage|sms/.test(text)) {
+    return 'text_message';
+  }
+
+  if (/slack|discord|teams\.microsoft|chat/.test(text)) {
+    return 'chat';
+  }
+
+  if (/github|reddit|linkedin|comment|reply/.test(text)) {
+    return 'comment';
+  }
+
+  if (/twitter|x\.com|bsky|bluesky|mastodon|threads\.net|post/.test(text)) {
+    return 'social_post';
+  }
+
+  return 'unknown';
+}
+
+function defaultReplyStyleForSurface(surface: ReplySurface): DraftletSidePanelContext['replyStyle'] {
+  if (surface === 'email') {
+    return 'friendly';
+  }
+
+  if (surface === 'text_message' || surface === 'chat') {
+    return 'casual';
+  }
+
+  if (surface === 'social_post') {
+    return 'short';
+  }
+
+  return 'friendly';
+}

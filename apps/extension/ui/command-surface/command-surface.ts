@@ -11,6 +11,8 @@ import type {
   DraftletSidePanelContext,
   InsertionResult,
   InsertionTargetStatusResult,
+  ReplyStyle,
+  ReplySurface,
   StartDraftGenerationResult,
   WorkspaceSession,
 } from '../../core/messages';
@@ -19,7 +21,7 @@ type CommandSurfaceStatus = 'idle' | 'starting' | 'streaming' | 'cancelled' | 'i
 
 export interface CommandSurfaceCallbacks {
   createSession(context: DraftletSidePanelContext): Promise<{ created: boolean; session?: WorkspaceSession; message?: string }>;
-  startGeneration(sessionId: string): Promise<StartDraftGenerationResult>;
+  startGeneration(sessionId: string, options: { replySurface?: ReplySurface; replyStyle?: ReplyStyle }): Promise<StartDraftGenerationResult>;
   cancelGeneration(sessionId?: string, generationId?: string): Promise<void>;
   getInsertionTargetStatus(sessionId: string): Promise<InsertionTargetStatusResult>;
   insertDraft(sessionId: string, text: string): Promise<InsertionResult>;
@@ -54,6 +56,11 @@ export function createCommandSurface(callbacks: CommandSurfaceCallbacks): Comman
   const title = document.createElement('h2');
   const contextText = document.createElement('p');
   const statusText = document.createElement('p');
+  const controls = document.createElement('div');
+  const surfaceLabel = document.createElement('label');
+  const surfaceSelect = document.createElement('select');
+  const styleLabel = document.createElement('label');
+  const styleSelect = document.createElement('select');
   const editor = document.createElement('textarea');
   const actions = document.createElement('div');
   const generateButton = document.createElement('button');
@@ -94,6 +101,29 @@ export function createCommandSurface(callbacks: CommandSurfaceCallbacks): Comman
   contextText.className = 'context';
   statusText.className = 'status';
 
+  controls.className = 'controls';
+  surfaceLabel.textContent = 'Surface';
+  surfaceLabel.append(surfaceSelect);
+  styleLabel.textContent = 'Style';
+  styleLabel.append(styleSelect);
+  controls.append(surfaceLabel, styleLabel);
+  configureSelect(surfaceSelect, [
+    ['email', 'Email'],
+    ['text_message', 'Text'],
+    ['chat', 'Chat'],
+    ['comment', 'Comment'],
+    ['social_post', 'Social post'],
+    ['unknown', 'Auto'],
+  ] satisfies Array<[ReplySurface, string]>);
+  configureSelect(styleSelect, [
+    ['friendly', 'Friendly'],
+    ['formal', 'Formal'],
+    ['casual', 'Casual'],
+    ['short', 'Short'],
+    ['bullet_points', 'Bullets'],
+    ['custom', 'Custom'],
+  ] satisfies Array<[ReplyStyle, string]>);
+
   editor.className = 'editor';
   editor.placeholder = 'Generate a draft, then edit it here before inserting.';
   editor.rows = 7;
@@ -111,13 +141,25 @@ export function createCommandSurface(callbacks: CommandSurfaceCallbacks): Comman
   cancelButton.className = 'danger';
 
   actions.append(generateButton, insertButton, copyButton, cancelButton, workshopButton, closeButton);
-  root.append(title, contextText, statusText, editor, actions);
+  root.append(title, contextText, statusText, controls, editor, actions);
   shadow.append(style, root);
   document.documentElement.append(host);
 
   editor.addEventListener('input', () => {
     state.userEdited = true;
     render();
+  });
+
+  surfaceSelect.addEventListener('change', () => {
+    if (state.context) {
+      state.context = { ...state.context, replySurface: surfaceSelect.value as ReplySurface };
+    }
+  });
+
+  styleSelect.addEventListener('change', () => {
+    if (state.context) {
+      state.context = { ...state.context, replyStyle: styleSelect.value as ReplyStyle };
+    }
   });
 
   root.addEventListener('keydown', (event) => {
@@ -169,6 +211,8 @@ export function createCommandSurface(callbacks: CommandSurfaceCallbacks): Comman
         : 'Select text on the page before generating.',
     };
     editor.value = '';
+    surfaceSelect.value = context.replySurface ?? context.detectedReplySurface ?? 'unknown';
+    styleSelect.value = context.replyStyle ?? defaultReplyStyleForSurface(surfaceSelect.value as ReplySurface);
     host.style.display = 'block';
     render();
     queueMicrotask(() => {
@@ -252,7 +296,10 @@ export function createCommandSurface(callbacks: CommandSurfaceCallbacks): Comman
         return;
       }
 
-      const result = await callbacks.startGeneration(sessionId);
+      const result = await callbacks.startGeneration(sessionId, {
+        replySurface: surfaceSelect.value as ReplySurface,
+        replyStyle: styleSelect.value as ReplyStyle,
+      });
       if (!result.started || !result.generationId || !result.sessionId) {
         setStatus('error', result.error?.message ?? 'Could not start draft generation.');
         return;
@@ -411,6 +458,7 @@ export function createCommandSurface(callbacks: CommandSurfaceCallbacks): Comman
       state.statusMessage = editor.value.trim() ? 'Draft ready. Edit or insert it.' : 'No draft text was returned.';
       state.generationId = undefined;
       render();
+      focusEditorAtEnd();
       return;
     }
 
@@ -464,6 +512,14 @@ export function createCommandSurface(callbacks: CommandSurfaceCallbacks): Comman
     }
   }
 
+  function focusEditorAtEnd(): void {
+    queueMicrotask(() => {
+      const end = editor.value.length;
+      editor.focus({ preventScroll: true });
+      editor.setSelectionRange(end, end);
+    });
+  }
+
   return {
     open,
     handleMessage,
@@ -510,6 +566,31 @@ function configureButton(button: HTMLButtonElement, label: string): void {
   button.textContent = label;
 }
 
+function configureSelect<T extends string>(select: HTMLSelectElement, options: Array<[T, string]>): void {
+  for (const [value, label] of options) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = label;
+    select.append(option);
+  }
+}
+
+function defaultReplyStyleForSurface(surface: ReplySurface): ReplyStyle {
+  if (surface === 'email') {
+    return 'friendly';
+  }
+
+  if (surface === 'text_message' || surface === 'chat') {
+    return 'casual';
+  }
+
+  if (surface === 'social_post') {
+    return 'short';
+  }
+
+  return 'friendly';
+}
+
 function cssText(): string {
   return `
     :host { all: initial; }
@@ -540,6 +621,29 @@ function cssText(): string {
     .status { color: #2563eb; }
     [data-status="error"] .status { color: #b91c1c; }
     [data-status="cancelled"] .status { color: #a16207; }
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin: 0 0 10px;
+    }
+    label {
+      display: grid;
+      gap: 4px;
+      color: #64748b;
+      font: 650 11px/1.2 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    select {
+      box-sizing: border-box;
+      width: 100%;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 7px 9px;
+      color: #0f172a;
+      background: #fff;
+      font: 12px/1.2 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    select:focus { outline: none; border-color: #60a5fa; box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.18); }
     .editor {
       box-sizing: border-box;
       display: block;
@@ -579,6 +683,7 @@ function cssText(): string {
     button.danger:hover:not(:disabled) { background: #b91c1c; }
     @media (max-width: 520px) {
       .surface { margin-top: 12px; padding: 14px; border-radius: 16px; }
+      .controls { grid-template-columns: 1fr; }
       .actions { align-items: stretch; flex-direction: column; }
       button { width: 100%; }
     }

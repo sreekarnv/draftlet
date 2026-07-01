@@ -16,10 +16,20 @@ The minimal shared layer currently covers:
 - `GenerationRun`
 - generation stream events and progress snapshots
 - runtime status
+- reply surface/style metadata for platform-aware drafting
 - insertion request/result and compose target refs
 - structured `DraftletError`
 
 FastAPI Pydantic schemas in `apps/server/app/schemas/` remain the server-side validation layer. The shared TypeScript contracts are for typed cross-boundary consumption; Zod is not used in this phase because no new runtime validation boundary was added on the TypeScript side.
+
+## Platform-Aware Reply Metadata
+
+Draftlet carries lightweight reply metadata with generation requests:
+- `replySurface`: `email`, `text_message`, `chat`, `comment`, `social_post`, or `unknown`
+- `detectedReplySurface`: the content script's best-effort guess from URL, target labels, and high-level page hints
+- `replyStyle`: `formal`, `friendly`, `casual`, `short`, `bullet_points`, or `custom`
+
+The content script may detect defaults, but detection is non-authoritative. User selection in Draftlet-owned UI can override it. The extension only transports this metadata; FastAPI owns the prompt mapping that decides email structure, chat brevity, comment/publicness, and social-post concision.
 
 ## Contract Principles
 

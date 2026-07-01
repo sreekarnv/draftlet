@@ -137,6 +137,15 @@ function button(label: string): HTMLButtonElement {
   return found;
 }
 
+function selectByLabel(label: string): HTMLSelectElement {
+  const found = Array.from(getShadowRoot().querySelectorAll('label')).find((candidate) => candidate.textContent?.includes(label));
+  const select = found?.querySelector('select');
+  if (!(select instanceof HTMLSelectElement)) {
+    throw new Error(`Missing select: ${label}`);
+  }
+  return select;
+}
+
 beforeEach(() => {
   document.body.innerHTML = '';
   document.documentElement.querySelectorAll('draftlet-command-surface').forEach((element) => element.remove());
@@ -223,6 +232,30 @@ describe('Command Surface', () => {
     expect(surface.isOpen()).toBe(true);
   });
 
+  it('passes selected surface and style when starting generation', async () => {
+    const callbacks = createCallbacks();
+    const surface = createCommandSurface(callbacks);
+    surface.open({
+      ...context(),
+      detectedReplySurface: 'email',
+      replySurface: 'email',
+      replyStyle: 'friendly',
+    });
+
+    const surfaceSelect = selectByLabel('Surface');
+    const styleSelect = selectByLabel('Style');
+    surfaceSelect.value = 'text_message';
+    surfaceSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    styleSelect.value = 'casual';
+    styleSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    await click('Generate');
+
+    expect(callbacks.startGeneration).toHaveBeenCalledWith('session-1', {
+      replySurface: 'text_message',
+      replyStyle: 'casual',
+    });
+  });
+
   it('inserts the approved draft through the provided insertion callback and closes on inserted', async () => {
     const callbacks = createCallbacks();
     const surface = createCommandSurface(callbacks);
@@ -240,6 +273,23 @@ describe('Command Surface', () => {
 
     expect(callbacks.insertDraft).toHaveBeenCalledWith('session-1', 'Approved draft.');
     expect(surface.isOpen()).toBe(false);
+  });
+
+  it('focuses the completed draft with the caret at the end instead of selecting text', async () => {
+    const surface = createCommandSurface(createCallbacks());
+    surface.open(context());
+
+    await click('Generate');
+    surface.handleMessage({
+      type: CONVERSATION_THREAD_UPDATED,
+      sessionId: 'session-1',
+      snapshot: completedSnapshot('Ready to edit.'),
+    });
+    await flushAsync();
+
+    expect(getShadowRoot().activeElement).toBe(editor());
+    expect(editor().selectionStart).toBe('Ready to edit.'.length);
+    expect(editor().selectionEnd).toBe('Ready to edit.'.length);
   });
 
   it('preserves the draft and exposes copy fallback when insertion fails', async () => {

@@ -26,6 +26,10 @@ DATE_OR_COMMITMENT_RE = re.compile(
     re.IGNORECASE,
 )
 NAME_RE = re.compile(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2}\b")
+TRANSACTIONAL_OR_TEST_RE = re.compile(
+    r"\b(automated|notification|verification|verify|test email|test message|no[-\s]?reply|do not reply|configured|configuration|account verification|system generated)\b",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -125,6 +129,10 @@ def build_refinement_prompt(request: ReplyRequest, thread_snapshot: Conversation
 def build_prompt_instructions(request: ReplyRequest, source: str, context: CompactedContext) -> list[str]:
     extras = [
         build_source_depth_instruction(source),
+        build_source_coverage_instruction(source),
+        build_transactional_context_instruction(source),
+        build_reply_surface_instruction(request),
+        build_reply_style_instruction(request),
         build_tone_mode_instruction(request),
         build_tone_instruction(request.tone, source),
     ]
@@ -310,6 +318,23 @@ def build_source_depth_instruction(source_text: str) -> str:
     )
 
 
+def build_source_coverage_instruction(source_text: str) -> str:
+    questions = len(QUESTION_RE.findall(source_text))
+    asks = len(ASK_RE.findall(source_text))
+
+    if questions >= 2 or asks >= 3:
+        return "- The source contains multiple questions or asks; answer each material question or ask directly instead of writing a generic acknowledgement."
+
+    return ""
+
+
+def build_transactional_context_instruction(source_text: str) -> str:
+    if not TRANSACTIONAL_OR_TEST_RE.search(source_text):
+        return ""
+
+    return "- If the source is an automated, transactional, notification, or verification/test message, do not thank the sender for writing; acknowledge the verified status or requested action directly and keep the reply minimal."
+
+
 def build_tone_mode_instruction(request: ReplyRequest) -> str:
     tone = normalize_tone(request.tone)
 
@@ -328,6 +353,52 @@ def build_tone_mode_instruction(request: ReplyRequest) -> str:
     if tone == "custom":
         custom = request.custom_tone_instruction or "Follow the user's custom tone direction without changing the facts."
         return f"- Custom tone instruction: {custom}"
+
+    return ""
+
+
+def build_reply_surface_instruction(request: ReplyRequest) -> str:
+    surface = normalize_reply_surface(request.reply_surface)
+
+    if surface == "email":
+        return "- Reply as email: use a clear email structure, include a greeting or sign-off only when it fits the source, and avoid sounding like a chat message."
+
+    if surface == "text_message":
+        return "- Reply as a text message: keep it natural, brief, and conversational; do not include email greetings, sign-offs, or formal paragraphing."
+
+    if surface == "chat":
+        return "- Reply as a chat or DM: be conversational and direct, with short paragraphs and no email-style sign-off unless explicitly requested."
+
+    if surface == "comment":
+        return "- Reply as a public or semi-public comment: be concise, helpful, and avoid oversharing private details."
+
+    if surface == "social_post":
+        return "- Reply as a social post: keep it concise, platform-appropriate, and easy to read in a feed."
+
+    return "- Reply in a balanced format because the target platform is unknown; do not assume email conventions unless the source clearly looks like email."
+
+
+def build_reply_style_instruction(request: ReplyRequest) -> str:
+    style = normalize_reply_style(request.reply_style)
+
+    if style == "formal":
+        return "- Use a formal style: polished, respectful, and precise without sounding stiff."
+
+    if style == "friendly":
+        return "- Use a friendly style: warm, cooperative, and clear."
+
+    if style == "casual":
+        return "- Use a casual style: relaxed and natural while preserving the facts."
+
+    if style == "short":
+        return "- Use a short style: prefer 1-3 concise sentences unless the source requires more coverage."
+
+    if style == "bullet_points":
+        return "- Use bullet points when they improve readability, especially for multiple questions or action items."
+
+    if style == "custom":
+        custom = request.custom_tone_instruction or "Follow the user's custom style direction while preserving facts."
+        return f"- Custom reply style instruction: {custom}"
 
     return ""
 
@@ -352,6 +423,24 @@ def normalize_tone(tone: str) -> str:
         return "short"
 
     return normalized
+
+
+def normalize_reply_surface(surface: str | None) -> str:
+    normalized = (surface or "unknown").strip().lower().replace(" ", "_").replace("-", "_")
+
+    if normalized in {"email", "text_message", "chat", "comment", "social_post"}:
+        return normalized
+
+    return "unknown"
+
+
+def normalize_reply_style(style: str | None) -> str:
+    normalized = (style or "").strip().lower().replace(" ", "_").replace("-", "_")
+
+    if normalized in {"formal", "friendly", "casual", "short", "bullet_points", "custom"}:
+        return normalized
+
+    return ""
 
 
 def preferred_refinement_variants(thread_snapshot: ConversationThreadSnapshot | None, current_turn_id: str | None):

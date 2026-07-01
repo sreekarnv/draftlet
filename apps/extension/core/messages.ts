@@ -11,6 +11,8 @@ import type {
   InsertionTargetStatus,
   PanelView,
   PlausibleTabCandidate,
+  ReplyStyle,
+  ReplySurface,
   RuntimeStatus,
   Tone,
   WorkspaceRestoreStatus,
@@ -44,6 +46,8 @@ export type {
   InsertionTargetStatus,
   PlausibleTabCandidate,
   PlausibleTabMatchReason,
+  ReplyStyle,
+  ReplySurface,
   RecoverableRunProjection,
   RuntimeStatus,
   SourceSnapshot,
@@ -165,8 +169,8 @@ export type DraftletMessage =
   | { type: typeof WORKSPACE_SESSION_UPDATED; session: WorkspaceSession }
   | { type: typeof CONVERSATION_THREAD_UPDATED; sessionId: string; snapshot: ConversationThreadSnapshot }
   | { type: typeof GET_RUNTIME_STATUS }
-  | { type: typeof START_DRAFT_GENERATION; sessionId: string; tone?: Tone; activeView?: PanelView }
-  | { type: typeof START_DRAFT_REFINEMENT; sessionId: string; instruction: string; tone?: Tone; activeView?: PanelView }
+  | { type: typeof START_DRAFT_GENERATION; sessionId: string; tone?: Tone; replySurface?: ReplySurface; replyStyle?: ReplyStyle; activeView?: PanelView }
+  | { type: typeof START_DRAFT_REFINEMENT; sessionId: string; instruction: string; tone?: Tone; replySurface?: ReplySurface; replyStyle?: ReplyStyle; activeView?: PanelView }
   | { type: typeof CANCEL_DRAFT_GENERATION; sessionId?: string; generationId?: string }
   | { type: typeof DRAFT_TEXT_DELTA_RECEIVED; sessionId: string; generationId: string; threadId: string; turnId: string; text: string; sequence?: number }
   | ({ type: typeof INSERT_REPLY } & InsertionRequest)

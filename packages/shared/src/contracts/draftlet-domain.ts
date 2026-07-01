@@ -1,5 +1,9 @@
 export type Tone = 'professional' | 'casual' | 'short' | 'bullet_points' | 'custom' | 'friendly' | 'concise';
 
+export type ReplySurface = 'email' | 'text_message' | 'chat' | 'comment' | 'social_post' | 'unknown';
+
+export type ReplyStyle = 'formal' | 'friendly' | 'casual' | 'short' | 'bullet_points' | 'custom';
+
 export type PanelView = 'replies' | 'history';
 
 export type ConnectionStatus = 'connected' | 'disconnected';
@@ -16,6 +20,8 @@ export type GenerationMode = 'initial' | 'refinement';
 export interface ReplyRequestPayload {
   selected_text: string;
   tone: Tone;
+  reply_surface?: ReplySurface;
+  reply_style?: ReplyStyle;
   source_url?: string;
   source_domain?: string;
   page_title?: string;
@@ -69,6 +75,9 @@ export interface InsertionResult {
 export interface DraftletSidePanelContext {
   selectedText: string;
   tone?: Tone;
+  replySurface?: ReplySurface;
+  detectedReplySurface?: ReplySurface;
+  replyStyle?: ReplyStyle;
   activeView?: PanelView;
   sourceUrl: string;
   sourceDomain?: string;

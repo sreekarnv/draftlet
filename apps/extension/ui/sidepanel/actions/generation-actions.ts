@@ -30,6 +30,8 @@ export async function startDraftGenerationFromCurrentSession(
       type: START_DRAFT_GENERATION,
       sessionId: state.runtime.currentSession.sessionId,
       tone: state.ui.currentTone,
+      replySurface: state.runtime.currentSession.latestContext.replySurface,
+      replyStyle: state.runtime.currentSession.latestContext.replyStyle,
       activeView: state.ui.currentPanelView,
     } satisfies DraftletMessage);
 
@@ -96,6 +98,8 @@ export async function refineReplies(state: SidePanelState, panel: PanelControlle
       sessionId: state.runtime.currentSession.sessionId,
       instruction: trimmedInstruction,
       tone: state.ui.currentTone,
+      replySurface: state.runtime.currentSession.latestContext.replySurface,
+      replyStyle: state.runtime.currentSession.latestContext.replyStyle,
       activeView: state.ui.currentPanelView,
     } satisfies DraftletMessage);
 

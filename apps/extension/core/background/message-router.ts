@@ -85,6 +85,8 @@ export function registerMessageRouter(
     if (message.type === START_DRAFT_GENERATION) {
       return Promise.resolve(handleStartDraftGeneration(message.sessionId, {
         tone: message.tone,
+        replySurface: message.replySurface,
+        replyStyle: message.replyStyle,
         activeView: message.activeView,
       }));
     }
@@ -92,6 +94,8 @@ export function registerMessageRouter(
     if (message.type === START_DRAFT_REFINEMENT) {
       return Promise.resolve(handleStartDraftGeneration(message.sessionId, {
         tone: message.tone,
+        replySurface: message.replySurface,
+        replyStyle: message.replyStyle,
         activeView: message.activeView,
         instruction: message.instruction,
         mode: 'refinement',

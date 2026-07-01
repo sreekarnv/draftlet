@@ -53,7 +53,7 @@ import { retryPendingRecaptureDiagnosticsPublish } from './diagnostics-coordinat
 
 export async function handleStartDraftGeneration(
   sessionId: string,
-  options: Pick<DraftletSidePanelContext, 'tone' | 'activeView'> & { instruction?: string; mode?: GenerationMode },
+  options: Pick<DraftletSidePanelContext, 'tone' | 'replySurface' | 'replyStyle' | 'activeView'> & { instruction?: string; mode?: GenerationMode },
 ): Promise<StartDraftGenerationResult> {
   const session = sessions.getBySessionId(sessionId);
 
@@ -110,6 +110,8 @@ export async function handleStartDraftGeneration(
     ...session.latestContext,
     selectedText,
     tone,
+    replySurface: options.replySurface ?? session.latestContext.replySurface ?? session.latestContext.detectedReplySurface,
+    replyStyle: options.replyStyle ?? session.latestContext.replyStyle,
     activeView: options.activeView ?? session.latestContext.activeView,
   };
   let updatedSession = sessions.updateContext(sessionId, context) ?? session;
@@ -325,6 +327,8 @@ export async function runDraftGeneration(
       {
         selected_text: context.selectedText,
         tone: context.tone ?? DEFAULT_TONE,
+        reply_surface: context.replySurface,
+        reply_style: context.replyStyle,
         source_url: context.sourceUrl,
         source_domain: context.sourceDomain,
         page_title: context.pageTitle,
