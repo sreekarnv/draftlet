@@ -13,6 +13,7 @@ class ReplyRequest(BaseModel):
     turn_id: str | None = Field(default=None, max_length=120)
     run_id: str | None = Field(default=None, max_length=120)
     instruction: str | None = Field(default=None, max_length=4000)
+    custom_tone_instruction: str | None = Field(default=None, max_length=1000)
     generation_mode: str = Field(default="initial", min_length=1, max_length=40)
 
     @field_validator(
@@ -27,6 +28,7 @@ class ReplyRequest(BaseModel):
         "turn_id",
         "run_id",
         "instruction",
+        "custom_tone_instruction",
         "generation_mode",
         mode="before",
     )

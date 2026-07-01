@@ -7,8 +7,10 @@ import {
   getGenerationRunExecutionState,
   getGenerationRunProgress,
   heartbeatGenerationRun,
+  getRuntimeModelState,
   putWorkspaceSession,
   reconcileGenerationRuns,
+  setRuntimeSelectedModel,
   startReplyGenerationRunExecution,
   streamReplyGenerationRunEvents,
 } from '../../core/api';
@@ -280,6 +282,53 @@ describe('generation run runtime API', () => {
       variantId: 'variant-1',
       content: 'Domain draft',
     });
+  });
+});
+
+describe('runtime model API', () => {
+  it('maps runtime Ollama model state', async () => {
+    const fetchMock = vi.fn(async () => Response.json({
+      selected_model: 'gemma3:4b',
+      default_model: 'gemma3:4b',
+      installed_models: [{ name: 'gemma3:4b', size: 123, digest: null, modified_at: '2026-06-01T00:00:00Z' }],
+      recommendations: [{ model: 'qwen2.5:7b', label: 'Power user', description: 'Higher-capacity local model.', installed: false }],
+      ollama_available: true,
+      error: null,
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const state = await getRuntimeModelState();
+
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/models/ollama'), expect.any(Object));
+    expect(state).toEqual({
+      selectedModel: 'gemma3:4b',
+      defaultModel: 'gemma3:4b',
+      installedModels: [{ name: 'gemma3:4b', size: 123, modifiedAt: '2026-06-01T00:00:00Z' }],
+      recommendations: [{ model: 'qwen2.5:7b', label: 'Power user', description: 'Higher-capacity local model.', installed: false }],
+      ollamaAvailable: true,
+      error: undefined,
+    });
+  });
+
+  it('sets runtime selected model without requiring an installed-model lock', async () => {
+    const fetchMock = vi.fn(async () => Response.json({
+      selected_model: 'custom-local:13b',
+      default_model: 'gemma3:4b',
+      installed_models: [],
+      recommendations: [],
+      ollama_available: false,
+      error: { code: 'ollama_models_unavailable', message: 'Could not list models.', retryable: true },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const state = await setRuntimeSelectedModel('custom-local:13b');
+
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/models/ollama/selection'), expect.objectContaining({
+      method: 'PUT',
+      body: JSON.stringify({ selected_model: 'custom-local:13b' }),
+    }));
+    expect(state.selectedModel).toBe('custom-local:13b');
+    expect(state.error?.code).toBe('ollama_models_unavailable');
   });
 });
 

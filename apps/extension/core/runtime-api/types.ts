@@ -6,7 +6,13 @@ import type {
 } from '@draftlet/shared/contracts';
 
 export function isTone(value: string): value is DraftVariant['tone'] {
-  return value === 'professional' || value === 'friendly' || value === 'concise';
+  return value === 'professional'
+    || value === 'casual'
+    || value === 'short'
+    || value === 'bullet_points'
+    || value === 'custom'
+    || value === 'friendly'
+    || value === 'concise';
 }
 
 export function isTurnStatus(value: string): value is Turn['generationStatus'] {

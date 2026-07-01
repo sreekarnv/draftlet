@@ -13,6 +13,8 @@ vi.mock('electron', () => ({
 
 import {
   RECOMMENDED_MODEL,
+  POWER_USER_MODEL,
+  LOW_END_FALLBACK_MODEL,
   getSelectedModelSetting,
   setSelectedModelSetting,
 } from '../../src/main/ipc/settings';
@@ -72,5 +74,7 @@ describe('getSelectedModelSetting / setSelectedModelSetting', () => {
   it('exposes the recommended model constant', () => {
     expect(typeof RECOMMENDED_MODEL).toBe('string');
     expect(RECOMMENDED_MODEL.length).toBeGreaterThan(0);
+    expect(POWER_USER_MODEL).toBe('qwen2.5:7b');
+    expect(LOW_END_FALLBACK_MODEL).toBe('llama3.2:3b');
   });
 });

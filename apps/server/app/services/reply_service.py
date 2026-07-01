@@ -31,11 +31,7 @@ from app.services.domain_service import (
     upsert_workspace_session,
 )
 from app.services.ollama_client import OllamaClientError, stream_ollama_generate
-from app.services.preference_service import (
-    SERVER_MODEL_PREFERENCE_KEY,
-    SERVER_MODEL_PREFERENCE_SCOPE,
-    get_preference_value,
-)
+from app.services.model_service import resolve_generation_model
 from app.services.prompt_builder import build_reply_prompt
 from app.services.stream_parser import ReplyStreamParser
 
@@ -45,7 +41,7 @@ async def generate_reply_events(request: ReplyRequest) -> AsyncIterator[ReplyEve
     parser = ReplyStreamParser()
 
     with SessionLocal() as session:
-        model = request.model or get_default_model(session, settings.default_model)
+        model = request.model or resolve_generation_model(session, settings.default_model)
         turn = ensure_domain_generation(session, request)
         thread_snapshot = get_thread_snapshot(session, request.thread_id) if request.thread_id else None
         prompt = build_reply_prompt(request, thread_snapshot)
@@ -243,11 +239,3 @@ def persist_variant_for_reply(
             rank=reply_index,
         ),
     )
-
-
-def get_default_model(session: Session, fallback_model: str) -> str:
-    return get_preference_value(
-        session,
-        SERVER_MODEL_PREFERENCE_SCOPE,
-        SERVER_MODEL_PREFERENCE_KEY,
-    ) or fallback_model

@@ -30,4 +30,5 @@ export {
 } from './generation-runs-api';
 export { patchDraftVariantState, putDraftVariant } from './variants-api';
 export { getPreferences, putPreference } from './preferences-api';
+export { getRuntimeModelState, setRuntimeSelectedModel } from './models-api';
 export { publishBrowserRecaptureDiagnosticsReport } from './diagnostics-api';

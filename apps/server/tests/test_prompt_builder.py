@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.schemas.domain import ConversationThreadRead, ConversationThreadSnapshot, DraftVariantRead, TurnRead
 from app.schemas.reply_request import ReplyRequest
@@ -8,6 +8,7 @@ from app.services.prompt_builder import (
     MEDIUM_SOURCE_CHARS,
     SHORT_SOURCE_CHARS,
     build_reply_prompt,
+    compact_text,
     build_source_depth_instruction,
     build_tone_instruction,
     classify_source_length,
@@ -401,7 +402,7 @@ class PromptBuilderLengthAwarenessTest(unittest.TestCase):
 
         prompt = build_reply_prompt(request, snapshot)
 
-        self.assertIn("Original source text:", prompt)
+        self.assertIn("Original source context:", prompt)
         self.assertIn("explicit ask", prompt)
         self.assertIn("one-line", prompt)
         self.assertIn("Initial draft body.", prompt)
@@ -481,6 +482,109 @@ class PromptBuilderLengthAwarenessTest(unittest.TestCase):
         self.assertNotIn("compact but complete", prompt)
         self.assertIn("Sure, I can send the report today.", prompt)
         self.assertIn("make this warmer", prompt)
+
+
+class ContextCompactionTest(unittest.TestCase):
+    def test_compaction_preserves_questions_names_dates_commitments_and_marks_omission(self) -> None:
+        long_source = " ".join(
+            ["Older low-priority background." for _index in range(160)]
+            + [
+                "Can Maya Chen review the launch copy by Thursday?",
+                "Please confirm that Jordan will send the budget numbers tomorrow.",
+            ]
+            + ["Additional low-priority background." for _index in range(160)]
+        )
+
+        context = compact_text(long_source, 1400)
+
+        self.assertTrue(context.omitted)
+        self.assertIn("Context omitted", context.text)
+        self.assertIn("Can Maya Chen review the launch copy by Thursday?", context.text)
+        self.assertIn("Jordan will send the budget numbers tomorrow", context.text)
+
+    def test_refinement_prompt_includes_recent_thread_context_before_older_context(self) -> None:
+        now = datetime.now(timezone.utc)
+        request = ReplyRequest(
+            selected_text="Current selected text asks whether we can commit to the new launch date.",
+            tone="professional",
+            thread_id="thread-1",
+            turn_id="turn-3",
+            instruction="answer all their questions",
+            generation_mode="refinement",
+        )
+        snapshot = ConversationThreadSnapshot(
+            thread=ConversationThreadRead(
+                thread_id="thread-1",
+                session_id="session-1",
+                selected_text="Original selected text.",
+                source_url="https://example.com/thread",
+                source_domain="example.com",
+                page_title="Inbox",
+                status="active",
+                created_at=now,
+                updated_at=now,
+            ),
+            turns=[
+                TurnRead(
+                    turn_id="turn-1",
+                    thread_id="thread-1",
+                    instruction="Generate reply drafts",
+                    selected_text="Older context asks for the March 2 budget note.",
+                    source_url="https://example.com/thread",
+                    source_domain="example.com",
+                    page_title="Inbox",
+                    tone="professional",
+                    generation_status="completed",
+                    created_at=now - timedelta(hours=2),
+                    updated_at=now - timedelta(hours=2),
+                ),
+                TurnRead(
+                    turn_id="turn-2",
+                    thread_id="thread-1",
+                    instruction="Make it clearer",
+                    selected_text="Recent context asks whether Priya can join the Friday review.",
+                    source_url="https://example.com/thread",
+                    source_domain="example.com",
+                    page_title="Inbox",
+                    tone="professional",
+                    generation_status="completed",
+                    created_at=now - timedelta(hours=1),
+                    updated_at=now - timedelta(hours=1),
+                ),
+                TurnRead(
+                    turn_id="turn-3",
+                    thread_id="thread-1",
+                    instruction="answer all their questions",
+                    selected_text="Current selected text asks whether we can commit to the new launch date.",
+                    source_url="https://example.com/thread",
+                    source_domain="example.com",
+                    page_title="Inbox",
+                    tone="professional",
+                    generation_status="queued",
+                    created_at=now,
+                    updated_at=now,
+                ),
+            ],
+            variants=[],
+        )
+
+        prompt = build_reply_prompt(request, snapshot)
+
+        self.assertIn("Current selected text", prompt)
+        self.assertIn("Recent thread context before the selected text", prompt)
+        self.assertLess(prompt.index("Recent context asks"), prompt.index("Older context asks"))
+
+    def test_custom_tone_prompt_uses_custom_instruction(self) -> None:
+        request = ReplyRequest(
+            selected_text="Please reply to Sam about the Friday demo.",
+            tone="custom",
+            custom_tone_instruction="Sound optimistic but avoid exclamation points.",
+        )
+
+        prompt = build_reply_prompt(request)
+
+        self.assertIn("Custom tone instruction", prompt)
+        self.assertIn("Sound optimistic but avoid exclamation points.", prompt)
 
 
 if __name__ == "__main__":

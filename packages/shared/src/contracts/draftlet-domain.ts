@@ -1,4 +1,4 @@
-export type Tone = 'professional' | 'friendly' | 'concise';
+export type Tone = 'professional' | 'casual' | 'short' | 'bullet_points' | 'custom' | 'friendly' | 'concise';
 
 export type PanelView = 'replies' | 'history';
 
@@ -25,6 +25,7 @@ export interface ReplyRequestPayload {
   turn_id?: string;
   run_id?: string;
   instruction?: string;
+  custom_tone_instruction?: string;
   generation_mode?: GenerationMode;
 }
 

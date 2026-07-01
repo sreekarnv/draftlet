@@ -7,6 +7,7 @@ export type {
   InsertionStatus,
   InsertionTargetStatus,
   ReplyRequestPayload,
+  RuntimeModelState,
   Tone,
 } from '@draftlet/shared/contracts';
 

@@ -6,6 +6,8 @@ export const DRAFTLET_SERVER_PORT = 47632;
 export const SERVER_BASE_URL = `http://127.0.0.1:${DRAFTLET_SERVER_PORT}`;
 export const OLLAMA_BASE_URL = 'http://127.0.0.1:11434';
 export const RECOMMENDED_MODEL = 'gemma3:4b';
+export const POWER_USER_MODEL = 'qwen2.5:7b';
+export const LOW_END_FALLBACK_MODEL = 'llama3.2:3b';
 export const SERVER_MODEL_PREFERENCE_SCOPE = 'server';
 export const SERVER_MODEL_PREFERENCE_KEY = 'default_model';
 

@@ -1,11 +1,36 @@
 from collections.abc import AsyncIterator
 import json
+from typing import Any
 
 import httpx
 
 
 class OllamaClientError(RuntimeError):
     pass
+
+
+async def list_ollama_models(*, base_url: str) -> list[dict[str, Any]]:
+    url = f"{base_url.rstrip('/')}/api/tags"
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.get(url)
+
+            if response.is_error:
+                detail = response.text.strip() or response.reason_phrase
+                raise OllamaClientError(
+                    f"Ollama model listing failed with {response.status_code}: {detail}"
+                )
+
+            data = response.json()
+            models = data.get("models")
+
+            if not isinstance(models, list):
+                raise OllamaClientError("Ollama model listing returned an unexpected response shape.")
+
+            return [model for model in models if isinstance(model, dict)]
+    except httpx.RequestError as error:
+        raise OllamaClientError(f"Could not connect to Ollama at {url}: {error}") from error
 
 
 async def stream_ollama_generate(

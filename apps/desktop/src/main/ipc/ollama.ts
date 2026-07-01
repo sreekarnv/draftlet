@@ -9,8 +9,6 @@ import {
   ok,
   RECOMMENDED_MODEL,
   SERVER_BASE_URL,
-  SERVER_MODEL_PREFERENCE_KEY,
-  SERVER_MODEL_PREFERENCE_SCOPE,
   setSelectedModelSetting,
   type CommandStatus,
 } from './settings.js';
@@ -19,6 +17,10 @@ const execFileAsync = promisify(execFile);
 
 export interface InstalledModel {
   name: string;
+}
+
+interface RuntimeModelStateRead {
+  selected_model?: string;
 }
 
 export function registerOllamaIpc() {
@@ -107,14 +109,16 @@ export async function setSelectedModel(model: string): Promise<CommandStatus> {
     return fail('Select a valid model name.', 'error');
   }
 
-  const installedModels = await listInstalledModels().catch(() => []);
+  const installedModels = await listInstalledModels().catch(() => null);
 
-  if (!installedModels.some((installed) => installed.name === selectedModel)) {
-    return fail(`${selectedModel} is not installed in Ollama.`, 'missing');
-  }
+  const modelInstalled = installedModels?.some((installed) => installed.name === selectedModel) ?? false;
 
   await setSelectedModelSetting(selectedModel);
   await syncSelectedModelToServer(selectedModel);
+
+  if (installedModels && !modelInstalled) {
+    return ok(`${selectedModel} is selected. Install it in Ollama before generating with this model.`, 'missing');
+  }
 
   return ok(`${selectedModel} is now the active Draftlet model.`, 'ready');
 }
@@ -140,15 +144,14 @@ export function pullRecommendedModel(): Promise<CommandStatus> {
 
 async function getSelectedModelFromServer(): Promise<string | null> {
   try {
-    const response = await fetch(`${SERVER_BASE_URL}/preferences?scope=${encodeURIComponent(SERVER_MODEL_PREFERENCE_SCOPE)}`, { cache: 'no-store' });
+    const response = await fetch(`${SERVER_BASE_URL}/models/ollama`, { cache: 'no-store' });
 
     if (!response.ok) {
       return null;
     }
 
-    const preferences = await response.json() as Array<{ key?: string; value?: string }>;
-    const preference = preferences.find((item) => item.key === SERVER_MODEL_PREFERENCE_KEY);
-    return preference?.value?.trim() || null;
+    const state = await response.json() as RuntimeModelStateRead;
+    return state.selected_model?.trim() || null;
   } catch {
     return null;
   }
@@ -156,16 +159,14 @@ async function getSelectedModelFromServer(): Promise<string | null> {
 
 async function syncSelectedModelToServer(model: string): Promise<void> {
   try {
-    await fetch(`${SERVER_BASE_URL}/preferences`, {
+    await fetch(`${SERVER_BASE_URL}/models/ollama/selection`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        scope: SERVER_MODEL_PREFERENCE_SCOPE,
-        key: SERVER_MODEL_PREFERENCE_KEY,
-        value: model,
+        selected_model: model,
       }),
     });
   } catch {
-    // The desktop setting is still persisted; the next running server can get it from env on start.
+    // The desktop setting is still persisted so setup can show the user's last choice.
   }
 }

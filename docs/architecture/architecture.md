@@ -54,6 +54,10 @@ The local runtime owns model selection, model access, prompt building, generatio
 
 FastAPI routes stay thin. Runtime behavior is organized through explicit services, schemas, storage modules, and streaming helpers rather than generic frameworks.
 
+Runtime model metadata is exposed through the runtime, not by the webpage or extension directly calling Ollama. The runtime lists installed Ollama models, reports the selected model preference, recommends `gemma3:4b` as the default local model, `qwen2.5:7b` as the power-user option, and `llama3.2:3b` as the low-end fallback. Selection is a runtime preference and is not hard-locked to the currently installed model list, so setup can choose a model before it is pulled.
+
+Prompt construction remains server-side. The runtime builds insertion-ready reply prompts with tone instructions, follow-up/refinement instructions, source-complexity rules, and deterministic context compaction that prioritizes selected text, preserves explicit questions and high-signal details, includes recent thread context before older context, and marks when context was omitted.
+
 ## Domain concepts
 
 Draftlet's runtime and extension both speak the same domain model:
