@@ -51,6 +51,7 @@ def build_reply_prompt(request: ReplyRequest, thread_snapshot: ConversationThrea
         "",
         f"Write exactly 3 replies in a {request.tone} tone.",
         "Each reply must be insertion-ready.",
+        "Each reply must be a complete standalone alternative, not a continuation or partial version of another reply.",
         f"Separate each reply with exactly this delimiter on its own line: {DELIMITER}",
         "",
         "Rules:",
@@ -59,7 +60,11 @@ def build_reply_prompt(request: ReplyRequest, thread_snapshot: ConversationThrea
         "- Do not explain your choices.",
         "- Return only the reply text and delimiters.",
         "- Write replies the user could paste directly into the original conversation.",
+        "- Write from the user's perspective as the person replying.",
+        "- Do not split required details, answers, or action items across the 3 replies; every reply must independently cover all material asks and questions.",
+        "- Reuse source-specific wording for concrete nouns, actions, deadlines, topics, objects, and outcomes that are material to the reply.",
         "- Do not invent facts, dates, names, or commitments that are not in the source context.",
+        "- Do not ask for confirmation unless the source explicitly asks the user to confirm something.",
         "- If context says content was omitted, do not mention the omission; answer from the preserved details only.",
         *extras,
     ]
@@ -95,6 +100,7 @@ def build_refinement_prompt(request: ReplyRequest, thread_snapshot: Conversation
         "",
         f"Write exactly 3 refined replies in a {request.tone} tone.",
         "Each reply must be insertion-ready.",
+        "Each reply must be a complete standalone alternative, not a continuation or partial version of another reply.",
         f"Separate each reply with exactly this delimiter on its own line: {DELIMITER}",
         "",
         "Rules:",
@@ -106,6 +112,10 @@ def build_refinement_prompt(request: ReplyRequest, thread_snapshot: Conversation
         "- Do not explain your choices.",
         "- Return only the reply text and delimiters.",
         "- Write replies the user could paste directly into the original conversation.",
+        "- Write from the user's perspective as the person replying.",
+        "- Do not split required details, answers, or action items across the 3 replies; every reply must independently cover all material asks and questions.",
+        "- Reuse source-specific wording for concrete nouns, actions, deadlines, topics, objects, and outcomes that are material to the reply.",
+        "- Do not ask for confirmation unless the source explicitly asks the user to confirm something.",
         "- If context says content was omitted, do not mention the omission; answer from the preserved details only.",
         *extras,
         "",
@@ -130,11 +140,12 @@ def build_prompt_instructions(request: ReplyRequest, source: str, context: Compa
     extras = [
         build_source_depth_instruction(source),
         build_source_coverage_instruction(source),
-        build_transactional_context_instruction(source),
+        build_concrete_detail_instruction(source),
         build_reply_surface_instruction(request),
         build_reply_style_instruction(request),
         build_tone_mode_instruction(request),
         build_tone_instruction(request.tone, source),
+        build_transactional_context_instruction(source),
     ]
 
     if context.omitted:
@@ -323,16 +334,23 @@ def build_source_coverage_instruction(source_text: str) -> str:
     asks = len(ASK_RE.findall(source_text))
 
     if questions >= 2 or asks >= 3:
-        return "- The source contains multiple questions or asks; answer each material question or ask directly instead of writing a generic acknowledgement."
+        return "- The source contains multiple questions or asks; every reply must answer each material question or ask directly, including explicit deadlines, deliverables, ownership/status questions, and requested actions, instead of writing a generic acknowledgement."
 
     return ""
+
+
+def build_concrete_detail_instruction(source_text: str) -> str:
+    if classify_source_length(source_text) != "short":
+        return ""
+
+    return "- For short sources, preserve concrete nouns, actions, topics, objects, and outcomes from the source; repeat the key noun phrase exactly in every reply instead of replacing it with vague synonyms, pronouns, or a vague acknowledgement."
 
 
 def build_transactional_context_instruction(source_text: str) -> str:
     if not TRANSACTIONAL_OR_TEST_RE.search(source_text):
         return ""
 
-    return "- If the source is an automated, transactional, notification, or verification/test message, do not thank the sender for writing; acknowledge the verified status or requested action directly and keep the reply minimal."
+    return "- If the source is an automated, transactional, notification, or verification/test message, write a minimal status-style reply from the user's perspective; acknowledge the verified status or requested action directly; when the source mentions verify, verification, configured, or notifications, use those exact words in every reply; do not use a greeting, do not thank the sender for writing, say thanks, confirm receipt, ask whether further action is required, or repeat customer-service greetings."
 
 
 def build_tone_mode_instruction(request: ReplyRequest) -> str:
@@ -370,10 +388,10 @@ def build_reply_surface_instruction(request: ReplyRequest) -> str:
         return "- Reply as a chat or DM: be conversational and direct, with short paragraphs and no email-style sign-off unless explicitly requested."
 
     if surface == "comment":
-        return "- Reply as a public or semi-public comment: be concise, helpful, and avoid oversharing private details."
+        return "- Reply as a public or semi-public comment: be concise, helpful, preserve public decision or review terms such as PR, review, concerns, approve, or merge when present, and avoid oversharing private details."
 
     if surface == "social_post":
-        return "- Reply as a social post: keep it concise, platform-appropriate, and easy to read in a feed."
+        return "- Reply as a social post: keep it concise, platform-appropriate, easy to read in a feed, and preserve the source topic rather than replying with generic enthusiasm."
 
     return "- Reply in a balanced format because the target platform is unknown; do not assume email conventions unless the source clearly looks like email."
 

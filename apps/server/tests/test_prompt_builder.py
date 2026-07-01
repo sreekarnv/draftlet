@@ -7,6 +7,7 @@ from app.services.prompt_builder import (
     DELIMITER,
     MEDIUM_SOURCE_CHARS,
     SHORT_SOURCE_CHARS,
+    build_concrete_detail_instruction,
     build_reply_prompt,
     compact_text,
     build_source_coverage_instruction,
@@ -270,7 +271,19 @@ class TransactionalContextInstructionTest(unittest.TestCase):
 
         self.assertIn("automated, transactional, notification, or verification/test message", instruction)
         self.assertIn("do not thank the sender for writing", instruction)
+        self.assertIn("confirm receipt", instruction)
         self.assertIn("acknowledge the verified status", instruction)
+
+
+class ConcreteDetailInstructionTest(unittest.TestCase):
+    def test_short_source_preserves_concrete_details(self) -> None:
+        instruction = build_concrete_detail_instruction("Can you pick up dinner and text me when you're leaving?")
+
+        self.assertIn("preserve concrete nouns, actions, topics, objects, and outcomes", instruction)
+        self.assertIn("vague acknowledgement", instruction)
+
+    def test_medium_source_does_not_add_short_source_detail_rule(self) -> None:
+        self.assertEqual(build_concrete_detail_instruction("a" * 800), "")
 
 
 class ToneInstructionTest(unittest.TestCase):
@@ -411,6 +424,9 @@ class ReplySurfacePromptTest(unittest.TestCase):
 
         self.assertIn("Reply as email", prompt)
         self.assertIn("formal style", prompt)
+        self.assertIn("complete standalone alternative", prompt)
+        self.assertIn("Do not split required details", prompt)
+        self.assertIn("every reply must independently cover all material asks and questions", prompt)
         self.assertIn("answer each material question", prompt)
         self.assertIn("Do not invent facts", prompt)
         self.assertIn("Q3 launch brief", prompt)
@@ -431,6 +447,8 @@ class ReplySurfacePromptTest(unittest.TestCase):
 
         self.assertIn("verification/test message", prompt)
         self.assertIn("do not thank the sender for writing", prompt)
+        self.assertIn("say thanks", prompt)
+        self.assertIn("confirm receipt", prompt)
         self.assertIn("acknowledge the verified status", prompt)
         self.assertIn("Reply as email", prompt)
 
@@ -462,6 +480,9 @@ class ReplySurfacePromptTest(unittest.TestCase):
         self.assertIn("Reply as a text message", prompt)
         self.assertIn("do not include email greetings", prompt)
         self.assertIn("1-3 concise sentences", prompt)
+        self.assertIn("preserve concrete nouns, actions, topics, objects, and outcomes", prompt)
+        self.assertIn("dinner", prompt)
+        self.assertIn("text me when you're leaving", prompt)
 
     def test_chat_prompt_is_direct_without_email_signoff(self) -> None:
         request = ReplyRequest(
@@ -476,6 +497,8 @@ class ReplySurfacePromptTest(unittest.TestCase):
         self.assertIn("Reply as a chat or DM", prompt)
         self.assertIn("no email-style sign-off", prompt)
         self.assertIn("casual style", prompt)
+        self.assertIn("preserve concrete nouns, actions, topics, objects, and outcomes", prompt)
+        self.assertIn("deploy logs", prompt)
 
     def test_comment_prompt_assumes_public_context(self) -> None:
         request = ReplyRequest(
@@ -490,6 +513,9 @@ class ReplySurfacePromptTest(unittest.TestCase):
         self.assertIn("public or semi-public comment", prompt)
         self.assertIn("avoid oversharing private details", prompt)
         self.assertIn("friendly style", prompt)
+        self.assertIn("preserve concrete nouns, actions, topics, objects, and outcomes", prompt)
+        self.assertIn("PR changes the cache key", prompt)
+        self.assertIn("concerns before merge", prompt)
 
     def test_social_post_prompt_is_feed_appropriate(self) -> None:
         request = ReplyRequest(
@@ -504,6 +530,8 @@ class ReplySurfacePromptTest(unittest.TestCase):
         self.assertIn("Reply as a social post", prompt)
         self.assertIn("platform-appropriate", prompt)
         self.assertIn("1-3 concise sentences", prompt)
+        self.assertIn("preserve concrete nouns, actions, topics, objects, and outcomes", prompt)
+        self.assertIn("local-first AI demo", prompt)
 
     def test_long_source_is_not_truncated_in_initial_mode(self) -> None:
         long_source = "a" * 4000
