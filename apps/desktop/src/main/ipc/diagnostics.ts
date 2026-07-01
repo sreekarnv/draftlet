@@ -104,33 +104,11 @@ export async function getGenerationRunMaintenanceDiagnostics(): Promise<Generati
 export function mapBrowserRecaptureDiagnosticsResponse(
   raw: unknown,
 ): BrowserRecaptureDiagnosticsRelayState {
-  const mapped = snakeToCamelDeep(raw) as BrowserRecaptureDiagnosticsRelayState;
-  return mapped;
+  return raw as BrowserRecaptureDiagnosticsRelayState;
 }
 
 export function mapGenerationRunMaintenanceDiagnosticsResponse(
   raw: unknown,
 ): GenerationRunMaintenanceStatus {
-  const mapped = snakeToCamelDeep(raw) as GenerationRunMaintenanceStatus;
-  return mapped;
-}
-
-function snakeToCamelDeep(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map((entry) => snakeToCamelDeep(entry));
-  }
-
-  if (value && typeof value === 'object') {
-    const result: Record<string, unknown> = {};
-    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
-      result[snakeToCamelKey(key)] = snakeToCamelDeep(entry);
-    }
-    return result;
-  }
-
-  return value;
-}
-
-function snakeToCamelKey(key: string): string {
-  return key.replace(/_([a-z0-9])/g, (_match, ch: string) => ch.toUpperCase());
+  return raw as GenerationRunMaintenanceStatus;
 }

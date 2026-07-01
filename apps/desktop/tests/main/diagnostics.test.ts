@@ -36,26 +36,26 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 describe('getBrowserRecaptureDiagnosticsReport', () => {
-  it('maps a snake_case runtime response into a camelCase bridge result', async () => {
+  it('passes a camelCase runtime response through to the bridge result', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({
       report: {
         kind: 'draftlet.recapture-diagnostics',
-        exported_at: '2026-01-01T00:00:00.000Z',
+        exportedAt: '2026-01-01T00:00:00.000Z',
         summary: {
-          last_updated_at: '2026-01-01T00:00:00.000Z',
-          entry_count: 1,
-          current_target: {
-            session_id: 'session-1',
-            tab_id: 10,
+          lastUpdatedAt: '2026-01-01T00:00:00.000Z',
+          entryCount: 1,
+          currentTarget: {
+            sessionId: 'session-1',
+            tabId: 10,
             status: 'live',
             message: 'target message',
-            updated_at: '2026-01-01T00:00:00.000Z',
-            candidate_count: 2,
+            updatedAt: '2026-01-01T00:00:00.000Z',
+            candidateCount: 2,
           },
-          latest_attempt: {
+          latestAttempt: {
             event: 'content_recapture_completed',
-            session_id: 'session-1',
-            tab_id: 10,
+            sessionId: 'session-1',
+            tabId: 10,
             status: 'live',
             message: 'Recaptured.',
             at: '2026-01-01T00:00:00.000Z',
@@ -66,20 +66,20 @@ describe('getBrowserRecaptureDiagnosticsReport', () => {
             id: 1,
             event: 'content_recapture_completed',
             level: 'info',
-            session_id: 'session-1',
-            tab_id: 10,
+            sessionId: 'session-1',
+            tabId: 10,
             status: 'live',
             message: 'Recaptured.',
             at: '2026-01-01T00:00:00.000Z',
           },
         ],
       },
-      received_at: '2026-01-01T00:00:00.000Z',
+      receivedAt: '2026-01-01T00:00:00.000Z',
       stale: false,
-      stale_after_seconds: 900,
-      retention_days: 14,
-      max_stored_reports: 50,
-      max_entries_per_report: 500,
+      staleAfterSeconds: 900,
+      retentionDays: 14,
+      maxStoredReports: 50,
+      maxEntriesPerReport: 500,
     }));
 
     const result = await getBrowserRecaptureDiagnosticsReport();
@@ -125,12 +125,12 @@ describe('getBrowserRecaptureDiagnosticsReport', () => {
   it('returns a stale failure when the report expired', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({
       report: null,
-      received_at: '2026-01-01T00:00:00.000Z',
+      receivedAt: '2026-01-01T00:00:00.000Z',
       stale: true,
-      stale_after_seconds: 900,
-      retention_days: 14,
-      max_stored_reports: 50,
-      max_entries_per_report: 500,
+      staleAfterSeconds: 900,
+      retentionDays: 14,
+      maxStoredReports: 50,
+      maxEntriesPerReport: 500,
     }));
 
     const result = await getBrowserRecaptureDiagnosticsReport();
@@ -151,10 +151,10 @@ describe('getBrowserRecaptureDiagnosticsReport', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({
       report: null,
       stale: false,
-      stale_after_seconds: 900,
-      retention_days: 14,
-      max_stored_reports: 50,
-      max_entries_per_report: 500,
+      staleAfterSeconds: 900,
+      retentionDays: 14,
+      maxStoredReports: 50,
+      maxEntriesPerReport: 500,
     }));
 
     const result = await getBrowserRecaptureDiagnosticsReport();
@@ -182,41 +182,41 @@ describe('getBrowserRecaptureDiagnosticsReport', () => {
 });
 
 describe('getGenerationRunMaintenanceDiagnostics', () => {
-  it('maps a snake_case runtime status into a camelCase desktop result', async () => {
+  it('passes a camelCase runtime status through to the desktop result', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({
-      checked_at: '2026-01-01T00:00:00.000Z',
-      process_local: false,
-      recent_limit: 20,
-      retention_days: 30,
-      max_stored_outcomes: 100,
-      latest_startup: {
+      checkedAt: '2026-01-01T00:00:00.000Z',
+      processLocal: false,
+      recentLimit: 20,
+      retentionDays: 30,
+      maxStoredOutcomes: 100,
+      latestStartup: {
         id: 1,
         operation: 'startup_maintenance',
         status: 'ok',
         source: 'startup',
         at: '2026-01-01T00:00:00.000Z',
-        reconciled_run_count: 0,
-        reconciled_run_ids: [],
-        pruned_event_count: 0,
-        stale_after_seconds: 0,
-        retention_days: 14,
-        replay_limit: 100,
-        prune_batch_size: 200,
-        error_code: null,
-        error_message: null,
+        reconciledRunCount: 0,
+        reconciledRunIds: [],
+        prunedEventCount: 0,
+        staleAfterSeconds: 0,
+        retentionDays: 14,
+        replayLimit: 100,
+        pruneBatchSize: 200,
+        errorCode: null,
+        errorMessage: null,
       },
-      latest_stale_reconciliation: {
+      latestStaleReconciliation: {
         id: 2,
         operation: 'stale_reconciliation',
         status: 'ok',
         source: 'startup',
         at: '2026-01-01T00:00:00.000Z',
-        reconciled_run_count: 0,
-        reconciled_run_ids: [],
-        pruned_event_count: 0,
-        stale_after_seconds: 0,
+        reconciledRunCount: 0,
+        reconciledRunIds: [],
+        prunedEventCount: 0,
+        staleAfterSeconds: 0,
       },
-      latest_replay_prune: null,
+      latestReplayPrune: null,
       recent: [],
     }));
 
@@ -274,15 +274,15 @@ describe('getGenerationRunMaintenanceDiagnostics', () => {
 });
 
 describe('mapBrowserRecaptureDiagnosticsResponse', () => {
-  it('converts top-level snake_case fields to camelCase', () => {
+  it('passes top-level camelCase fields through unchanged', () => {
     const result = mapBrowserRecaptureDiagnosticsResponse({
       report: null,
-      received_at: '2026-01-01T00:00:00.000Z',
+      receivedAt: '2026-01-01T00:00:00.000Z',
       stale: true,
-      stale_after_seconds: 900,
-      retention_days: 14,
-      max_stored_reports: 50,
-      max_entries_per_report: 500,
+      staleAfterSeconds: 900,
+      retentionDays: 14,
+      maxStoredReports: 50,
+      maxEntriesPerReport: 500,
     });
 
     expect(result.receivedAt).toBe('2026-01-01T00:00:00.000Z');
@@ -293,21 +293,21 @@ describe('mapBrowserRecaptureDiagnosticsResponse', () => {
     expect(result.maxEntriesPerReport).toBe(500);
   });
 
-  it('recursively maps nested report, summary, target, and entry fields', () => {
+  it('passes nested report, summary, target, and entry fields through unchanged', () => {
     const result = mapBrowserRecaptureDiagnosticsResponse({
       report: {
         kind: 'draftlet.recapture-diagnostics',
-        exported_at: '2026-01-01T00:00:00.000Z',
+        exportedAt: '2026-01-01T00:00:00.000Z',
         summary: {
-          last_updated_at: '2026-01-01T00:00:00.000Z',
-          entry_count: 1,
-          current_target: {
-            session_id: 'session-1',
-            tab_id: 7,
+          lastUpdatedAt: '2026-01-01T00:00:00.000Z',
+          entryCount: 1,
+          currentTarget: {
+            sessionId: 'session-1',
+            tabId: 7,
             status: 'live',
             message: 'msg',
-            updated_at: '2026-01-01T00:00:00.000Z',
-            candidate_count: 3,
+            updatedAt: '2026-01-01T00:00:00.000Z',
+            candidateCount: 3,
           },
         },
         entries: [
@@ -315,17 +315,17 @@ describe('mapBrowserRecaptureDiagnosticsResponse', () => {
             id: 1,
             event: 'content_recapture_completed',
             level: 'info',
-            session_id: 'session-1',
-            tab_id: 7,
+            sessionId: 'session-1',
+            tabId: 7,
             status: 'live',
             message: 'Recaptured.',
             at: '2026-01-01T00:00:00.000Z',
           },
         ],
       },
-      received_at: '2026-01-01T00:00:00.000Z',
+      receivedAt: '2026-01-01T00:00:00.000Z',
       stale: false,
-      stale_after_seconds: 900,
+      staleAfterSeconds: 900,
     });
 
     expect(result.report?.exportedAt).toBe('2026-01-01T00:00:00.000Z');
@@ -338,28 +338,16 @@ describe('mapBrowserRecaptureDiagnosticsResponse', () => {
     expect(result.report?.entries[0].sessionId).toBe('session-1');
     expect(result.report?.entries[0].tabId).toBe(7);
   });
-
-  it('leaves already-camelCase keys unchanged', () => {
-    const result = mapBrowserRecaptureDiagnosticsResponse({
-      report: null,
-      receivedAt: '2026-01-01T00:00:00.000Z',
-      stale: false,
-      staleAfterSeconds: 900,
-    });
-
-    expect(result.receivedAt).toBe('2026-01-01T00:00:00.000Z');
-    expect(result.staleAfterSeconds).toBe(900);
-  });
 });
 
 describe('mapGenerationRunMaintenanceDiagnosticsResponse', () => {
-  it('converts top-level snake_case fields to camelCase', () => {
+  it('passes top-level camelCase fields through unchanged', () => {
     const result = mapGenerationRunMaintenanceDiagnosticsResponse({
-      checked_at: '2026-01-01T00:00:00.000Z',
-      process_local: false,
-      recent_limit: 5,
-      retention_days: 14,
-      max_stored_outcomes: 50,
+      checkedAt: '2026-01-01T00:00:00.000Z',
+      processLocal: false,
+      recentLimit: 5,
+      retentionDays: 14,
+      maxStoredOutcomes: 50,
       recent: [],
     });
 
@@ -371,31 +359,31 @@ describe('mapGenerationRunMaintenanceDiagnosticsResponse', () => {
     expect(result.recent).toEqual([]);
   });
 
-  it('recursively maps nested outcome fields for latest and recent entries', () => {
+  it('passes nested outcome fields through for latest and recent entries', () => {
     const result = mapGenerationRunMaintenanceDiagnosticsResponse({
-      checked_at: '2026-01-01T00:00:00.000Z',
-      process_local: false,
-      recent_limit: 1,
-      retention_days: 14,
-      max_stored_outcomes: 50,
-      latest_startup: {
+      checkedAt: '2026-01-01T00:00:00.000Z',
+      processLocal: false,
+      recentLimit: 1,
+      retentionDays: 14,
+      maxStoredOutcomes: 50,
+      latestStartup: {
         id: 11,
         operation: 'startup_maintenance',
         status: 'ok',
         source: 'startup',
         at: '2026-01-01T00:00:00.000Z',
-        reconciled_run_count: 2,
-        reconciled_run_ids: ['run-a', 'run-b'],
-        pruned_event_count: 4,
-        stale_after_seconds: 30,
-        retention_days: 14,
-        replay_limit: 100,
-        prune_batch_size: 25,
-        error_code: null,
-        error_message: null,
+        reconciledRunCount: 2,
+        reconciledRunIds: ['run-a', 'run-b'],
+        prunedEventCount: 4,
+        staleAfterSeconds: 30,
+        retentionDays: 14,
+        replayLimit: 100,
+        pruneBatchSize: 25,
+        errorCode: null,
+        errorMessage: null,
       },
-      latest_stale_reconciliation: null,
-      latest_replay_prune: null,
+      latestStaleReconciliation: null,
+      latestReplayPrune: null,
       recent: [
         {
           id: 12,
@@ -403,12 +391,12 @@ describe('mapGenerationRunMaintenanceDiagnosticsResponse', () => {
           status: 'error',
           source: 'reconciler',
           at: '2026-01-01T00:00:00.000Z',
-          reconciled_run_count: 0,
-          reconciled_run_ids: [],
-          pruned_event_count: 0,
-          stale_after_seconds: 30,
-          error_code: 'boom',
-          error_message: 'kaboom',
+          reconciledRunCount: 0,
+          reconciledRunIds: [],
+          prunedEventCount: 0,
+          staleAfterSeconds: 30,
+          errorCode: 'boom',
+          errorMessage: 'kaboom',
         },
       ],
     });
@@ -424,21 +412,6 @@ describe('mapGenerationRunMaintenanceDiagnosticsResponse', () => {
     expect(result.recent[0].operation).toBe('stale_reconciliation');
     expect(result.recent[0].errorCode).toBe('boom');
     expect(result.recent[0].errorMessage).toBe('kaboom');
-  });
-
-  it('leaves already-camelCase keys unchanged', () => {
-    const result = mapGenerationRunMaintenanceDiagnosticsResponse({
-      checkedAt: '2026-01-01T00:00:00.000Z',
-      processLocal: false,
-      recentLimit: 5,
-      retentionDays: 14,
-      maxStoredOutcomes: 50,
-      recent: [],
-    });
-
-    expect(result.checkedAt).toBe('2026-01-01T00:00:00.000Z');
-    expect(result.processLocal).toBe(false);
-    expect(result.recentLimit).toBe(5);
   });
 });
 

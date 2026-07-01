@@ -13,7 +13,7 @@ import {
   setRuntimeSelectedModel,
   startReplyGenerationRunExecution,
   streamReplyGenerationRunEvents,
-} from '../../core/api';
+} from '../../core/runtime-api';
 import type { ReplyRequestPayload } from '../../core/types';
 
 afterEach(() => {

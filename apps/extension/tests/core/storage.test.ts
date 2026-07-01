@@ -5,7 +5,7 @@ import type { PreferenceItem, PreferenceUpsert } from '../../core/types';
 const getPreferences = vi.fn();
 const putPreference = vi.fn();
 
-vi.mock('../../core/api', () => ({
+vi.mock('../../core/runtime-api', () => ({
   getPreferences,
   putPreference,
 }));

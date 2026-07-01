@@ -22,7 +22,7 @@ import {
   refreshHealth,
   restoreDomainHistoryItem,
   startDraftGenerationFromCurrentSession,
-} from '../../ui/sidepanel/actions';
+} from '../../ui/sidepanel/actions/index';
 import type { SendMessage } from '../../ui/sidepanel/runtime-message-bus';
 import type { ConnectionStatus, InsertionTargetStatus, PanelState } from '../../core/types';
 

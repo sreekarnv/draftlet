@@ -47,7 +47,6 @@ export function applySession(
   if (previousSession?.sessionId !== session.sessionId) {
     state.ui.insertionTrail = [];
     state.ui.selectedVariantId = null;
-    state.ui.draftEditBuffers = {};
     state.runtime.currentThreadSnapshot = null;
   }
 

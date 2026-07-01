@@ -1,5 +1,6 @@
 import { Badge, Button, Card } from './ui';
 import type { GenerationRunMaintenanceOutcome } from '@draftlet/shared/contracts';
+import { formatDateTime } from '../lib/format';
 import type { RuntimeMaintenanceDiagnosticsResult } from '../lib/types';
 
 interface RuntimeMaintenanceDiagnosticsCardProps {
@@ -167,14 +168,4 @@ function labelForOperation(operation: string) {
   }
 
   return operation;
-}
-
-function formatDateTime(value: string) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toLocaleString();
 }

@@ -7,7 +7,7 @@ import {
   PREFERENCE_SCOPE,
   TONES,
 } from './constants';
-import { getPreferences, putPreference } from './api';
+import { getPreferences, putPreference } from './runtime-api';
 import type { PanelView, PreferenceItem, Tone } from './types';
 
 let savedTone: Tone = DEFAULT_TONE;

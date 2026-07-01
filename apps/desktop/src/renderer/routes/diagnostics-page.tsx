@@ -1,6 +1,7 @@
 import { BrowserDiagnosticsCard } from '../components/browser-diagnostics-card';
 import { RuntimeMaintenanceDiagnosticsCard } from '../components/runtime-maintenance-diagnostics-card';
 import { Badge, Button, Card } from '../components/ui';
+import { formatDateTime } from '../lib/format';
 import { useDiagnosticsStore } from '../stores/diagnostics-store';
 import type { BrowserDiagnosticsBridgeResult, RuntimeMaintenanceDiagnosticsResult, RuntimeState } from '../lib/types';
 
@@ -140,14 +141,4 @@ function sourceStatusLabel(result: BrowserDiagnosticsBridgeResult | RuntimeMaint
   }
 
   return result.ok ? 'Loaded' : 'Unavailable';
-}
-
-function formatDateTime(value: string) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toLocaleString();
 }

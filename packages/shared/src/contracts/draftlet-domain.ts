@@ -229,6 +229,12 @@ export interface DraftVariant {
   updatedAt: string;
 }
 
+// Bounded invariant (enforced in apps/server/app/services/domain/variants.py):
+// per thread, at most one variant has isCurrent=true and at most one variant
+// has status='accepted'.
+export type DraftVariantBoundedInvariant = typeof DRAFT_VARIANT_BOUNDED_INVARIANT;
+export const DRAFT_VARIANT_BOUNDED_INVARIANT = 'one-current-and-one-accepted-per-thread';
+
 export interface GenerationRun {
   runId: string;
   sessionId: string;

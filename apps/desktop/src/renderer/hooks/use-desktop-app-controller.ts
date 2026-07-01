@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 
 import { serializeRecaptureDiagnosticsReport } from '@draftlet/shared/contracts';
-import { desktopApi } from '../lib/api';
 import { RECOMMENDED_MODEL } from '../lib/constants';
 import {
   buildDesktopDiagnosticsExportPayload,
@@ -16,6 +15,8 @@ import type {
   RuntimeState,
 } from '../lib/types';
 import { useDiagnosticsStore } from '../stores/diagnostics-store';
+
+const desktopApi = window.draftlet;
 
 const UNKNOWN: CommandStatus = { ok: false, message: 'Not checked yet.', code: 'unknown' };
 

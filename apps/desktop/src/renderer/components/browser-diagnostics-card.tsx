@@ -1,4 +1,5 @@
 import { Badge, Button, Card } from './ui';
+import { formatDateTime } from '../lib/format';
 import type { BrowserDiagnosticsBridgeResult } from '../lib/types';
 
 interface BrowserDiagnosticsCardProps {
@@ -23,9 +24,9 @@ export function BrowserDiagnosticsCard({
   const reportDetails = diagnostics?.ok
     ? [
         ['Kind', diagnostics.report.kind],
-        ['Received', formatReportTime(diagnostics.receivedAt ?? diagnostics.report.exportedAt)],
-        ['Exported', formatReportTime(diagnostics.report.exportedAt)],
-        ['Last updated', formatReportTime(diagnostics.report.summary.lastUpdatedAt)],
+        ['Received', formatDateTime(diagnostics.receivedAt ?? diagnostics.report.exportedAt)],
+        ['Exported', formatDateTime(diagnostics.report.exportedAt)],
+        ['Last updated', formatDateTime(diagnostics.report.summary.lastUpdatedAt)],
         ['Entries', String(diagnostics.report.entries.length)],
         ['Stale window', diagnostics.staleAfterSeconds ? `${Math.round(diagnostics.staleAfterSeconds / 60)} minutes` : 'Unknown'],
       ]
@@ -48,7 +49,7 @@ export function BrowserDiagnosticsCard({
       <div className="grid gap-2 rounded-lg bg-slate-100 px-3 py-2 text-[13px] leading-6 text-slate-700 ring-1 ring-slate-200">
         {diagnostics?.ok ? (
           <div>
-            Last report: {diagnostics.report.entries.length} entries, received {formatReportTime(diagnostics.receivedAt ?? diagnostics.report.exportedAt)}.
+            Last report: {diagnostics.report.entries.length} entries, received {formatDateTime(diagnostics.receivedAt ?? diagnostics.report.exportedAt)}.
           </div>
         ) : (
           <div>{diagnostics?.error.message ?? 'No desktop report loaded yet.'}</div>
@@ -105,14 +106,4 @@ export function BrowserDiagnosticsCard({
       </div>
     </Card>
   );
-}
-
-function formatReportTime(value: string) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toLocaleString();
 }

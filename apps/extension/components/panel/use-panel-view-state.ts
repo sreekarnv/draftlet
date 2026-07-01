@@ -84,13 +84,6 @@ export function usePanelViewState(callbacks: PanelCallbacks, controller: PanelCo
     callbacks.onViewChange?.(activeView);
   };
 
-  const recaptureInsertionTarget = async (_tabId?: number) => {
-    // The visible Recapture flow has been removed. Insert/Use owns the
-    // full target recovery path. This stub remains only so the function
-    // shape on the hook return value stays stable for any external callers.
-    setView((current) => ({ ...current, persistenceMessage: '' }));
-  };
-
   const retryInterruptedTurn = async (turnId: string) => {
     if (!callbacks.onRetryInterruptedTurn) {
       setView((current) => ({ ...current, persistenceMessage: 'Retry is unavailable here.' }));
@@ -102,16 +95,8 @@ export function usePanelViewState(callbacks: PanelCallbacks, controller: PanelCo
     setView((current) => ({ ...current, persistenceMessage: result.message }));
   };
 
-  const activateRecaptureTab = async (_tabId: number) => {
-    // The visible Recapture flow has been removed. This stub remains only
-    // so the function shape on the hook return value stays stable.
-    setView((current) => ({ ...current, persistenceMessage: '' }));
-  };
-
   return {
-    activateRecaptureTab,
     loadHistory,
-    recaptureInsertionTarget,
     restoreHistoryItem,
     retryInterruptedTurn,
     selectTone,

@@ -13,7 +13,6 @@ export interface SidePanelUiState {
   currentPanelView: PanelView;
   selectedThreadId: string | null;
   selectedVariantId: string | null;
-  draftEditBuffers: Record<string, string>;
   insertionTrail: InsertionStatusTrailItem[];
   isInsertInProgress: boolean;
   insertInProgressMessage: string;
@@ -35,7 +34,6 @@ export function createInitialState(initialTone: Tone, initialView: PanelView): S
       currentPanelView: initialView,
       selectedThreadId: null,
       selectedVariantId: null,
-      draftEditBuffers: {},
       insertionTrail: [],
       isInsertInProgress: false,
       insertInProgressMessage: '',

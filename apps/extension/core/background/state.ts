@@ -14,6 +14,9 @@ export interface LocalGenerationTransportHandle {
   abortController: AbortController;
 }
 
+// Mirrors apps/server/app/services/domain/constants.py DEFAULT_GENERATION_RUN_STALE_AFTER_SECONDS.
+// The runtime is the source of truth and ships the value with each claim; this constant is the
+// browser-local default used when the runtime has not yet responded.
 export const GENERATION_RUN_STALE_AFTER_SECONDS = 30;
 
 // Browser-local fetch/SSE handles only. Runtime GenerationRun state and durable replay remain the recovery source.

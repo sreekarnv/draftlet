@@ -99,6 +99,10 @@ export function createDomainId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+// Every session update broadcast goes through `attachAndRecordWorkspaceRestoreState`, which
+// calls `recordRestoreStateDiagnostic`. The diagnostic is deduped per session by a fingerprint
+// of the restore state, so the 50-entry ring buffer in `recapture-diagnostics.ts` is bounded
+// by the number of distinct restore-state fingerprints per session, not by traffic.
 export function withCurrentRestoreState(session: WorkspaceSession, source: WorkspaceRestoreSource): WorkspaceSession {
   const thread = session.activeThreadId
     ? threads.getSnapshot(session.activeThreadId)

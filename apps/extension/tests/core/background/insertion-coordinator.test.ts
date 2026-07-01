@@ -9,7 +9,7 @@ import {
   handleInsertReply,
   handleRecaptureInsertionTarget,
   revalidateInsertionTarget,
-} from '../../../core/background/insertion-coordinator';
+} from '../../../core/background/insertion';
 import { sessions, recaptureDiagnostics } from '../../../core/background/state';
 
 const runtimeApiMocks = vi.hoisted(() => ({

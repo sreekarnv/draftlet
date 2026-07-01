@@ -27,7 +27,7 @@ import {
   handleInsertionInProgress,
   handleInsertReply,
   handleRecaptureInsertionTarget,
-} from './insertion-coordinator';
+} from './insertion';
 import {
   handleCancelDraftGeneration,
   handleDraftVariantState,
