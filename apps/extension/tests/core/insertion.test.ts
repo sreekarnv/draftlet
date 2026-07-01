@@ -38,6 +38,8 @@ describe('insertReply', () => {
     const textarea = document.createElement('textarea');
     textarea.value = 'Short';
     document.body.append(textarea);
+    const inputEvents: InputEvent[] = [];
+    textarea.addEventListener('input', (event) => inputEvents.push(event as InputEvent));
 
     const result = await insertReply(' reply', {
       element: textarea,
@@ -47,6 +49,9 @@ describe('insertReply', () => {
 
     expect(result.status).toBe('inserted');
     expect(textarea.value).toBe('Short reply');
+    expect(inputEvents).toHaveLength(1);
+    expect(inputEvents[0].inputType).toBe('insertText');
+    expect(inputEvents[0].data).toBe(' reply');
   });
 
   it('inserts into a contenteditable element at the captured range', async () => {
@@ -58,6 +63,8 @@ describe('insertReply', () => {
     const range = document.createRange();
     range.setStart(textNode, 6);
     range.setEnd(textNode, 11);
+    const inputEvents: InputEvent[] = [];
+    editable.addEventListener('input', (event) => inputEvents.push(event as InputEvent));
 
     const result = await insertReply('Draftlet', {
       element: editable,
@@ -66,6 +73,9 @@ describe('insertReply', () => {
 
     expect(result.status).toBe('inserted');
     expect(editable.textContent).toBe('Hello Draftlet');
+    expect(inputEvents).toHaveLength(1);
+    expect(inputEvents[0].inputType).toBe('insertText');
+    expect(inputEvents[0].data).toBe('Draftlet');
   });
 
   it('inserts into a stored textarea even when it is no longer the active element', async () => {

@@ -10,16 +10,18 @@ import type {
   DraftletMessage,
   DraftletSidePanelContext,
   InsertionResult,
+  InsertionTargetStatusResult,
   StartDraftGenerationResult,
   WorkspaceSession,
 } from '../../core/messages';
 
-type CommandSurfaceStatus = 'idle' | 'starting' | 'streaming' | 'cancelled' | 'inserted' | 'error';
+type CommandSurfaceStatus = 'idle' | 'starting' | 'streaming' | 'cancelled' | 'inserted' | 'copied' | 'error';
 
 export interface CommandSurfaceCallbacks {
   createSession(context: DraftletSidePanelContext): Promise<{ created: boolean; session?: WorkspaceSession; message?: string }>;
   startGeneration(sessionId: string): Promise<StartDraftGenerationResult>;
   cancelGeneration(sessionId?: string, generationId?: string): Promise<void>;
+  getInsertionTargetStatus(sessionId: string): Promise<InsertionTargetStatusResult>;
   insertDraft(sessionId: string, text: string): Promise<InsertionResult>;
   openWorkshop(context: DraftletSidePanelContext): Promise<boolean>;
 }
@@ -56,11 +58,23 @@ export function createCommandSurface(callbacks: CommandSurfaceCallbacks): Comman
   const actions = document.createElement('div');
   const generateButton = document.createElement('button');
   const insertButton = document.createElement('button');
+  const copyButton = document.createElement('button');
   const cancelButton = document.createElement('button');
   const workshopButton = document.createElement('button');
   const closeButton = document.createElement('button');
 
   let state = initialState();
+  let restoreFocusTarget: HTMLElement | null = null;
+
+  const handleDocumentKeyDown = (event: KeyboardEvent): void => {
+    if (!isOpen() || event.key !== 'Escape') {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    void handleEscape();
+  };
 
   host.style.cssText = [
     'position: fixed',
@@ -87,14 +101,16 @@ export function createCommandSurface(callbacks: CommandSurfaceCallbacks): Comman
   actions.className = 'actions';
   configureButton(generateButton, 'Generate');
   configureButton(insertButton, 'Insert');
+  configureButton(copyButton, 'Copy');
   configureButton(cancelButton, 'Cancel');
   configureButton(workshopButton, 'Open Workshop');
   configureButton(closeButton, 'Close');
   closeButton.className = 'ghost';
+  copyButton.className = 'ghost';
   workshopButton.className = 'ghost';
   cancelButton.className = 'danger';
 
-  actions.append(generateButton, insertButton, cancelButton, workshopButton, closeButton);
+  actions.append(generateButton, insertButton, copyButton, cancelButton, workshopButton, closeButton);
   root.append(title, contextText, statusText, editor, actions);
   shadow.append(style, root);
   document.documentElement.append(host);
@@ -105,14 +121,17 @@ export function createCommandSurface(callbacks: CommandSurfaceCallbacks): Comman
   });
 
   root.addEventListener('keydown', (event) => {
+    event.stopPropagation();
+
     if (event.key !== 'Escape') {
       return;
     }
 
     event.preventDefault();
-    event.stopPropagation();
     void handleEscape();
   });
+
+  document.addEventListener('keydown', handleDocumentKeyDown, true);
 
   generateButton.addEventListener('click', () => {
     void generateDraft();
@@ -126,6 +145,10 @@ export function createCommandSurface(callbacks: CommandSurfaceCallbacks): Comman
     void insertDraft();
   });
 
+  copyButton.addEventListener('click', () => {
+    void copyDraft();
+  });
+
   workshopButton.addEventListener('click', () => {
     void openWorkshop();
   });
@@ -135,6 +158,9 @@ export function createCommandSurface(callbacks: CommandSurfaceCallbacks): Comman
   });
 
   function open(context: DraftletSidePanelContext): void {
+    restoreFocusTarget = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
     state = {
       ...initialState(),
       context,
@@ -146,11 +172,15 @@ export function createCommandSurface(callbacks: CommandSurfaceCallbacks): Comman
     host.style.display = 'block';
     render();
     queueMicrotask(() => {
-      generateButton.focus({ preventScroll: true });
+      if (context.selectedText.trim()) {
+        generateButton.focus({ preventScroll: true });
+      } else {
+        editor.focus({ preventScroll: true });
+      }
     });
   }
 
-  function close(): void {
+  function close(options: { restoreFocus?: boolean } = {}): void {
     if (isGenerating()) {
       return;
     }
@@ -158,9 +188,15 @@ export function createCommandSurface(callbacks: CommandSurfaceCallbacks): Comman
     host.style.display = 'none';
     state = initialState();
     editor.value = '';
+    if (options.restoreFocus !== false) {
+      restorePageFocus();
+    } else {
+      restoreFocusTarget = null;
+    }
   }
 
   function remove(): void {
+    document.removeEventListener('keydown', handleDocumentKeyDown, true);
     host.remove();
   }
 
@@ -287,18 +323,41 @@ export function createCommandSurface(callbacks: CommandSurfaceCallbacks): Comman
     setStatus('idle', 'Inserting...');
 
     try {
+      const targetStatus = await callbacks.getInsertionTargetStatus(sessionId).catch(() => null);
+      if (targetStatus && targetStatus.status !== 'live') {
+        state.statusMessage = targetStatus.message ?? insertionTargetMessage(targetStatus.status);
+        render();
+      }
+
       const result = await callbacks.insertDraft(sessionId, text);
       if (result.status === 'inserted') {
         state.status = 'inserted';
         state.statusMessage = result.message || 'Inserted.';
         render();
-        close();
+        close({ restoreFocus: false });
         return;
       }
 
-      setStatus(result.status === 'copied' ? 'idle' : 'error', result.message || 'Could not insert the draft.');
+      setStatus(result.status === 'copied' ? 'copied' : 'error', result.message || fallbackInsertionMessage(result));
     } catch (error) {
       setStatus('error', error instanceof Error ? error.message : 'Could not insert the draft.');
+    }
+  }
+
+  async function copyDraft(): Promise<void> {
+    const text = currentDraftText();
+    if (!text) {
+      setStatus('error', 'Generate or type a draft before copying.');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setStatus('copied', 'Copied draft. Paste it into the compose field when ready.');
+    } catch {
+      setStatus('error', 'Could not copy automatically. Select the draft text and copy it manually.');
+      editor.focus({ preventScroll: true });
+      editor.select();
     }
   }
 
@@ -387,8 +446,22 @@ export function createCommandSurface(callbacks: CommandSurfaceCallbacks): Comman
     root.dataset.status = state.status;
     generateButton.disabled = isGenerating();
     insertButton.disabled = isGenerating() || !currentDraftText();
+    copyButton.disabled = isGenerating() || !currentDraftText();
     cancelButton.hidden = !isGenerating();
     closeButton.disabled = isGenerating();
+  }
+
+  function isOpen(): boolean {
+    return host.style.display !== 'none';
+  }
+
+  function restorePageFocus(): void {
+    const target = restoreFocusTarget;
+    restoreFocusTarget = null;
+
+    if (target?.isConnected && document.activeElement !== target) {
+      target.focus({ preventScroll: true });
+    }
   }
 
   return {
@@ -397,9 +470,29 @@ export function createCommandSurface(callbacks: CommandSurfaceCallbacks): Comman
     close,
     remove,
     isOpen() {
-      return host.style.display !== 'none';
+      return isOpen();
     },
   };
+}
+
+function insertionTargetMessage(status: InsertionTargetStatusResult['status']): string {
+  if (status === 'needs_focus' || status === 'needs_recapture') {
+    return 'Focus a compose field, then try inserting again. Copy is available if insertion still fails.';
+  }
+
+  if (status === 'tab_disambiguation_required') {
+    return 'Draftlet found multiple possible tabs. Open Workshop to choose a tab, or copy the draft.';
+  }
+
+  return 'Draftlet could not confirm the compose field. It will try to recover before falling back to copy.';
+}
+
+function fallbackInsertionMessage(result: InsertionResult): string {
+  if (result.targetStatus === 'unavailable' || result.targetStatus === 'needs_recapture') {
+    return 'Could not find a compose field. Copy the draft and paste it manually.';
+  }
+
+  return 'Could not insert the draft. Copy fallback is available.';
 }
 
 function initialState(): CommandSurfaceState {

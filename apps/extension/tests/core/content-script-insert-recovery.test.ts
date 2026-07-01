@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ACTIVATE_INSERTION_TAB, INSERTION_IN_PROGRESS, type DraftletMessage } from '../../core/messages';
 import { createInsertionTargetStore } from '../../core/insertion-target-store';
 import { insertReply } from '../../core/insertion';
-import type { FocusSnapshot } from '../../core/focus';
+import { restoreTargetFromRef, type FocusSnapshot } from '../../core/focus';
 
 // Mirrors the production chain: try cached, then arm, then send
 // INSERTION_IN_PROGRESS, then send ACTIVATE_INSERTION_TAB, then await the
@@ -15,7 +15,7 @@ class TestContentScriptChain {
   private activeArmController: AbortController | null = null;
   private supersedeListeners = new Set<() => void>();
 
-  async handleInsertReply(sessionId: string, replyText: string): Promise<{ status: string; errorCode?: string }> {
+  async handleInsertReply(sessionId: string, replyText: string, targetRef?: FocusSnapshot['targetRef']): Promise<{ status: string; errorCode?: string }> {
     if (this.activeArmController) {
       this.activeArmController.abort();
       this.activeArmController = null;
@@ -25,6 +25,13 @@ class TestContentScriptChain {
     const live = this.targetStore.getLiveSnapshot();
     if (live) {
       const result = await insertReply(replyText, live);
+      return { status: result.status, errorCode: result.errorCode };
+    }
+
+    const restored = targetRef ? restoreTargetFromRef(targetRef) : null;
+    if (restored) {
+      this.targetStore.noteFocusIn(restored.element);
+      const result = await insertReply(replyText, restored);
       return { status: result.status, errorCode: result.errorCode };
     }
 
@@ -162,6 +169,24 @@ describe('content-script INSERT_REPLY chain', () => {
 
     expect(result.status).toBe('failed');
     expect(result.errorCode).toBe('armed_capture_timeout');
+  });
+
+  it('restores a stale saved target ref before arming for a new editable', async () => {
+    const chain = new TestContentScriptChain();
+    const textarea = document.createElement('textarea');
+    textarea.id = 'reply-box';
+    textarea.value = 'Hello world';
+    document.body.append(textarea);
+    textarea.setSelectionRange(11, 11);
+    chain.targetStore.noteFocusIn(textarea);
+    const targetRef = chain.targetStore.getLiveSnapshot()?.targetRef;
+    chain.targetStore.forget();
+
+    const result = await chain.handleInsertReply('session-1', 'Draftlet ', targetRef);
+
+    expect(result.status).toBe('inserted');
+    expect(textarea.value).toBe('Hello worldDraftlet ');
+    expect(chain.sentMessages).toEqual([]);
   });
 
   it('supersedes the prior arm when a second INSERT_REPLY arrives during the first arm', async () => {

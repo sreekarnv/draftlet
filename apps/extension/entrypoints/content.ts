@@ -111,12 +111,13 @@ export default defineContentScript({
           generationId,
         } satisfies DraftletMessage).catch(() => undefined);
       },
-      async insertDraft(sessionId, replyText) {
-        await browser.runtime.sendMessage({
+      async getInsertionTargetStatus(sessionId) {
+        return await browser.runtime.sendMessage({
           type: GET_INSERTION_TARGET_STATUS,
           sessionId,
-        } satisfies DraftletMessage).catch(() => undefined);
-
+        } satisfies DraftletMessage) as InsertionTargetStatusResult;
+      },
+      async insertDraft(sessionId, replyText) {
         const response = await browser.runtime.sendMessage({
           type: INSERT_REPLY,
           sessionId,
@@ -244,6 +245,7 @@ export default defineContentScript({
     const handleInsertReply = async (
       sessionId: string,
       replyText: string,
+      targetRef?: FocusSnapshot['targetRef'],
     ): Promise<InsertReplyResult> => {
       // A new insert supersedes any prior arming insert. Resolve the prior
       // promise silently (no copy attempt, no trail item) and start fresh.
@@ -258,6 +260,16 @@ export default defineContentScript({
           kind: live.targetRef?.kind ?? 'unknown',
         });
         return insertReply(replyText, live).then((result) => ({ result }));
+      }
+
+      const restored = targetRef ? restoreTargetFromRef(targetRef) : null;
+      if (restored) {
+        targetStore.noteFocusIn(restored.element);
+        logTargetEvent('inserting into cached target', {
+          kind: restored.targetRef?.kind ?? 'unknown',
+          reason: 'restored-ref',
+        });
+        return insertReply(replyText, restored).then((result) => ({ result }));
       }
 
       logTargetEvent('unavailable', { reason: 'no-target' });
@@ -433,7 +445,7 @@ export default defineContentScript({
       }
 
       if (message.type === INSERT_REPLY) {
-        return handleInsertReply(message.sessionId ?? '', message.replyText);
+        return handleInsertReply(message.sessionId ?? '', message.replyText, message.target);
       }
 
       return undefined;
