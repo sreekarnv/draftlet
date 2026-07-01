@@ -41,7 +41,7 @@ async def generate_reply_events(request: ReplyRequest) -> AsyncIterator[ReplyEve
     parser = ReplyStreamParser()
 
     with SessionLocal() as session:
-        model = request.model or resolve_generation_model(session, settings.default_model)
+        model = resolve_generation_model(session, settings.default_model)
         turn = ensure_domain_generation(session, request)
         thread_snapshot = get_thread_snapshot(session, request.thread_id) if request.thread_id else None
         prompt = build_reply_prompt(request, thread_snapshot)

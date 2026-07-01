@@ -28,9 +28,9 @@ Expected results:
 - `pnpm typecheck` runs the shared package typecheck, the extension typecheck, and the desktop typecheck in sequence and exits 0.
 - `pnpm build` produces a packaged Python server bundle, packages the Electron desktop app, and builds the Chrome MV3 extension.
 - `pnpm make:desktop` runs `DRAFTLET_MAKE_DEB=1 DRAFTLET_MAKE_APPIMAGE=1 pnpm --dir apps/desktop make` and produces the Linux `.deb` and ZIP installers under `apps/desktop/out/make/`. On Debian/Ubuntu hosts, this needs `fakeroot` and `dpkg` to be installed.
-- Extension test command runs ~230 tests across ~24 files.
-- Desktop test command runs 35 tests across 4 files.
-- Server `uv run pytest` runs 70 tests across the server package, including the CORS settings tests under `tests/test_cors.py` and the diagnostics API tests under `tests/test_diagnostics_api.py`.
+- Extension test command runs 246 tests across 27 files.
+- Desktop test command runs 42 tests across 5 files.
+- Server `uv run pytest` runs 77 tests across the server package, including the CORS settings tests under `tests/test_cors.py` and the diagnostics API tests under `tests/test_diagnostics_api.py`.
 - `uv run alembic upgrade head` reports the current head revision (verify against the top of `apps/server/alembic/versions/`).
 
 If a command is environment-specific (for example, the Linux desktop maker needs `fakeroot` and `dpkg`), note that in [`troubleshooting.md`](troubleshooting.md) rather than pretending it works everywhere.
@@ -68,7 +68,7 @@ Required:
 
 Then verify:
 
-- Launching the desktop shows the main window and the tray icon.
+- First launch opens the setup window and tray icon; after setup is marked complete, launching the desktop starts tray-only until Settings or Diagnostics is opened from the tray.
 - The Ollama status card reports the running Ollama instance and lists the installed models.
 - Model detection surfaces the configured model and lets the user switch to a different installed model.
 - Start server requests the local server and reports a `ready` state once `/health` returns success.
@@ -81,7 +81,7 @@ Then verify:
 
 ## 4. Server checks
 
-- `GET /health` returns `{"status":"healthy","service":"draftlet-server","app":"draftlet","version":"0.1.1"}` and HTTP 200.
+- `GET /health` returns `{"status":"healthy","service":"draftlet-server","app":"draftlet","version":"0.2.0"}` and HTTP 200. The branch is named `v0.2.0`; the runtime `version` field reflects that release label while the Python and Node package manifests keep the previous `0.1.0` so the workspace lockfile does not need to be regenerated for a hardening pass.
 - `uv run alembic upgrade head` reports the database is at the head revision.
 - The default development database file (`apps/server/draftlet.db`) is created on first run, and a clean `rm apps/server/draftlet.db && uv run alembic upgrade head` cycle recreates it without errors.
 - After a runtime restart, the startup maintenance hook reconciles any interrupted runs and reports a `runtime_restarted` error message in the runtime maintenance endpoint.

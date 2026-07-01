@@ -14,6 +14,7 @@ const localRequire = createRequire(__filename);
 const bundledServerDir = path.resolve(__dirname, '../server/dist/draftlet-server');
 const rootDir = path.resolve(__dirname, "../..");
 const iconPng = path.join(rootDir, "apps/desktop/assets/icon.png");
+const bundledServerExecutableName = process.platform === 'win32' ? 'draftlet-server.exe' : 'draftlet-server';
 
 /**
  * Node 24 currently freezes in Electron Packager's default Electron ZIP
@@ -85,29 +86,26 @@ patchElectronPackagerUnzip();
 
 const resolveExtraResource = (): string[] => {
   if (!existsSync(bundledServerDir)) {
-    console.log(
-      `${logPrefix} No bundled server at ${bundledServerDir}; skipping extraResource.`,
+    throw new Error(
+      `${logPrefix} No bundled server at ${bundledServerDir}. Run scripts/build-server.sh before packaging the desktop app.`,
     );
-    return [];
   }
 
   const stats = statSync(bundledServerDir);
   const entries = stats.isDirectory() ? readdirSync(bundledServerDir) : [];
 
   if (!stats.isDirectory() || entries.length === 0) {
-    console.warn(
-      `${logPrefix} Bundled server directory is missing or empty; skipping extraResource.`,
+    throw new Error(
+      `${logPrefix} Bundled server directory is missing or empty. Run scripts/build-server.sh before packaging the desktop app.`,
     );
-    return [];
   }
 
-  const executablePath = path.join(bundledServerDir, 'draftlet-server');
+  const executablePath = path.join(bundledServerDir, bundledServerExecutableName);
 
   if (!existsSync(executablePath)) {
-    console.warn(
-      `${logPrefix} Bundled server executable missing at ${executablePath}; skipping extraResource. Run scripts/build-server.sh first.`,
+    throw new Error(
+      `${logPrefix} Bundled server executable missing at ${executablePath}. Run scripts/build-server.sh before packaging the desktop app.`,
     );
-    return [];
   }
 
   console.log(`${logPrefix} Bundling server from ${bundledServerDir}.`);

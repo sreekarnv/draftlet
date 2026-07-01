@@ -40,6 +40,11 @@ export async function startDraftletServer(): Promise<CommandStatus> {
   }
 
   const startCommand = buildServerStartCommand();
+
+  if (!('command' in startCommand)) {
+    return startCommand;
+  }
+
   const child = spawn(startCommand.command, startCommand.args, {
     cwd: startCommand.cwd,
     env: {
@@ -51,6 +56,12 @@ export async function startDraftletServer(): Promise<CommandStatus> {
     stdio: 'ignore',
     windowsHide: true,
   });
+
+  const spawnStatus = await waitForSpawn(child, startCommand);
+
+  if (!spawnStatus.ok) {
+    return spawnStatus;
+  }
 
   child.once('exit', () => {
     serverProcess = null;
@@ -95,10 +106,14 @@ export async function stopOwnedDraftletServer(): Promise<CommandStatus> {
   return ok('No managed Draftlet server is running.', 'stopped');
 }
 
-function buildServerStartCommand(): ServerStartCommand {
-  const bundledServerExecutable = getBundledServerExecutable();
+function buildServerStartCommand(): ServerStartCommand | CommandStatus {
+  if (app.isPackaged) {
+    const bundledServerExecutable = getBundledServerExecutable();
 
-  if (app.isPackaged && bundledServerExecutable) {
+    if (!bundledServerExecutable) {
+      return fail('Packaged Draftlet server bundle is missing. Reinstall Draftlet or rebuild the package with scripts/build-server.sh.', 'missing');
+    }
+
     return {
       command: bundledServerExecutable,
       args: [],
@@ -118,6 +133,26 @@ function buildServerStartCommand(): ServerStartCommand {
     cwd: serverDir,
     mode: 'development',
   };
+}
+
+function waitForSpawn(child: ChildProcess, startCommand: ServerStartCommand): Promise<CommandStatus> {
+  return new Promise((resolve) => {
+    const onError = (error: Error) => {
+      if (serverProcess === child) {
+        serverProcess = null;
+      }
+
+      resolve(fail(`Could not start Draftlet server (${startCommand.mode}): ${error.message}`, 'error'));
+    };
+
+    const onSpawn = () => {
+      child.off('error', onError);
+      resolve(ok(`Draftlet server start requested (${startCommand.mode}).`, 'starting'));
+    };
+
+    child.once('error', onError);
+    child.once('spawn', onSpawn);
+  });
 }
 
 function getBundledServerExecutable(): string | null {

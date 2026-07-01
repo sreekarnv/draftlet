@@ -8,7 +8,7 @@ The hard rule is that the webpage must not own the Draftlet workflow. The page i
 
 Put code in content scripts when it directly touches the webpage.
 
-Content scripts own capture and insertion only:
+Content scripts own capture, insertion, and lightweight page affordance hosting:
 - page integration
 - selection capture
 - editable target detection

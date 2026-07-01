@@ -12,11 +12,6 @@ pnpm --dir "$ROOT_DIR" icons
 echo "[3/6] Building bundled Python server"
 "$ROOT_DIR/scripts/build-server.sh"
 
-if [[ ! -x "$ROOT_DIR/apps/server/dist/draftlet-server/draftlet-server" ]]; then
-  echo "scripts/build-all.sh: expected server bundle at $ROOT_DIR/apps/server/dist/draftlet-server/draftlet-server" >&2
-  echo "The desktop app will still be packaged, but without a bundled local server." >&2
-fi
-
 echo "[4/6] Packaging Electron desktop app"
 pnpm --dir "$ROOT_DIR/apps/desktop" package
 

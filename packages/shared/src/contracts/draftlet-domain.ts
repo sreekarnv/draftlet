@@ -16,7 +16,6 @@ export type GenerationMode = 'initial' | 'refinement';
 export interface ReplyRequestPayload {
   selected_text: string;
   tone: Tone;
-  model?: string;
   source_url?: string;
   source_domain?: string;
   page_title?: string;

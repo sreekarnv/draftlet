@@ -16,7 +16,7 @@ Draftlet is composed of six major surfaces. Each one has a narrow responsibility
 
 ### Content script
 
-The content script is the page integration layer. It owns capture and insertion only: detecting editable surfaces, capturing selection or nearby context, showing tiny inline affordances, performing best-effort insertion, and relaying structured messages to extension-owned surfaces.
+The content script is the page integration layer. It owns capture, insertion, and lightweight page affordance hosting: detecting editable surfaces, capturing selection or nearby context, showing tiny inline affordances, performing best-effort insertion, and relaying structured messages to extension-owned surfaces.
 
 It must stay lightweight. It must not own prompt logic, model orchestration, persistence, thread state, or the local runtime connection.
 
@@ -34,7 +34,7 @@ Workshop is where the user spends time drafting. It is not a thin wrapper around
 
 ### Command Surface
 
-The Command Surface is a future lightweight Shadow DOM page affordance. It will provide quick browser-native commands and entry points, but it will not own the drafting workflow, thread state, prompt construction, persistence, or runtime transport.
+The Command Surface is a lightweight Shadow DOM page affordance. It provides quick browser-native commands and entry points, but it does not own prompt construction, persistence, or runtime transport.
 
 ### Popup
 
