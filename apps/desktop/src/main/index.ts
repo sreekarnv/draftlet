@@ -2,10 +2,12 @@ import path from 'node:path';
 import { app, BrowserWindow, Menu, nativeImage, Tray } from 'electron';
 import started from 'electron-squirrel-startup';
 
+import { getDesktopStartupMode, getTrayRuntimeStatusLabel, getTrayTooltip } from './desktop-lifecycle.js';
 import { registerDiagnosticsIpc } from './ipc/diagnostics.js';
-import { registerHealthIpc } from './ipc/health.js';
+import { checkServerHealth, registerHealthIpc } from './ipc/health.js';
 import { registerOllamaIpc } from './ipc/ollama.js';
 import { registerServerIpc, startDraftletServer, stopDraftletServer, stopOwnedDraftletServer } from './ipc/server.js';
+import { getSetupCompleteSetting, registerSettingsIpc, type CommandStatus } from './ipc/settings.js';
 import { registerShellIpc } from './ipc/shell.js';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
@@ -18,10 +20,14 @@ if (started) {
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
+let runtimeStatus: CommandStatus = { ok: false, message: 'Runtime status has not been checked yet.', code: 'unknown' };
+let runtimeStatusTimer: NodeJS.Timeout | null = null;
 
-function createWindow() {
+type DesktopView = 'settings' | 'diagnostics' | 'runtime' | 'help';
+
+function createWindow(view: DesktopView = 'settings') {
   if (mainWindow && !mainWindow.isDestroyed()) {
-    showMainWindow();
+    showMainWindow(view);
     return mainWindow;
   }
 
@@ -53,17 +59,17 @@ function createWindow() {
   });
 
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    void mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
+    void mainWindow.loadURL(`${MAIN_WINDOW_VITE_DEV_SERVER_URL}#${view}`);
     return mainWindow;
   }
 
-  void mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`));
+  void mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`), { hash: view });
   return mainWindow;
 }
 
-function showMainWindow() {
+function showMainWindow(view: DesktopView = 'settings') {
   if (!mainWindow || mainWindow.isDestroyed()) {
-    createWindow();
+    createWindow(view);
     return;
   }
 
@@ -73,6 +79,7 @@ function showMainWindow() {
 
   mainWindow.show();
   mainWindow.focus();
+  mainWindow.webContents.send('draftlet:desktop-view', view);
 }
 
 function createTray() {
@@ -81,21 +88,57 @@ function createTray() {
   }
 
   tray = new Tray(createTrayIcon());
-  tray.setToolTip('Draftlet');
-  tray.setContextMenu(createTrayMenu());
-  tray.on('click', showMainWindow);
+  updateTrayStatus(runtimeStatus);
+  tray.on('click', () => showMainWindow('settings'));
 }
 
 function createTrayMenu() {
   return Menu.buildFromTemplate([
-    { label: 'Open Draftlet', click: showMainWindow },
+    { label: getTrayRuntimeStatusLabel(runtimeStatus), enabled: false },
+    { label: runtimeStatus.message.slice(0, 90), enabled: false },
     { type: 'separator' },
-    { label: 'Start server', click: () => void startDraftletServer() },
-    { label: 'Stop server', click: () => void stopDraftletServer() },
-    { label: 'Restart server', click: () => void restartDraftletServer() },
+    { label: 'Settings', click: () => showMainWindow('settings') },
+    { label: 'Diagnostics', click: () => showMainWindow('diagnostics') },
+    { type: 'separator' },
+    { label: 'Restart Runtime', click: () => void restartRuntimeFromTray() },
+    { label: 'Stop Runtime', click: () => void stopRuntimeFromTray() },
     { type: 'separator' },
     { label: 'Quit', click: () => void quitApp() },
   ]);
+}
+
+function updateTrayStatus(status: CommandStatus) {
+  runtimeStatus = status;
+
+  if (!tray) {
+    return;
+  }
+
+  tray.setToolTip(getTrayTooltip(status));
+  tray.setContextMenu(createTrayMenu());
+}
+
+async function refreshRuntimeStatus() {
+  updateTrayStatus(await checkServerHealth());
+}
+
+function startRuntimeStatusPolling() {
+  if (runtimeStatusTimer) {
+    return;
+  }
+
+  runtimeStatusTimer = setInterval(() => {
+    void refreshRuntimeStatus();
+  }, 30000);
+}
+
+function stopRuntimeStatusPolling() {
+  if (!runtimeStatusTimer) {
+    return;
+  }
+
+  clearInterval(runtimeStatusTimer);
+  runtimeStatusTimer = null;
 }
 
 function createTrayIcon() {
@@ -104,9 +147,22 @@ function createTrayIcon() {
   return icon;
 }
 
-async function restartDraftletServer() {
+async function startRuntimeFromTray() {
+  updateTrayStatus({ ok: true, message: 'Draftlet runtime is starting.', code: 'starting' });
+  updateTrayStatus(await startDraftletServer());
+  setTimeout(() => void refreshRuntimeStatus(), 1500);
+}
+
+async function stopRuntimeFromTray() {
+  updateTrayStatus(await stopDraftletServer());
+  setTimeout(() => void refreshRuntimeStatus(), 500);
+}
+
+async function restartRuntimeFromTray() {
+  updateTrayStatus({ ok: true, message: 'Draftlet runtime is restarting.', code: 'starting' });
   await stopDraftletServer();
-  await startDraftletServer();
+  updateTrayStatus(await startDraftletServer());
+  setTimeout(() => void refreshRuntimeStatus(), 1500);
 }
 
 async function quitApp() {
@@ -115,6 +171,7 @@ async function quitApp() {
   }
 
   isQuitting = true;
+  stopRuntimeStatusPolling();
   await stopOwnedDraftletServer();
   destroyTray();
   app.quit();
@@ -125,17 +182,27 @@ function destroyTray() {
   tray = null;
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   registerDiagnosticsIpc();
   registerHealthIpc();
   registerOllamaIpc();
   registerServerIpc();
+  registerSettingsIpc();
   registerShellIpc();
 
   createTray();
-  createWindow();
+  startRuntimeStatusPolling();
 
-  app.on('activate', showMainWindow);
+  const startupMode = getDesktopStartupMode(await getSetupCompleteSetting());
+
+  if (startupMode === 'setup-window') {
+    createWindow('settings');
+    void refreshRuntimeStatus();
+  } else {
+    void startRuntimeFromTray();
+  }
+
+  app.on('activate', () => showMainWindow('settings'));
 });
 
 app.on('before-quit', (event) => {

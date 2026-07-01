@@ -7,13 +7,15 @@ This document describes the current Draftlet architecture and the small set of c
 Draftlet runs locally on the developer's machine and is composed of six surfaces:
 
 - a browser extension with a content script, a background service worker, a side panel workspace, and a popup
-- an Electron desktop companion for setup, runtime lifecycle, tray behavior, and diagnostics
+- an Electron desktop companion for first-run setup, tray-first runtime lifecycle, model settings, diagnostics, logs, and explicit quit behavior
 - a local FastAPI server for Ollama streaming, runtime-owned model metadata/selection, prompt building, deterministic context compaction, response parsing, and SQLite persistence
 - shared typed contracts in `packages/shared/src/contracts/` across the extension, desktop, and runtime boundaries
 - a local SQLite database (via Alembic migrations) for sessions, threads, turns, draft variants, generation runs, preferences, and bounded browser recapture diagnostics
 - Ollama, installed and run separately by the user
 
 The runtime owns the `WorkspaceSession` / `ConversationThread` / `Turn` / `DraftVariant` / `GenerationRun` data model. It also owns selected model preference for generation and exposes Ollama model state through `/models/ollama`. `gemma3:4b` is the default recommendation, `qwen2.5:7b` is the power-user recommendation, and `llama3.2:3b` is the low-end fallback recommendation; selection is not hard-locked to installed models. Prompt building remains in FastAPI and now includes tone modes, follow-up/refinement instructions, source-complexity guidance, and deterministic context compaction that preserves explicit questions, names, dates, commitments, asks, and recent thread context before older context.
+
+After first-run setup is marked complete, the desktop companion starts hidden with tray controls only. Closing a desktop window hides it; quitting is explicit through the tray. The tray exposes runtime status, settings, diagnostics, restart runtime, stop runtime, and quit actions. Runtime startup still uses `uv run uvicorn` in development and the bundled server executable in packaged builds.
 
 Workshop is the primary drafting surface and is currently implemented by the extension side panel. The side panel keeps runtime snapshots under an explicit runtime projection and keeps Workshop-only state, including tone/view controls, selected thread/variant IDs, draft edit buffers, loading/error display state, and insertion progress/trail display, separately under UI state. Zustand remains deferred until the side panel has cross-component state pressure that justifies a store dependency. Insertion is best-effort page integration owned by the content script; Workshop's `Insert` / `Use` action owns the full target recovery chain (cached target → arm listener → activate tab → await capture → focus, restore selection, and insert). A `DRAFTLET_DEBUG_INSERTION=1` env var gates the popup's recapture diagnostics surface for dev-only debugging. The Command Surface MVP is a `Ctrl+Shift+D` Shadow DOM page affordance for fast context capture, draft generation, editing, cancellation, and insertion. It has only temporary overlay state and uses the existing background/runtime generation and content-script insertion paths; it is not the primary drafting UX.
 

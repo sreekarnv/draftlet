@@ -128,6 +128,7 @@ The desktop app owns:
 - starting and stopping runtime processes
 - runtime lifecycle
 - tray behavior
+- tray-first startup after setup is complete
 - logs and diagnostics
 - advanced settings
 - update-oriented operational UX
@@ -140,7 +141,7 @@ The desktop app does not own:
 - browser-side insertion
 - the primary browser drafting workspace
 
-Desktop may present runtime state, but it should not become a second Draftlet drafting app competing with the side panel.
+Desktop may present runtime state, model settings, setup, diagnostics, and logs on demand. After first-run setup is complete, it should start as a tray-first daemon surface and open windows only for explicit setup, settings, diagnostics, or help actions. It should not become a second Draftlet drafting app competing with the side panel.
 
 ## Runtime / Daemon
 

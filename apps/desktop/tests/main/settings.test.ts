@@ -15,7 +15,9 @@ import {
   RECOMMENDED_MODEL,
   POWER_USER_MODEL,
   LOW_END_FALLBACK_MODEL,
+  getSetupCompleteSetting,
   getSelectedModelSetting,
+  setSetupCompleteSetting,
   setSelectedModelSetting,
 } from '../../src/main/ipc/settings';
 
@@ -76,5 +78,24 @@ describe('getSelectedModelSetting / setSelectedModelSetting', () => {
     expect(RECOMMENDED_MODEL.length).toBeGreaterThan(0);
     expect(POWER_USER_MODEL).toBe('qwen2.5:7b');
     expect(LOW_END_FALLBACK_MODEL).toBe('llama3.2:3b');
+  });
+});
+
+describe('getSetupCompleteSetting / setSetupCompleteSetting', () => {
+  it('defaults setup completion to false', async () => {
+    await expect(getSetupCompleteSetting()).resolves.toBe(false);
+  });
+
+  it('round-trips setup completion while preserving selected model', async () => {
+    await setSelectedModelSetting('gemma3:4b');
+    await expect(setSetupCompleteSetting(true)).resolves.toBe(true);
+
+    const stored = JSON.parse(readFileSync(path.join(tmpDir, 'settings.json'), 'utf8'));
+    expect(stored).toEqual({ selectedModel: 'gemma3:4b', setupComplete: true });
+    await expect(getSetupCompleteSetting()).resolves.toBe(true);
+
+    await expect(setSetupCompleteSetting(false)).resolves.toBe(false);
+    await expect(getSetupCompleteSetting()).resolves.toBe(false);
+    await expect(getSelectedModelSetting()).resolves.toBe('gemma3:4b');
   });
 });

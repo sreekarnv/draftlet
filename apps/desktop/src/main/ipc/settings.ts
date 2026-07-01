@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { app } from 'electron';
+import { app, ipcMain } from 'electron';
 
 export const DRAFTLET_SERVER_PORT = 47632;
 export const SERVER_BASE_URL = `http://127.0.0.1:${DRAFTLET_SERVER_PORT}`;
@@ -30,6 +30,12 @@ export interface CommandStatus {
 
 interface DesktopSettings {
   selectedModel?: string;
+  setupComplete?: boolean;
+}
+
+export function registerSettingsIpc() {
+  ipcMain.handle('draftlet:get-setup-complete', () => getSetupCompleteSetting());
+  ipcMain.handle('draftlet:set-setup-complete', (_event, complete: boolean) => setSetupCompleteSetting(complete));
 }
 
 export function ok(message: string, code: CommandStatusCode = 'ready'): CommandStatus {
@@ -56,6 +62,19 @@ export async function setSelectedModelSetting(model: string): Promise<void> {
     ...(await readDesktopSettings()),
     selectedModel,
   });
+}
+
+export async function getSetupCompleteSetting(): Promise<boolean> {
+  const settings = await readDesktopSettings();
+  return settings.setupComplete === true;
+}
+
+export async function setSetupCompleteSetting(complete: boolean): Promise<boolean> {
+  await writeDesktopSettings({
+    ...(await readDesktopSettings()),
+    setupComplete: complete,
+  });
+  return complete;
 }
 
 async function readDesktopSettings(): Promise<DesktopSettings> {

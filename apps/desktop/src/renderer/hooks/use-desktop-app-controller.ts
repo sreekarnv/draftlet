@@ -29,6 +29,7 @@ export function useDesktopAppController() {
     server: UNKNOWN,
   });
   const [busy, setBusy] = useState(false);
+  const [setupComplete, setSetupComplete] = useState(false);
   const [actionMessage, setActionMessage] = useState('');
   const browserDiagnostics = useDiagnosticsStore((state) => state.browserDiagnostics);
   const diagnosticsLastRefreshedAt = useDiagnosticsStore((state) => state.diagnosticsLastRefreshedAt);
@@ -174,8 +175,18 @@ export function useDesktopAppController() {
     await refreshStatus();
   };
 
+  const completeSetup = async () => {
+    setBusy(true);
+    await desktopApi.setSetupComplete(true);
+    setSetupComplete(true);
+    const startResult = await desktopApi.startDraftletServer();
+    setActionMessage(`${startResult.message} Setup is complete. Draftlet will start from the tray on future launches.`);
+    await refreshStatus();
+  };
+
   useEffect(() => {
     void refreshStatus();
+    void desktopApi.getSetupComplete().then(setSetupComplete);
   }, []);
 
   return {
@@ -185,6 +196,7 @@ export function useDesktopAppController() {
       copyDiagnosticsExport,
       loadBrowserDiagnostics,
       loadMaintenanceDiagnostics,
+      completeSetup,
       openExtensionHelp,
       openOllamaInstallPage,
       pullRecommendedModel,
@@ -197,6 +209,7 @@ export function useDesktopAppController() {
     },
     busy,
     runtime,
+    setupComplete,
   };
 }
 

@@ -44,8 +44,11 @@ export interface DraftletDesktopApi {
   stopDraftletServer: () => Promise<CommandStatus>;
   getBrowserRecaptureDiagnosticsReport: () => Promise<DesktopExtensionDiagnosticsBridgeResult>;
   getGenerationRunMaintenanceDiagnostics: () => Promise<GenerationRunMaintenanceDiagnosticsResult>;
+  getSetupComplete: () => Promise<boolean>;
+  setSetupComplete: (complete: boolean) => Promise<boolean>;
   openOllamaInstallPage: () => Promise<CommandStatus>;
   openExtensionHelp: () => Promise<CommandStatus>;
+  onDesktopView: (callback: (view: string) => void) => () => void;
 }
 
 export type BrowserDiagnosticsBridgeResult = DesktopExtensionDiagnosticsBridgeResult;
