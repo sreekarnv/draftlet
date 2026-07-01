@@ -265,6 +265,14 @@ Use stable `code` values for program behavior. Use `message` for human-facing ex
 
 Retryable errors should be machine-readable so popup, side panel, desktop, and runtime clients can offer the right recovery path.
 
+## Contract Source of Truth
+
+For cross-boundary types that appear in more than one surface (extension, desktop, server), the canonical definition lives in `packages/shared/src/contracts/`. The shared TypeScript contract is the source of truth; the FastAPI Pydantic schemas in `apps/server/app/schemas/` mirror it. Surfaces import the shared type directly and do not re-declare it locally. When the contract changes, update the shared definition first, then any Pydantic mirror, then any consumer.
+
+Types that already follow this rule include `RuntimeErrorInfo`, `CommandStatus`, `CommandStatusCode`, `InstalledModel`, `OllamaModel`, `RuntimeModelState`, and the desktop IPC surface `DraftletDesktopApi`.
+
+Field-name convention: the shared contract uses camelCase. Pydantic field names use snake_case (`apps/server/app/schemas/domain.py`) when the type is part of the durable domain model (where Python convention wins) and camelCase (`apps/server/app/schemas/diagnostics.py`) when the type is a cross-boundary payload (where the TypeScript contract is the source of truth and the wire format must match). Mappers in `apps/extension/core/runtime-api/mappers.ts` translate domain responses to TS contract field names at the boundary; do not duplicate shape definitions inside mappers.
+
 ## Identifier Guidance
 
 Use stable identifiers to keep cross-boundary state coherent.

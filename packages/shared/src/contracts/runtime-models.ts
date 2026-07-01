@@ -11,6 +11,27 @@ export interface OllamaModel {
   modifiedAt?: string;
 }
 
+export interface InstalledModel {
+  name: string;
+}
+
+export type CommandStatusCode =
+  | 'ready'
+  | 'missing'
+  | 'not_running'
+  | 'offline'
+  | 'starting'
+  | 'stopped'
+  | 'conflict'
+  | 'error'
+  | 'unknown';
+
+export interface CommandStatus {
+  ok: boolean;
+  message: string;
+  code?: CommandStatusCode;
+}
+
 export interface RuntimeModelRecommendation {
   model: string;
   label: string;

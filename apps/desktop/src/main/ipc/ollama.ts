@@ -2,6 +2,8 @@ import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { ipcMain } from 'electron';
 
+import type { CommandStatus, InstalledModel } from '@draftlet/shared/contracts';
+
 import { checkHttpStatus } from './health.js';
 import {
   fail,
@@ -10,14 +12,11 @@ import {
   RECOMMENDED_MODEL,
   SERVER_BASE_URL,
   setSelectedModelSetting,
-  type CommandStatus,
 } from './settings.js';
 
 const execFileAsync = promisify(execFile);
 
-export interface InstalledModel {
-  name: string;
-}
+export type { InstalledModel };
 
 interface RuntimeModelStateRead {
   selected_model?: string;

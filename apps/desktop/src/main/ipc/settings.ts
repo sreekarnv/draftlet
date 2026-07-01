@@ -2,6 +2,8 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { app, ipcMain } from 'electron';
 
+import type { CommandStatus, CommandStatusCode } from '@draftlet/shared/contracts';
+
 export const DRAFTLET_SERVER_PORT = 47632;
 export const SERVER_BASE_URL = `http://127.0.0.1:${DRAFTLET_SERVER_PORT}`;
 export const OLLAMA_BASE_URL = 'http://127.0.0.1:11434';
@@ -11,22 +13,7 @@ export const LOW_END_FALLBACK_MODEL = 'llama3.2:3b';
 export const SERVER_MODEL_PREFERENCE_SCOPE = 'server';
 export const SERVER_MODEL_PREFERENCE_KEY = 'default_model';
 
-export type CommandStatusCode =
-  | 'ready'
-  | 'missing'
-  | 'not_running'
-  | 'offline'
-  | 'starting'
-  | 'stopped'
-  | 'conflict'
-  | 'error'
-  | 'unknown';
-
-export interface CommandStatus {
-  ok: boolean;
-  message: string;
-  code?: CommandStatusCode;
-}
+export type { CommandStatus, CommandStatusCode };
 
 interface DesktopSettings {
   selectedModel?: string;

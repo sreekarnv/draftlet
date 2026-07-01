@@ -1,26 +1,12 @@
-import type { DesktopExtensionDiagnosticsBridgeResult } from '@draftlet/shared/contracts';
-import type { GenerationRunMaintenanceDiagnosticsResult } from '@draftlet/shared/contracts';
+import type {
+  CommandStatus,
+  CommandStatusCode,
+  DesktopExtensionDiagnosticsBridgeResult,
+  GenerationRunMaintenanceDiagnosticsResult,
+  InstalledModel,
+} from '@draftlet/shared/contracts';
 
-export type CommandStatusCode =
-  | 'ready'
-  | 'missing'
-  | 'not_running'
-  | 'offline'
-  | 'starting'
-  | 'stopped'
-  | 'conflict'
-  | 'error'
-  | 'unknown';
-
-export interface CommandStatus {
-  ok: boolean;
-  message: string;
-  code?: CommandStatusCode;
-}
-
-export interface InstalledModel {
-  name: string;
-}
+export type { CommandStatus, CommandStatusCode, InstalledModel };
 
 export interface RuntimeState {
   ollamaInstalled: CommandStatus;
