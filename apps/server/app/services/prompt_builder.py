@@ -141,6 +141,7 @@ def build_prompt_instructions(request: ReplyRequest, source: str, context: Compa
         build_source_depth_instruction(source),
         build_source_coverage_instruction(source),
         build_concrete_detail_instruction(source),
+        build_platform_instruction(request.platform_id, source),
         build_reply_surface_instruction(request),
         build_reply_style_instruction(request),
         build_tone_mode_instruction(request),
@@ -344,6 +345,16 @@ def build_concrete_detail_instruction(source_text: str) -> str:
         return ""
 
     return "- For short sources, preserve concrete nouns, actions, topics, objects, and outcomes from the source; repeat the key noun phrase exactly in every reply instead of replacing it with vague synonyms, pronouns, or a vague acknowledgement."
+
+
+def build_platform_instruction(platform_id: str | None, source_text: str) -> str:
+    if platform_id not in {"gmail", "whatsapp"}:
+        return ""
+
+    if platform_id == "gmail":
+        return "- Reply platform is Gmail. Keep greetings and sign-offs optional unless the source uses them. Preserve formal markers when present in the source. Email may be longer than text message."
+
+    return "- Reply platform is WhatsApp. Do not include greeting or sign-off. Keep paragraphs short. Preserve concrete actions and objects verbatim. Emoji allowed only if the source uses them."
 
 
 def build_transactional_context_instruction(source_text: str) -> str:

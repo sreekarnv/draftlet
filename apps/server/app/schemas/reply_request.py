@@ -1,4 +1,9 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field, field_validator
+
+
+PlatformId = Literal["gmail", "whatsapp", "unknown"]
 
 
 class ReplyRequest(BaseModel):
@@ -16,6 +21,7 @@ class ReplyRequest(BaseModel):
     instruction: str | None = Field(default=None, max_length=4000)
     custom_tone_instruction: str | None = Field(default=None, max_length=1000)
     generation_mode: str = Field(default="initial", min_length=1, max_length=40)
+    platform_id: PlatformId | None = Field(default=None, max_length=40)
 
     @field_validator(
         "selected_text",
@@ -40,3 +46,16 @@ class ReplyRequest(BaseModel):
             return None
 
         return value.strip() or None
+
+    @field_validator("platform_id", mode="before")
+    @classmethod
+    def normalize_platform_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+
+        normalized = value.strip().lower()
+
+        if normalized in {"gmail", "whatsapp", "unknown"}:
+            return normalized
+
+        return "unknown"
