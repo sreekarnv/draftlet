@@ -1,0 +1,16 @@
+{
+  "name": "text_message",
+  "source": {
+    "selected_text": "Can you pick up dinner and text me when you're leaving?",
+    "tone": "casual",
+    "surface": "text_message"
+  },
+  "raw_model_output": "1. Yep, I can pick up dinner and text you when I am leaving.\n---\n2. Sure, I will grab dinner and text you before I head out.\n---\n3. I can do that. I will pick up dinner and text you when I leave.",
+  "expected_parsed": [
+    "Yep, I can pick up dinner and text you when I am leaving.",
+    "Sure, I will grab dinner and text you before I head out.",
+    "I can do that. I will pick up dinner and text you when I leave."
+  ],
+  "expected_forbidden_terms": ["dear", "sincerely", "best regards"],
+  "expected_required_terms": ["dinner"]
+}

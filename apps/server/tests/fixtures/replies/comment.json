@@ -1,0 +1,16 @@
+{
+  "name": "comment",
+  "source": {
+    "selected_text": "This PR changes the cache key. Any concerns before merge?",
+    "tone": "professional",
+    "surface": "comment"
+  },
+  "raw_model_output": "Here are three replies:\nThe cache key change looks reasonable to me, and I do not have concerns before merge.\n---\nI reviewed the cache key update and do not see any blockers for merge.\n---\nThe cache key change makes sense; I am comfortable moving forward with the merge.",
+  "expected_parsed": [
+    "The cache key change looks reasonable to me, and I do not have concerns before merge.",
+    "I reviewed the cache key update and do not see any blockers for merge.",
+    "The cache key change makes sense; I am comfortable moving forward with the merge."
+  ],
+  "expected_forbidden_terms": ["private", "confidential"],
+  "expected_required_terms": ["cache", "merge"]
+}

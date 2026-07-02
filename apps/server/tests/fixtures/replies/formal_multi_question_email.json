@@ -1,0 +1,16 @@
+{
+  "name": "formal_multi_question_email",
+  "source": {
+    "selected_text": "Hi Maya, can you confirm whether the Q3 launch brief is approved? Also, please send the revised pricing table by Friday and let me know who owns the customer note.",
+    "tone": "professional",
+    "surface": "email"
+  },
+  "raw_model_output": "Sure, here are three replies:\n1. Hi Maya, I can confirm the Q3 launch brief is approved. I will send the revised pricing table by Friday and confirm who owns the customer note.\n---\n2. Hi Maya, the Q3 launch brief is approved. I will get the revised pricing table to you by Friday and follow up with the owner for the customer note.\n---\n3. Hi Maya, I can confirm approval for the Q3 launch brief, send the revised pricing table by Friday, and clarify who owns the customer note.",
+  "expected_parsed": [
+    "Hi Maya, I can confirm the Q3 launch brief is approved. I will send the revised pricing table by Friday and confirm who owns the customer note.",
+    "Hi Maya, the Q3 launch brief is approved. I will get the revised pricing table to you by Friday and follow up with the owner for the customer note.",
+    "Hi Maya, I can confirm approval for the Q3 launch brief, send the revised pricing table by Friday, and clarify who owns the customer note."
+  ],
+  "expected_forbidden_terms": ["best regards", "sincerely"],
+  "expected_required_terms": ["q3", "friday", "customer"]
+}

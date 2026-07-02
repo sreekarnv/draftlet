@@ -24,14 +24,7 @@ export function useDesktopAppController() {
   const actionMessage = useAppStatusStore((state) => state.actionMessage);
   const busy = useAppStatusStore((state) => state.busy);
   const setupComplete = useAppStatusStore((state) => state.setupComplete);
-  const runtime = useRuntimeStore((state) => ({
-    ollamaInstalled: state.ollamaInstalled,
-    ollamaRunning: state.ollamaRunning,
-    model: state.model,
-    installedModels: state.installedModels,
-    selectedModel: state.selectedModel,
-    server: state.server,
-  }));
+  const runtime = useRuntimeStore();
 
   useEffect(() => {
     bindInitialStatusLoad();

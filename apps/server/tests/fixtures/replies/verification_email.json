@@ -1,0 +1,16 @@
+{
+  "name": "verification_email",
+  "source": {
+    "selected_text": "Subject: Notification: Account Verification Test Dear Customer, This is an automated message from [Company Name] to verify that your email notifications are properly configured.",
+    "tone": "professional",
+    "surface": "email"
+  },
+  "raw_model_output": "Here are three replies:\nThe account notifications are verified and properly configured.\n---\nThe verification test confirms the email notifications are configured correctly.\n---\nEmail notification verification is complete, and the account is configured correctly.",
+  "expected_parsed": [
+    "The account notifications are verified and properly configured.",
+    "The verification test confirms the email notifications are configured correctly.",
+    "Email notification verification is complete, and the account is configured correctly."
+  ],
+  "expected_forbidden_terms": ["thank you", "thanks", "confirm receipt", "dear customer"],
+  "expected_required_terms": ["configured"]
+}

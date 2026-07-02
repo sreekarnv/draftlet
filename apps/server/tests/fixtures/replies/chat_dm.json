@@ -1,0 +1,16 @@
+{
+  "name": "chat_dm",
+  "source": {
+    "selected_text": "Can you check the deploy logs when you get a minute?",
+    "tone": "casual",
+    "surface": "chat"
+  },
+  "raw_model_output": "Sure, I can check the deploy logs in a minute.\n---\nYep, I will take a look at the deploy logs shortly.\n---\nI can check the deploy logs now and let you know what I find.",
+  "expected_parsed": [
+    "Sure, I can check the deploy logs in a minute.",
+    "Yep, I will take a look at the deploy logs shortly.",
+    "I can check the deploy logs now and let you know what I find."
+  ],
+  "expected_forbidden_terms": ["sincerely", "best regards"],
+  "expected_required_terms": ["logs"]
+}
