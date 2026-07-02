@@ -11,6 +11,7 @@ from app.api.health import router as health_router
 from app.api.models import router as models_router
 from app.api.preferences import router as preferences_router
 from app.api.replies import router as replies_router
+from app.api.search import router as search_router
 from app.core.database import SessionLocal
 from app.core.config import get_settings
 from app.schemas.domain import GenerationRunReconcileRequest
@@ -91,3 +92,4 @@ app.include_router(domain_router)
 app.include_router(preferences_router)
 app.include_router(models_router)
 app.include_router(diagnostics_router)
+app.include_router(search_router)

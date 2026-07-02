@@ -4,4 +4,5 @@ export * from './platforms';
 export * from './recapture-diagnostics';
 export * from './generation-run-maintenance-diagnostics';
 export * from './runtime-models';
+export * from './search';
 export * from './support-bundle';
