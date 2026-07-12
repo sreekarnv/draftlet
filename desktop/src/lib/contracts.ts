@@ -1,10 +1,8 @@
-export type Connector = "Gmail" | "Telegram";
+export type Connector = "gmail" | "telegram";
 
 export type DraftStatus = "generating" | "ready" | "accepted" | "sent";
 
-export type Tone = "Direct" | "Warm" | "Formal" | "Friendly";
-export type Length = "Short" | "Medium" | "Long";
-export type Coverage = "Brief" | "Answer all points" | "Detailed";
+export type { Coverage, Length, Tone } from "@/lib/contracts.ui";
 
 export type MessageKind = "incoming" | "outgoing" | "draft" | "accepted";
 

@@ -12,6 +12,7 @@ import { Home } from "@/routes/home";
 import { Library } from "@/routes/library";
 import { Search } from "@/routes/search";
 import { Settings } from "@/routes/settings";
+import { QueryProvider } from "@/shared/components/query-provider";
 
 const router = createBrowserRouter([
   {
@@ -33,6 +34,8 @@ const router = createBrowserRouter([
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <RouterProvider router={router} />
+    <QueryProvider>
+      <RouterProvider router={router} />
+    </QueryProvider>
   </React.StrictMode>,
 );

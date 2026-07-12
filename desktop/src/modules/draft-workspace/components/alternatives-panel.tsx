@@ -24,9 +24,7 @@ export function AlternativesPanel({
         <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
           Drafts
         </p>
-        <h2 className="mt-1 truncate text-sm font-semibold tracking-tight">
-          Alternatives
-        </h2>
+        <h2 className="mt-1 truncate text-sm font-semibold tracking-tight">Alternatives</h2>
       </div>
       <ScrollArea className="min-h-0 flex-1">
         <DraftVariantList
@@ -36,12 +34,7 @@ export function AlternativesPanel({
         />
       </ScrollArea>
       <div className="p-3">
-        <Button
-          className="w-full"
-          size="sm"
-          variant="secondary"
-          onClick={onGenerateVariant}
-        >
+        <Button className="w-full" size="sm" variant="secondary" onClick={onGenerateVariant}>
           <RefreshCw className="size-3.5" />
           Generate variant
         </Button>

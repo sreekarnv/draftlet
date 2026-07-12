@@ -10,12 +10,15 @@ import {
 } from "@/modules/home/utils";
 import { Button } from "@/shared/components/ui/button";
 import { SectionCard } from "@/shared/components/ui/section-card";
-import { useDraftletStore } from "@/state/draftlet-store";
+import { useRuntimeStatus } from "@/lib/runtime-status";
+import { useConversationsQuery } from "@/lib/queries/conversations";
+import { useDraftsQuery } from "@/lib/queries/drafts";
 import { Link } from "react-router";
 
 export function Home() {
-  const conversations = useDraftletStore((s) => s.conversations);
-  const drafts = useDraftletStore((s) => s.drafts);
+  const conversations = useConversationsQuery().data ?? [];
+  const drafts = useDraftsQuery().data ?? [];
+  const runtime = useRuntimeStatus();
   const primaryDraft = getPrimaryDraft(drafts);
 
   return (
@@ -66,7 +69,7 @@ export function Home() {
             />
           </SectionCard>
           <SectionCard title="Runtime and connectors" description="Local readiness at a glance.">
-            <StatusSummary items={getStatusItems()} />
+            <StatusSummary items={getStatusItems(runtime.runtime, runtime.ollama)} />
           </SectionCard>
         </div>
 

@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { Command } from "lucide-react";
 
 import { draftletNavigation } from "@/lib/navigation";
+import { useRuntimeStatus } from "@/lib/runtime-status";
 import { StatusDot } from "@/components/status-dot";
 import { cn } from "@/shared/lib/utils";
 import {
@@ -103,6 +104,8 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
 
 
 export function AppSidebar({ activePath, ...props }: AppSidebarProps) {
+  const runtime = useRuntimeStatus();
+  
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar" {...props}>
       <SidebarHeader className="h-14 justify-center px-2 py-2">
@@ -137,8 +140,8 @@ export function AppSidebar({ activePath, ...props }: AppSidebarProps) {
           Local status
         </div>
         <div className="space-y-1">
-          <StatusRow label="Draftlet Runtime" value="Not connected" tone="offline" />
-          <StatusRow label="Ollama Provider" value="Model not selected" tone="offline" />
+          <StatusRow label="Draftlet Runtime" value={runtime.runtime === "ready" ? "Connected" : "Not connected"} tone={runtime.runtime} />
+          <StatusRow label="Ollama Provider" value={runtime.ollama === "ready" ? "Available" : "Not connected"} tone={runtime.ollama} />
         </div>
       </SidebarFooter>
       <SidebarRail />

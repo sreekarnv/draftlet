@@ -14,7 +14,6 @@ import { TooltipProvider } from "@/shared/components/ui/tooltip";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { draftletNavigation, type DraftletNavItem } from "@/lib/navigation";
-import { useDraftletStore } from "@/state/draftlet-store";
 
 type Crumb = {
   label: string;
@@ -93,12 +92,6 @@ export const DefaultLayout = () => {
   const location = useLocation();
   const activeItem = getActiveNavItem(location.pathname);
   const crumbs = getBreadcrumbs(location.pathname);
-  const hydrated = useDraftletStore((s) => s.hydrated);
-
-  if (!hydrated) {
-    return <div className="dark min-h-screen bg-background text-foreground" />;
-  }
-
   return (
     <TooltipProvider>
       <SidebarProvider>

@@ -1,12 +1,13 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router";
 
+import { useConversationsQuery } from "@/lib/queries/conversations";
+import { useDraftsQuery } from "@/lib/queries/drafts";
 import { MissingResourceState } from "@/shared/components/missing-resource-state";
-import { useDraftletStore } from "@/state/draftlet-store";
 
 export function DraftsIndex() {
-  const firstDraft = useDraftletStore((s) => s.drafts[0]);
-  const conversations = useDraftletStore((s) => s.conversations);
+  const firstDraft = useDraftsQuery().data?.[0];
+  const conversations = useConversationsQuery().data ?? [];
   const navigate = useNavigate();
 
   useEffect(() => {

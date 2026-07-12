@@ -1,5 +1,6 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, ipcMain, net } from "electron";
 import { createRequire } from "node:module";
+import { spawn, type ChildProcess } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -27,6 +28,20 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   : RENDERER_DIST;
 
 let win: BrowserWindow | null;
+let runtime: ChildProcess | null = null;
+
+function startRuntime() {
+  if (!VITE_DEV_SERVER_URL || runtime) return;
+  const runtimeRoot = path.resolve(process.env.APP_ROOT, "..", "api");
+  runtime = spawn("sh", ["-c", "uv run alembic-upgrade && uv run dev"], { cwd: runtimeRoot, stdio: "inherit" });
+  runtime.on("exit", () => { runtime = null; });
+}
+
+ipcMain.handle("runtime:request", async (_event, path: string, init?: RequestInit) => {
+  const response = await net.fetch(`http://127.0.0.1:8000${path}`, init);
+  const body = await response.text();
+  return { ok: response.ok, status: response.status, body };
+});
 
 function createWindow() {
   const { screen } = require("electron");
@@ -75,4 +90,9 @@ app.on("activate", () => {
   }
 });
 
-app.whenReady().then(createWindow);
+app.on("before-quit", () => { runtime?.kill(); });
+
+app.whenReady().then(() => {
+  startRuntime();
+  createWindow();
+});

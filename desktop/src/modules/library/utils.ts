@@ -4,10 +4,10 @@ import { LibraryFilter } from "./types";
 export function matchesFilter(conversation: Conversation, filter: LibraryFilter) {
   switch (filter) {
     case LibraryFilter.GMAIL:
-      return conversation.connector === "Gmail";
+      return conversation.connector === "gmail";
 
     case LibraryFilter.TELEGRAM:
-      return conversation.connector === "Telegram";
+      return conversation.connector === "telegram";
 
     case LibraryFilter.DRAFT_PENDING:
       return conversation.draftPending;

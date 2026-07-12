@@ -1,10 +1,5 @@
 import { FileText, Library, Mail, MessageCircle, PlugZap, Server, Sparkles } from "lucide-react";
 import type { Conversation, Draft } from "@/lib/contracts";
-import {
-  mockConnectorStatuses,
-  mockOllamaProviderStatus,
-  mockRuntimeStatus,
-} from "@/lib/mock-data";
 import type { ActivityItem, QuickAction, StatusItem } from "@/modules/home/types";
 
 export function getPrimaryDraft(drafts: Draft[]): Draft | undefined {
@@ -31,12 +26,30 @@ export function getFollowUpDrafts(drafts: Draft[]): ActivityItem[] {
     }));
 }
 
-export function getStatusItems(): StatusItem[] {
+export function getStatusItems(runtime = "offline", ollama = "offline"): StatusItem[] {
   return [
-    { ...mockRuntimeStatus, icon: Server },
-    { ...mockOllamaProviderStatus, icon: Sparkles },
-    { ...mockConnectorStatuses[0], icon: Mail },
-    { ...mockConnectorStatuses[1], icon: MessageCircle },
+    {
+      label: "Draftlet Runtime",
+      value: runtime === "ready" ? "Ready" : "Offline",
+      detail: runtime === "ready" ? "Connected" : "Not connected",
+      state: runtime,
+      icon: Server,
+    },
+    {
+      label: "Ollama Provider",
+      value: ollama === "ready" ? "Ready" : "Offline",
+      detail: ollama === "ready" ? "Available" : "Not connected",
+      state: ollama,
+      icon: Sparkles,
+    },
+    { label: "Gmail", value: "Offline", detail: "Not connected", state: "offline", icon: Mail },
+    {
+      label: "Telegram",
+      value: "Offline",
+      detail: "Not connected",
+      state: "offline",
+      icon: MessageCircle,
+    },
   ];
 }
 

@@ -22,9 +22,7 @@ export function PlaceholderPage({
           {eyebrow}
         </p>
         <h2 className="mt-3 text-2xl font-semibold tracking-tight">{title}</h2>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          {description}
-        </p>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
         <p className="mt-5 text-xs text-muted-foreground">{note}</p>
       </div>
     </section>

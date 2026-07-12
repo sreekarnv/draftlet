@@ -6,7 +6,7 @@ import type { Connector, OllamaProviderStatus, RuntimeStatus } from "@/lib/contr
 type BadgeStatus = RuntimeStatus | OllamaProviderStatus | "connected";
 
 function iconFor(connector: Connector) {
-  return connector === "Gmail" ? Mail : MessageCircle;
+  return connector === "gmail" ? Mail : MessageCircle;
 }
 
 function toneFor(status: BadgeStatus): StatusTone {
@@ -33,7 +33,7 @@ export function ConnectorBadge({
   label,
 }: ConnectorBadgeProps) {
   const Icon = iconFor(connector);
-  const resolvedLabel = label ?? connector;
+  const resolvedLabel = label ?? (connector === "gmail" ? "Gmail" : "Telegram");
   return (
     <StatusBadge tone={toneFor(status)}>
       <Icon className="size-3" aria-hidden="true" />

@@ -3,21 +3,17 @@ import { useNavigate, useParams } from "react-router";
 import { ConversationHeader } from "@/modules/conversation-detail/components/conversation-header";
 import { MessageTimeline } from "@/modules/conversation-detail/components/message-timeline";
 import { useMarkConversationCaptured } from "@/modules/conversation-detail/hooks/use-mark-conversation-captured";
+import { useConversationQuery } from "@/lib/queries/conversations";
+import { useGenerateDraft } from "@/lib/queries/drafts";
 import { MissingResourceState } from "@/shared/components/missing-resource-state";
-import { useDraftletStore } from "@/state/draftlet-store";
 
 export function ConversationDetail() {
   const { conversationId } = useParams<{ conversationId: string }>();
-  const conversation = useDraftletStore((state) =>
-    state.conversations.find((item) => item.id === conversationId),
-  );
-  const generateDraftFromConversation = useDraftletStore(
-    (state) => state.generateDraftFromConversation,
-  );
-  const markConversationCaptured = useDraftletStore((state) => state.markConversationCaptured);
+  const conversation = useConversationQuery(conversationId).data;
+  const generateDraft = useGenerateDraft();
   const navigate = useNavigate();
 
-  useMarkConversationCaptured(conversation?.id, markConversationCaptured);
+  useMarkConversationCaptured(conversation?.id, conversation?.recentlyCaptured);
 
   if (!conversation) {
     return (
@@ -30,12 +26,9 @@ export function ConversationDetail() {
 
   const selectedConversation = conversation;
 
-  function handleGenerate() {
-    const draftId = generateDraftFromConversation(selectedConversation.id);
-
-    if (draftId) {
-      void navigate(`/drafts/${draftId}`);
-    }
+  async function handleGenerate() {
+    const draft = await generateDraft.mutateAsync({ conversationId: selectedConversation.id });
+    void navigate(`/drafts/${draft.id}`);
   }
 
   function handleCopyLatest() {
@@ -48,7 +41,7 @@ export function ConversationDetail() {
     <main className="min-h-full overflow-auto bg-background">
       <ConversationHeader
         conversation={selectedConversation}
-        onGenerate={handleGenerate}
+        onGenerate={() => void handleGenerate()}
         onCopyLatest={handleCopyLatest}
       />
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-8">

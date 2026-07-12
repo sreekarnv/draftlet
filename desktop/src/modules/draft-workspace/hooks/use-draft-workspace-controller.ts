@@ -1,23 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { Coverage, Length, Tone } from "@/lib/contracts";
+import { useConversationsQuery } from "@/lib/queries/conversations";
+import { useAcceptDraft, useAddDraftVariant, useDraftQuery, useMarkDraftSent, useUpdateDraft } from "@/lib/queries/drafts";
 import type { DraftWorkspaceView, WorkspaceToast } from "@/modules/draft-workspace/types";
 import {
   generateDraftVariant,
   getDraftSource,
   getDraftStatusLabel,
 } from "@/modules/draft-workspace/utils";
-import { useDraftletStore } from "@/state/draftlet-store";
 
 export function useDraftWorkspaceController(draftId: string | undefined): DraftWorkspaceView {
-  const draft = useDraftletStore((state) => state.drafts.find((item) => item.id === draftId));
-  const conversation = useDraftletStore((state) =>
-    draft ? state.conversations.find((item) => item.id === draft.conversationId) : undefined,
-  );
-  const updateDraft = useDraftletStore((state) => state.updateDraft);
-  const addDraftVariant = useDraftletStore((state) => state.addDraftVariant);
-  const acceptDraft = useDraftletStore((state) => state.acceptDraft);
-  const markDraftSent = useDraftletStore((state) => state.markDraftSent);
+  const draft = useDraftQuery(draftId).data;
+  const conversation = useConversationsQuery().data?.find((item) => item.id === draft?.conversationId);
+  const updateDraft = useUpdateDraft();
+  const addDraftVariant = useAddDraftVariant();
+  const acceptDraft = useAcceptDraft();
+  const markDraftSent = useMarkDraftSent();
 
   const [tone, setTone] = useState<Tone>("Direct");
   const [length, setLength] = useState<Length>("Short");
@@ -87,10 +86,10 @@ export function useDraftWorkspaceController(draftId: string | undefined): DraftW
       return;
     }
 
-    updateDraft(draft.id, {
+    updateDraft.mutate({ id: draft.id, patch: {
       text: draftText,
       selectedVariantId: selectedVariant || undefined,
-    });
+    } });
     flashToast("Saved");
   }
 
@@ -106,8 +105,8 @@ export function useDraftWorkspaceController(draftId: string | undefined): DraftW
       return;
     }
 
-    updateDraft(draft.id, { text: draftText });
-    acceptDraft(draft.id);
+    updateDraft.mutate({ id: draft.id, patch: { text: draftText } });
+    acceptDraft.mutate(draft.id);
     flashToast("Inserted into conversation");
   }
 
@@ -116,7 +115,7 @@ export function useDraftWorkspaceController(draftId: string | undefined): DraftW
       return;
     }
 
-    markDraftSent(draft.id);
+    markDraftSent.mutate(draft.id);
     flashToast("Marked as sent");
   }
 
@@ -132,7 +131,7 @@ export function useDraftWorkspaceController(draftId: string | undefined): DraftW
       variantNumber: draft.variants.length + 1,
     });
 
-    addDraftVariant(draft.id, variant);
+    addDraftVariant.mutate({ id: draft.id, variant });
     flashToast(`Variant “${variant.title}” added`);
   }
 

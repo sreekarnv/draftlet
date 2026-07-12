@@ -44,9 +44,7 @@ export function EditorCanvas({
             <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
               Instruction
             </p>
-            <p className="text-sm leading-6 text-muted-foreground">
-              {instruction}
-            </p>
+            <p className="text-sm leading-6 text-muted-foreground">{instruction}</p>
           </section>
 
           <section className="rounded-lg bg-card px-6 py-7 text-card-foreground shadow-sm ring-1 ring-border/60 sm:px-8 sm:py-8 lg:px-10 lg:py-9">
@@ -73,14 +71,14 @@ export function EditorCanvas({
             />
             {isInserted ? (
               <p className="mt-4 text-xs text-muted-foreground">
-                Inserted into the conversation timeline. Open the conversation
-                to view the accepted message.
+                Inserted into the conversation timeline. Open the conversation to view the accepted
+                message.
               </p>
             ) : null}
             {!isInserted && userIsEditing ? (
               <p className="mt-4 text-xs text-muted-foreground">
-                Editing the selected variant. Click another variant to swap, or
-                press Save to keep your changes.
+                Editing the selected variant. Click another variant to swap, or press Save to keep
+                your changes.
               </p>
             ) : null}
           </section>

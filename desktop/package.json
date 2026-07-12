@@ -9,10 +9,14 @@
     "dev": "vp dev",
     "build": "tsc && vp build && electron-builder",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vp preview"
+    "preview": "vp preview",
+    "contracts:pull": "curl -fsS http://127.0.0.1:8000/openapi.json -o openapi.json",
+    "contracts:gen": "pnpm contracts:pull && openapi-typescript openapi.json -o src/lib/contracts.generated.ts",
+    "contracts:check": "pnpm contracts:gen && git diff --exit-code src/lib/contracts.generated.ts"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",
+    "@tanstack/react-query": "^5.101.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.23.0",
@@ -39,6 +43,7 @@
     "eslint": "^8.57.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
+    "openapi-typescript": "^7.13.0",
     "tailwindcss": "^4.3.2",
     "typescript": "^5.2.2",
     "vite": "catalog:",

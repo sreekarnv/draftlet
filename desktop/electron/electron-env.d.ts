@@ -21,7 +21,10 @@ declare namespace NodeJS {
   }
 }
 
-// Used in Renderer process, expose in `preload.ts`
 interface Window {
-  ipcRenderer: import("electron").IpcRenderer;
+  draftlet?: {
+    runtime: {
+      request: (path: string, init?: RequestInit) => Promise<{ ok: boolean; status: number; body: string }>;
+    };
+  };
 }

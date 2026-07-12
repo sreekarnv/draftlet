@@ -1,0 +1,11 @@
+export const queryKeys = {
+  health: ["health"] as const,
+  conversations: ["conversations"] as const,
+  conversation: (id: string) => ["conversations", id] as const,
+  drafts: ["drafts"] as const,
+  draft: (id: string) => ["drafts", id] as const,
+  connectors: ["connectors"] as const,
+  captures: ["captures"] as const,
+  setting: (key: string) => ["settings", key] as const,
+  ollamaModels: ["ollama", "models"] as const,
+};
