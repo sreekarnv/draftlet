@@ -1,4 +1,12 @@
-import type { Conversation, Coverage, Draft, DraftVariant, Length, Tone } from "@/lib/contracts";
+import type {
+  Conversation,
+  Coverage,
+  Draft,
+  DraftVariant,
+  Length,
+  SearchResult,
+  Tone,
+} from "@/lib/contracts";
 
 const baseUrl = "http://127.0.0.1:8000/api/v1";
 
@@ -20,6 +28,7 @@ type ApiConversation = Omit<
   draft_ids: string[];
   latest_draft_id: string | null;
 };
+
 type ApiDraft = Omit<
   Draft,
   "conversationId" | "selectedVariantId" | "selectedMessages" | "createdAt" | "updatedAt"
@@ -30,8 +39,18 @@ type ApiDraft = Omit<
   created_at: string;
   updated_at: string;
 };
-type ApiConnector = { id: string; kind: string; name: string; enabled: boolean; config: Record<string, unknown>; updated_at: string };
+
+type ApiConnector = {
+  id: string;
+  kind: string;
+  name: string;
+  enabled: boolean;
+  config: Record<string, unknown>;
+  updated_at: string;
+};
+
 type ApiSetting = { key: string; value: unknown; updated_at: string };
+
 export type CaptureCreate = {
   connector_kind: "gmail" | "telegram";
   source_message_id: string;
@@ -41,6 +60,7 @@ export type CaptureCreate = {
   body: string;
   author?: string;
 };
+
 export type ApiCapture = {
   id: string;
   connector_kind: string;
@@ -49,6 +69,11 @@ export type ApiCapture = {
   message_id: string | null;
   status: string;
   captured_at: string;
+};
+
+type ApiSearchResult = Omit<SearchResult, "itemType" | "updatedAt"> & {
+  item_type: SearchResult["itemType"];
+  updated_at: string;
 };
 
 function conversation(value: ApiConversation): Conversation {
@@ -71,6 +96,14 @@ function draft(value: ApiDraft): Draft {
     selectedVariantId: value.selected_variant_id ?? undefined,
     selectedMessages: value.selected_messages,
     createdAt: value.created_at,
+    updatedAt: value.updated_at,
+  };
+}
+
+function searchResult(value: ApiSearchResult): SearchResult {
+  return {
+    ...value,
+    itemType: value.item_type,
     updatedAt: value.updated_at,
   };
 }
@@ -111,13 +144,19 @@ export const runtimeClient = {
     return request<ApiConnector[]>("/connectors");
   },
   async updateConnector(id: string, patch: Partial<Pick<ApiConnector, "enabled" | "config">>) {
-    return request<ApiConnector>(`/connectors/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+    return request<ApiConnector>(`/connectors/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    });
   },
   async getSetting(key: string) {
     return request<ApiSetting>(`/settings/${key}`);
   },
   async updateSetting(key: string, value: unknown) {
-    return request<ApiSetting>(`/settings/${key}`, { method: "PATCH", body: JSON.stringify({ value }) });
+    return request<ApiSetting>(`/settings/${key}`, {
+      method: "PATCH",
+      body: JSON.stringify({ value }),
+    });
   },
   async listOllamaModels() {
     return request<string[]>("/ollama/models");
@@ -128,6 +167,10 @@ export const runtimeClient = {
   },
   async ingestCapture(payload: CaptureCreate) {
     return request<ApiCapture>("/captures", { method: "POST", body: JSON.stringify(payload) });
+  },
+  async search(q: string) {
+    const value = await request<{ items: ApiSearchResult[] }>(`/search?q=${encodeURIComponent(q)}`);
+    return value.items.map(searchResult);
   },
   async generate(
     conversationId: string,
@@ -167,7 +210,12 @@ export const runtimeClient = {
     return draft(await request<ApiDraft>(`/drafts/${id}/mark-sent`, { method: "POST" }));
   },
   async markConversationCaptured(id: string) {
-    return conversation(await request<ApiConversation>(`/conversations/${id}`, { method: "PATCH", body: JSON.stringify({ recently_captured: true }) }));
+    return conversation(
+      await request<ApiConversation>(`/conversations/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ recently_captured: true }),
+      }),
+    );
   },
   async health() {
     if (window.draftlet) {

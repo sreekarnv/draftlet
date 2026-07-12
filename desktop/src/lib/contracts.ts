@@ -58,3 +58,12 @@ export type Conversation = {
 
 export type RuntimeStatus = "offline" | "ready" | "warning";
 export type OllamaProviderStatus = "ready" | "offline" | "warning";
+
+export type SearchResult = {
+  itemType: "conversation" | "draft";
+  id: string;
+  title: string;
+  subtitle: string;
+  snippet: string;
+  updatedAt: string;
+};

@@ -8,4 +8,5 @@ export const queryKeys = {
   captures: ["captures"] as const,
   setting: (key: string) => ["settings", key] as const,
   ollamaModels: ["ollama", "models"] as const,
+  search: (q: string) => ["search", q] as const,
 };

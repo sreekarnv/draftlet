@@ -29,7 +29,9 @@ export function Library() {
   const conversations = useConversationsQuery().data ?? [];
   const generateDraft = useGenerateDraft();
   const selectedLibraryConversationId = useDraftletStore((s) => s.selectedLibraryConversationId);
-  const setSelectedLibraryConversationId = useDraftletStore((s) => s.setSelectedLibraryConversationId);
+  const setSelectedLibraryConversationId = useDraftletStore(
+    (s) => s.setSelectedLibraryConversationId,
+  );
   const [state, dispatch] = useReducer(libraryReducer, {
     activeFilter: LibraryFilter.ALL,
     query: "",
@@ -159,7 +161,10 @@ export function Library() {
         </ScrollArea>
       </div>
 
-      <ConversationPreview conversation={selectedConversation} onGenerate={(id) => void handleGenerate(id)} />
+      <ConversationPreview
+        conversation={selectedConversation}
+        onGenerate={(id) => void handleGenerate(id)}
+      />
     </section>
   );
 }

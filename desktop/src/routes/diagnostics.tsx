@@ -31,34 +31,61 @@ export function Diagnostics() {
             Live status for the local runtime, Ollama provider, and connector rows.
           </p>
         </div>
-        <Button type="button" size="sm" variant="secondary" onClick={refresh}>Refresh</Button>
+        <Button type="button" size="sm" variant="secondary" onClick={refresh}>
+          Refresh
+        </Button>
       </header>
 
       <SectionCard title="Runtime health" description="Polled from /health every 15 seconds.">
         <div className="grid gap-3 sm:grid-cols-2">
-          <StatusTile label="Database" ok={Boolean(health.data?.database?.ok)} detail={health.data?.database?.detail} />
-          <StatusTile label="Ollama" ok={Boolean(health.data?.ollama?.ok)} detail={health.data?.ollama?.detail} />
+          <StatusTile
+            label="Database"
+            ok={Boolean(health.data?.database?.ok)}
+            detail={health.data?.database?.detail}
+          />
+          <StatusTile
+            label="Ollama"
+            ok={Boolean(health.data?.ollama?.ok)}
+            detail={health.data?.ollama?.detail}
+          />
         </div>
       </SectionCard>
 
-      <SectionCard title="Installed Ollama models" description="Model names reported by the local Ollama API.">
+      <SectionCard
+        title="Installed Ollama models"
+        description="Model names reported by the local Ollama API."
+      >
         {models.data?.length ? (
-          <div className="flex flex-wrap gap-2 text-sm">{models.data.map((name) => <span key={name} className="rounded-md border px-2 py-1">{name}</span>)}</div>
+          <div className="flex flex-wrap gap-2 text-sm">
+            {models.data.map((name) => (
+              <span key={name} className="rounded-md border px-2 py-1">
+                {name}
+              </span>
+            ))}
+          </div>
         ) : (
           <p className="text-sm text-muted-foreground">No models available.</p>
         )}
       </SectionCard>
 
-      <SectionCard title="Connectors" description="Connector rows currently persisted in the runtime database.">
+      <SectionCard
+        title="Connectors"
+        description="Connector rows currently persisted in the runtime database."
+      >
         {connectors.data?.length ? (
           <div className="divide-y divide-border rounded-lg border">
             {connectors.data.map((connector) => (
-              <div key={connector.id} className="flex items-center justify-between gap-4 px-3 py-2 text-sm">
+              <div
+                key={connector.id}
+                className="flex items-center justify-between gap-4 px-3 py-2 text-sm"
+              >
                 <div>
                   <p className="font-medium">{connector.name}</p>
                   <p className="text-xs text-muted-foreground">{connector.kind}</p>
                 </div>
-                <span className="text-xs text-muted-foreground">{connector.enabled ? "Enabled" : "Disabled"}</span>
+                <span className="text-xs text-muted-foreground">
+                  {connector.enabled ? "Enabled" : "Disabled"}
+                </span>
               </div>
             ))}
           </div>
@@ -74,7 +101,9 @@ function StatusTile({ label, ok, detail }: { label: string; ok: boolean; detail?
   return (
     <div className="rounded-lg border bg-background p-3">
       <p className="text-sm font-medium">{label}</p>
-      <p className={ok ? "mt-1 text-sm text-emerald-500" : "mt-1 text-sm text-destructive"}>{ok ? "Ready" : "Offline"}</p>
+      <p className={ok ? "mt-1 text-sm text-emerald-500" : "mt-1 text-sm text-destructive"}>
+        {ok ? "Ready" : "Offline"}
+      </p>
       {detail ? <p className="mt-2 text-xs text-muted-foreground">{detail}</p> : null}
     </div>
   );
