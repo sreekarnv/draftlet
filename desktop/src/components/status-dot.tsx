@@ -12,13 +12,26 @@ const toneClass: Record<StatusTone, string> = {
   generating: "bg-teal-400/80",
 };
 
-export function StatusDot({ tone, className }: { tone: StatusTone; className?: string }) {
+export interface StatusDotProps {
+  tone: StatusTone;
+  className?: string;
+}
+
+export function StatusDot({ tone, className }: StatusDotProps) {
   return (
-    <span className={cn("size-2 rounded-full", toneClass[tone], className)} aria-hidden="true" />
+    <span
+      className={cn("size-2 rounded-full", toneClass[tone], className)}
+      aria-hidden="true"
+    />
   );
 }
 
-export function StatusBadge({ tone, children }: { tone: StatusTone; children: ReactNode }) {
+export interface StatusBadgeProps {
+  tone: StatusTone;
+  children: ReactNode;
+}
+
+export function StatusBadge({ tone, children }: StatusBadgeProps) {
   return (
     <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
       <StatusDot tone={tone} />

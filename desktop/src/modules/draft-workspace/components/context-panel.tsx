@@ -7,6 +7,16 @@ import { coverageOptions, lengthOptions, toneOptions } from "@/modules/draft-wor
 import { ScrollArea } from "@/shared/components/ui/scroll-area";
 import type { Coverage, Length, Tone } from "@/lib/contracts";
 
+export interface ContextPanelProps {
+  source: DraftSource;
+  settings: DraftSettings;
+  onToneChange: (value: Tone) => void;
+  onLengthChange: (value: Length) => void;
+  onCoverageChange: (value: Coverage) => void;
+  selectedMessages: Array<{ author: string; detail: string }>;
+  references: string[];
+}
+
 export function ContextPanel({
   source,
   settings,
@@ -15,22 +25,16 @@ export function ContextPanel({
   onCoverageChange,
   selectedMessages,
   references,
-}: {
-  source: DraftSource;
-  settings: DraftSettings;
-  onToneChange: (value: Tone) => void;
-  onLengthChange: (value: Length) => void;
-  onCoverageChange: (value: Coverage) => void;
-  selectedMessages: Array<{ author: string; detail: string }>;
-  references: string[];
-}) {
+}: ContextPanelProps) {
   return (
     <aside className="flex h-full min-h-0 flex-col bg-muted/50">
       <div className="px-4 py-4">
         <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
           Context
         </p>
-        <h2 className="mt-1 truncate text-sm font-semibold tracking-tight">{source.title}</h2>
+        <h2 className="mt-1 truncate text-sm font-semibold tracking-tight">
+          {source.title}
+        </h2>
       </div>
 
       <ScrollArea className="min-h-0 flex-1">
@@ -67,13 +71,17 @@ export function ContextPanel({
 
           <InspectorSection title="Selected messages">
             {selectedMessages.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No source messages selected.</p>
+              <p className="text-xs text-muted-foreground">
+                No source messages selected.
+              </p>
             ) : (
               <div className="space-y-3">
                 {selectedMessages.map((message) => (
                   <div key={message.detail}>
                     <p className="text-sm font-medium">{message.author}</p>
-                    <p className="mt-1 text-xs leading-5 text-muted-foreground">{message.detail}</p>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                      {message.detail}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -83,7 +91,10 @@ export function ContextPanel({
           <InspectorSection title="References">
             <div className="space-y-2">
               {references.map((reference) => (
-                <div key={reference} className="flex items-center gap-2 text-sm">
+                <div
+                  key={reference}
+                  className="flex items-center gap-2 text-sm"
+                >
                   <FileText className="size-3.5 text-muted-foreground" />
                   <span>{reference}</span>
                 </div>

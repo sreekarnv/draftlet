@@ -1,6 +1,12 @@
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/shared/components/ui/empty";
 
-export function EmptyState({ title, description }: { title: string; description: string }) {
+
+interface EmptyStateProps {
+  title: string;
+  description: string;
+}
+
+export function EmptyState({ title, description }: EmptyStateProps) {
   return (
     <Empty className="min-h-72 rounded-none border-0">
       <EmptyHeader>

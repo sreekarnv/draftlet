@@ -3,15 +3,18 @@ import { CheckCircle2 } from "lucide-react";
 import type { DraftVariantListItem } from "@/modules/draft-workspace/types";
 import { cn } from "@/shared/lib/utils";
 
+
+export interface DraftVariantListProps {
+  variants: DraftVariantListItem[];
+  selectedVariant: string;
+  onSelect: (id: string) => void;
+}
+
 export function DraftVariantList({
   variants,
   selectedVariant,
   onSelect,
-}: {
-  variants: DraftVariantListItem[];
-  selectedVariant: string;
-  onSelect: (id: string) => void;
-}) {
+}: DraftVariantListProps) {
   if (variants.length === 0) {
     return (
       <div className="px-3 py-4 text-xs text-muted-foreground">

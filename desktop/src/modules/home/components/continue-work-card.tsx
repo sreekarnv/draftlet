@@ -6,7 +6,11 @@ import { StatusBadge } from "@/components/status-dot";
 import { Button } from "@/shared/components/ui/button";
 import { SectionCard } from "@/shared/components/ui/section-card";
 
-export function ContinueWorkCard({ primaryDraft }: { primaryDraft?: Draft }) {
+export interface ContinueWorkCardProps {
+  primaryDraft?: Draft;
+}
+
+export function ContinueWorkCard({ primaryDraft }: ContinueWorkCardProps) {
   return (
     <SectionCard
       title="Continue work"

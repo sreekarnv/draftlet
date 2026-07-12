@@ -13,21 +13,25 @@ function toneFor(status: BadgeStatus): StatusTone {
   if (status === "ready" || status === "connected") {
     return "ready";
   }
+
   if (status === "warning") {
     return "warning";
   }
+
   return "offline";
+}
+
+interface ConnectorBadgeProps {
+  connector: Connector;
+  status?: BadgeStatus;
+  label?: string;
 }
 
 export function ConnectorBadge({
   connector,
   status = "offline",
   label,
-}: {
-  connector: Connector;
-  status?: BadgeStatus;
-  label?: string;
-}) {
+}: ConnectorBadgeProps) {
   const Icon = iconFor(connector);
   const resolvedLabel = label ?? connector;
   return (

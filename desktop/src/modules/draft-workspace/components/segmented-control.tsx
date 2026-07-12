@@ -1,17 +1,19 @@
 import { Button } from "@/shared/components/ui/button";
 import { cn } from "@/shared/lib/utils";
 
+export interface SegmentedControlProps<T> {
+  label: string;
+  options: readonly T[];
+  value: T;
+  onChange: (value: T) => void;
+}
+
 export function SegmentedControl<T extends string>({
   label,
   options,
   value,
   onChange,
-}: {
-  label: string;
-  options: readonly T[];
-  value: T;
-  onChange: (value: T) => void;
-}) {
+}: SegmentedControlProps<T>) {
   return (
     <section className="min-w-0 space-y-2">
       <p className="truncate text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">

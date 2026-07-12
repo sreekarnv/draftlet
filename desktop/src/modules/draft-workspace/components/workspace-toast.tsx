@@ -1,6 +1,10 @@
 import type { WorkspaceToast as WorkspaceToastState } from "@/modules/draft-workspace/types";
 
-export function WorkspaceToast({ toast }: { toast: WorkspaceToastState | null }) {
+export interface WorkspaceToastProps {
+  toast: WorkspaceToastState | null;
+}
+
+export function WorkspaceToast({ toast }: WorkspaceToastProps) {
   if (!toast) {
     return null;
   }

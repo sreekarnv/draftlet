@@ -20,24 +20,25 @@ import {
   SidebarSeparator,
 } from "@/shared/components/ui/sidebar";
 
-type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
-  activePath: string;
-};
 
-const workspacePaths = new Set(["/", "/library", "/drafts", "/connectors", "/search"]);
-
+const workspacePaths = new Set([
+  "/",
+  "/library",
+  "/drafts",
+  "/connectors",
+  "/search",
+]);
 const workspaceNavigation = draftletNavigation.filter((item) => workspacePaths.has(item.path));
 const systemNavigation = draftletNavigation.filter((item) => !workspacePaths.has(item.path));
 
-function StatusRow({
-  label,
-  value,
-  tone,
-}: {
+
+interface StatusRowProps {
   label: string;
   value: string;
   tone: React.ComponentProps<typeof StatusDot>["tone"];
-}) {
+}
+
+function StatusRow({ label, value, tone }: StatusRowProps) {
   return (
     <div className="flex items-center gap-2 px-0.5 py-1.5 text-xs">
       <StatusDot tone={tone} />
@@ -50,15 +51,13 @@ function StatusRow({
   );
 }
 
-function NavigationGroup({
-  label,
-  items,
-  activePath,
-}: {
+interface NavigationGroupProps {
   label: string;
   items: typeof draftletNavigation;
   activePath: string;
-}) {
+}
+
+function NavigationGroup({ label, items, activePath }: NavigationGroupProps) {
   return (
     <SidebarGroup>
       <SidebarGroupLabel className="px-2 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
@@ -81,7 +80,10 @@ function NavigationGroup({
                       "bg-sidebar-accent font-medium text-sidebar-accent-foreground before:absolute before:left-1 before:top-1/2 before:h-4 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-primary",
                   )}
                 >
-                  <Link to={item.path} aria-current={isActive ? "page" : undefined}>
+                  <Link
+                    to={item.path}
+                    aria-current={isActive ? "page" : undefined}
+                  >
                     <item.icon />
                     <span>{item.title}</span>
                   </Link>
@@ -94,6 +96,11 @@ function NavigationGroup({
     </SidebarGroup>
   );
 }
+
+type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
+  activePath: string;
+};
+
 
 export function AppSidebar({ activePath, ...props }: AppSidebarProps) {
   return (
