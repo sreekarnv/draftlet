@@ -15,6 +15,14 @@ export type Message = {
   status?: string;
 };
 
+export type TelegramSendResult = {
+  draft: Draft;
+  message: Message;
+  telegram_message_id: string;
+  reply_to_message_id: number | null;
+  reply_fallback: boolean;
+};
+
 export type DraftVariant = {
   id: string;
   title: string;

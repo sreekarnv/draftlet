@@ -26,7 +26,11 @@ export function getFollowUpDrafts(drafts: Draft[]): ActivityItem[] {
     }));
 }
 
-export function getStatusItems(runtime = "offline", ollama = "offline"): StatusItem[] {
+export function getStatusItems(
+  runtime = "offline",
+  ollama = "offline",
+  telegram = "offline",
+): StatusItem[] {
   return [
     {
       label: "Draftlet Runtime",
@@ -45,9 +49,9 @@ export function getStatusItems(runtime = "offline", ollama = "offline"): StatusI
     { label: "Gmail", value: "Offline", detail: "Not connected", state: "offline", icon: Mail },
     {
       label: "Telegram",
-      value: "Offline",
-      detail: "Not connected",
-      state: "offline",
+      value: telegram === "ready" ? "Ready" : "Offline",
+      detail: telegram === "ready" ? "Connected" : "Not connected",
+      state: telegram,
       icon: MessageCircle,
     },
   ];

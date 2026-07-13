@@ -24,7 +24,10 @@ declare namespace NodeJS {
 interface Window {
   draftlet?: {
     runtime: {
-      request: (path: string, init?: RequestInit) => Promise<{ ok: boolean; status: number; body: string }>;
+      request: (
+        path: string,
+        init?: { method?: string; headers?: Record<string, string>; body?: string },
+      ) => Promise<{ ok: boolean; status: number; body: string }>;
     };
   };
 }

@@ -16,6 +16,11 @@ class ConnectorRepository:
     async def get(self, connector_id: UUID):
         return await self.db.get(Connector, connector_id)
 
+    async def get_by_kind(self, kind: str):
+        return (
+            await self.db.scalars(select(Connector).where(Connector.kind == kind))
+        ).first()
+
     async def save(self, connector: Connector) -> Connector:
         self.db.add(connector)
         await self.db.commit()

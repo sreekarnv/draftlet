@@ -41,12 +41,13 @@ class CaptureService:
 
         timestamp = payload.timestamp or datetime.now(UTC)
         captured_at = datetime.now(UTC)
+        connector_kind = payload.connector_kind.value
         conversation = Conversation(
-            connector=payload.connector_kind,
+            connector=connector_kind,
             title=payload.title,
             contact=payload.contact,
             participants=payload.participants,
-            source=f"{payload.connector_kind}:{payload.source_message_id}",
+            source=f"{connector_kind}:{payload.source_message_id}",
             latest_message=payload.body,
             latest_message_at=timestamp,
             captured_at=captured_at,
@@ -61,7 +62,7 @@ class CaptureService:
             source_message_id=payload.source_message_id,
         )
         capture = Capture(
-            connector_kind=payload.connector_kind,
+            connector_kind=connector_kind,
             source_message_id=payload.source_message_id,
             conversation=conversation,
             message=message,

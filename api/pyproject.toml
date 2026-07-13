@@ -10,6 +10,8 @@ dependencies = [
     "httpx>=0.28.0",
     "greenlet>=3.2.0",
     "alembic>=1.18.5",
+    "telethon>=1.44.0",
+    "platformdirs>=4.10.0",
 ]
 
 [project.scripts]

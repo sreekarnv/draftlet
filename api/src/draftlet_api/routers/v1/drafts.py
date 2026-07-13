@@ -8,6 +8,8 @@ from draftlet_api.dtos.draft import (
     DraftCreate,
     DraftList,
     DraftRead,
+    DraftTelegramSendRequest,
+    DraftTelegramSendResponse,
     DraftUpdate,
     DraftVariantCreate,
     DraftVariantGenerate,
@@ -69,6 +71,15 @@ async def generate_variant(
 @router.post("/{draft_id}/accept", response_model=DraftRead)
 async def accept_draft(draft_id: UUID, db: AsyncSession = Depends(get_db)) -> DraftRead:
     return await RuntimeService(db).accept(draft_id)
+
+
+@router.post("/{draft_id}/send/telegram", response_model=DraftTelegramSendResponse)
+async def send_draft_via_telegram(
+    draft_id: UUID,
+    data: DraftTelegramSendRequest,
+    db: AsyncSession = Depends(get_db),
+) -> DraftTelegramSendResponse:
+    return await RuntimeService(db).send_telegram(draft_id, data)
 
 
 @router.post("/{draft_id}/mark-sent", response_model=DraftRead)

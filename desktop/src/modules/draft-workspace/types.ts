@@ -26,6 +26,7 @@ export type EditorToolbarProps = {
   onSave: () => void;
   onCopy: () => void;
   onInsert: () => void;
+  onSendTelegram: () => void;
   onMarkSent: () => void;
 };
 
@@ -39,6 +40,8 @@ export type DraftWorkspaceView = {
   statusLabel: string;
   isInserted: boolean;
   draftIsSent: boolean;
+  canSendTelegram: boolean;
+  isSendingTelegram: boolean;
   isGeneratingVariant: boolean;
   userIsEditing: boolean;
   toast: WorkspaceToast | null;
@@ -50,6 +53,7 @@ export type DraftWorkspaceView = {
   save: () => void;
   copy: () => void;
   insert: () => void;
+  sendTelegram: () => Promise<void>;
   markSent: () => void;
   generateVariant: () => void;
 };

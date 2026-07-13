@@ -48,6 +48,11 @@ export function Diagnostics() {
             ok={Boolean(health.data?.ollama?.ok)}
             detail={health.data?.ollama?.detail}
           />
+          <StatusTile
+            label="Telegram"
+            ok={Boolean(health.data?.telegram?.ok)}
+            detail={health.data?.telegram?.detail}
+          />
         </div>
       </SectionCard>
 

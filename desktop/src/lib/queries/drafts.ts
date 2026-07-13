@@ -80,3 +80,19 @@ export function useMarkDraftSent() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.drafts }),
   });
 }
+
+export function useSendDraftViaTelegram() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: string }) =>
+      runtimeClient.sendDraftViaTelegram(id, {
+        body,
+        reply_to_original: true,
+        mark_sent: true,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.drafts });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
+    },
+  });
+}

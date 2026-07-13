@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from draftlet_api.dtos.message import MessageRead
+
 
 class SelectedMessage(BaseModel):
     author: str
@@ -53,6 +55,12 @@ class DraftUpdate(BaseModel):
     references: list[str] | None = None
 
 
+class DraftTelegramSendRequest(BaseModel):
+    body: str | None = None
+    reply_to_original: bool = True
+    mark_sent: bool = True
+
+
 class DraftRead(BaseModel):
     id: UUID
     conversation_id: UUID
@@ -83,3 +91,11 @@ class DraftRead(BaseModel):
 
 class DraftList(BaseModel):
     items: list[DraftRead]
+
+
+class DraftTelegramSendResponse(BaseModel):
+    draft: DraftRead
+    message: MessageRead
+    telegram_message_id: str
+    reply_to_message_id: int | None = None
+    reply_fallback: bool = False

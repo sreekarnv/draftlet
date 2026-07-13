@@ -9,9 +9,12 @@ export interface EditorToolbarProps {
   statusDraft: string;
   isInserted: boolean;
   draftIsSent: boolean;
+  canSendTelegram: boolean;
+  isSendingTelegram: boolean;
   onSave: () => void;
   onCopy: () => void;
   onInsert: () => void;
+  onSendTelegram: () => void;
   onMarkSent: () => void;
 }
 
@@ -22,9 +25,12 @@ export function EditorToolbar({
   statusDraft,
   isInserted,
   draftIsSent,
+  canSendTelegram,
+  isSendingTelegram,
   onSave,
   onCopy,
   onInsert,
+  onSendTelegram,
   onMarkSent,
 }: EditorToolbarProps) {
   return (
@@ -51,6 +57,19 @@ export function EditorToolbar({
           <Copy className="size-3.5" />
           <span className="hidden xl:inline">Copy</span>
         </Button>
+        {canSendTelegram ? (
+          <Button
+            size="sm"
+            className="ml-1 px-2.5"
+            onClick={onSendTelegram}
+            disabled={isSendingTelegram}
+          >
+            <Send className="size-3.5" />
+            <span className="hidden lg:inline">
+              {isSendingTelegram ? "Sending..." : "Send via Telegram"}
+            </span>
+          </Button>
+        ) : null}
         {draftIsSent ? null : isInserted ? (
           <Button size="sm" variant="secondary" className="ml-1 px-2.5" onClick={onMarkSent}>
             <Send className="size-3.5" />
@@ -62,10 +81,10 @@ export function EditorToolbar({
             className="ml-1 px-2.5"
             onClick={onInsert}
             disabled={isInserted}
-            title={isInserted ? "This draft has already been inserted" : undefined}
+            title={isInserted ? "This draft has already been inserted into Draftlet" : undefined}
           >
             <Send className="size-3.5" />
-            <span className="hidden lg:inline">Insert</span>
+            <span className="hidden lg:inline">Insert into timeline</span>
           </Button>
         )}
       </div>

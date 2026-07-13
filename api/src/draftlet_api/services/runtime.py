@@ -5,7 +5,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from draftlet_api.core.errors import NotFoundError
+from draftlet_api.connectors.telegram.sender import TelegramSender
+from draftlet_api.core.errors import ConnectorError, NotFoundError
 from draftlet_api.database.models import Conversation, Draft, DraftVariant, Message
 from draftlet_api.dtos.conversation import (
     ConversationCreate,
@@ -15,6 +16,8 @@ from draftlet_api.dtos.conversation import (
 from draftlet_api.dtos.draft import (
     DraftCreate,
     DraftRead,
+    DraftTelegramSendRequest,
+    DraftTelegramSendResponse,
     DraftUpdate,
     DraftVariantCreate,
     DraftVariantGenerate,
@@ -68,6 +71,37 @@ def draft_dto(item: Draft) -> DraftRead:
         created_at=item.created_at,
         updated_at=item.updated_at,
     )
+
+
+def _telegram_route(conversation: Conversation) -> tuple[int, int | None]:
+    source = conversation.source
+    if source.startswith("telegram:"):
+        route = source.removeprefix("telegram:")
+    elif source.startswith("ConnectorKind.TELEGRAM:"):
+        route = source.removeprefix("ConnectorKind.TELEGRAM:")
+    else:
+        raise ConnectorError(
+            "telegram_send_unsupported_conversation",
+            "This draft is not from a Telegram conversation.",
+            status=400,
+        )
+
+    chat_id, separator, message_id = route.rpartition(":")
+    if not separator:
+        raise ConnectorError(
+            "telegram_route_invalid",
+            "This Telegram conversation is missing routing metadata.",
+            status=400,
+        )
+
+    try:
+        return int(chat_id), int(message_id)
+    except ValueError as error:
+        raise ConnectorError(
+            "telegram_route_invalid",
+            "This Telegram conversation has invalid routing metadata.",
+            status=400,
+        ) from error
 
 
 class RuntimeService:
@@ -227,6 +261,54 @@ class RuntimeService:
         )
         await self.db.commit()
         return draft_dto(await self.draft(draft.id))
+
+    async def send_telegram(
+        self,
+        draft_id: UUID,
+        data: DraftTelegramSendRequest,
+    ) -> DraftTelegramSendResponse:
+        draft = await self.draft(draft_id)
+        conversation = await self.conversation(draft.conversation_id)
+        body = (data.body if data.body is not None else draft.text).strip()
+        if not body:
+            raise ConnectorError(
+                "telegram_send_empty_body",
+                "Draft text is empty.",
+                status=400,
+            )
+
+        chat_id, source_message_id = _telegram_route(conversation)
+        reply_to = source_message_id if data.reply_to_original else None
+        sent = await TelegramSender().send_message(chat_id, body, reply_to=reply_to)
+
+        if data.mark_sent:
+            draft.text = body
+            draft.status = "sent"
+
+        message = Message(
+            conversation_id=conversation.id,
+            kind="outgoing",
+            author="You",
+            body=body,
+            timestamp=sent.date
+            if isinstance(sent.date, datetime)
+            else datetime.now(UTC),
+            status="Sent via Telegram",
+            source_message_id=f"{chat_id}:{sent.id}",
+        )
+        conversation.latest_message = body
+        conversation.latest_message_at = message.timestamp
+        self.db.add(message)
+        await self.db.commit()
+        await self.db.refresh(message)
+
+        return DraftTelegramSendResponse(
+            draft=draft_dto(await self.draft(draft.id)),
+            message=MessageRead.model_validate(message),
+            telegram_message_id=str(sent.id),
+            reply_to_message_id=reply_to if not sent.reply_fallback else None,
+            reply_fallback=sent.reply_fallback,
+        )
 
     async def generate(self, data: GenerationCreate) -> DraftRead:
         conversation = await self.conversation(data.conversation_id)

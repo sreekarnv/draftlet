@@ -17,8 +17,8 @@ alongside this work.
 - **Conversation detail** — thread timeline, follow-up composer, context
   panel.
 - **Drafts** — 3-pane writing workspace (alternatives, editor, context).
-- **Connectors / Search / Settings / Diagnostics** — placeholder pages
-  pending the runtime wiring.
+- **Connectors / Search / Settings / Diagnostics** — runtime-backed pages for
+  local ingest, full-text search, model selection, and runtime status.
 
 ## Develop
 
@@ -41,19 +41,14 @@ desktop/
   src/
     components/     page components and shared UI helpers
     layouts/        app shell
-    lib/            contracts, navigation, runtime-side mock data
+    lib/            contracts, navigation, runtime client
     routes/         thin page wrappers
-    state/          Zustand store (persist to localStorage)
+    state/          client UI state
     styles/         Tailwind 4 + shadcn tokens
   public/           static assets
 ```
 
-## Known temporary bits
+## Telegram connector
 
-- `src/lib/mock-data.ts` is hard-coded fixture data. The header comment
-  explicitly says it is to be replaced when the runtime is wired.
-- `src/state/draftlet-store.ts` persists to `localStorage` under
-  `draftlet:v1`. When the runtime lands, the same store will be
-  hydrated from the FastAPI daemon instead.
-- The four `/connectors`, `/search`, `/settings`, `/diagnostics` routes
-  render a shared `ShellPlaceholder` until their pages are built.
+The Telegram connector is a MTProto user-client integration. It uses
+`api_id` / `api_hash` from `my.telegram.org`, not a `@BotFather` bot token.
