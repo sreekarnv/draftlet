@@ -19,6 +19,8 @@ a Gmail browser extension. See the in-repo planning notes and
   drafting, popup status.
 - **Runtime** (local FastAPI daemon) — owns persistence, prompt building, and
   generation. Exposes typed APIs to desktop and extension.
+- **Telegram connector** — MTProto user-client integration. This uses
+  `api_id` / `api_hash` from `my.telegram.org`, not a `@BotFather` bot token.
 
 ## Layout
 
@@ -33,8 +35,8 @@ draftlet/
 ## Supported scope (target)
 
 - Linux desktop (AppImage first).
-- Source connectors: Gmail (via extension), Telegram Desktop Linux
-  (manual-confirmation capture).
+- Source connectors: Gmail (via extension), Telegram through MTProto user-client
+  auth.
 - Provider connector: Ollama (local).
 - Local persistence in SQLite.
 

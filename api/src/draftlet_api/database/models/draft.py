@@ -12,7 +12,6 @@ if TYPE_CHECKING:
     from draftlet_api.database.models.draft_variant import DraftVariant
 
 
-
 class Draft(Base):
     __tablename__ = "drafts"
 
@@ -26,6 +25,10 @@ class Draft(Base):
     instruction: Mapped[str] = mapped_column(Text, default="")
     text: Mapped[str] = mapped_column(Text, default="")
     selected_variant_id: Mapped[UUID | None] = mapped_column(nullable=True)
+    reply_target_message_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("messages.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    send_mode: Mapped[str | None] = mapped_column(String(32), nullable=True)
     selected_messages: Mapped[list[dict[str, str]]] = mapped_column(JSON, default=list)
     references: Mapped[list[str]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(

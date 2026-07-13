@@ -5,7 +5,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from draftlet_api.core.errors import NotFoundError
+from draftlet_api.connectors.telegram.sender import TelegramSender
+from draftlet_api.core.errors import ConnectorError, NotFoundError
 from draftlet_api.database.models import Conversation, Draft, DraftVariant, Message
 from draftlet_api.dtos.conversation import (
     ConversationCreate,
@@ -15,6 +16,8 @@ from draftlet_api.dtos.conversation import (
 from draftlet_api.dtos.draft import (
     DraftCreate,
     DraftRead,
+    DraftTelegramSendRequest,
+    DraftTelegramSendResponse,
     DraftUpdate,
     DraftVariantCreate,
     DraftVariantGenerate,
@@ -36,6 +39,9 @@ def conversation_dto(item: Conversation) -> ConversationRead:
         contact=item.contact,
         participants=item.participants,
         source=item.source,
+        external_thread_id=item.external_thread_id,
+        thread_kind=item.thread_kind,
+        metadata=item.meta,
         latest_message=item.latest_message,
         timestamp=item.latest_message_at,
         captured_at=item.captured_at,
@@ -44,7 +50,23 @@ def conversation_dto(item: Conversation) -> ConversationRead:
         recently_captured=item.recently_captured,
         draft_ids=[d.id for d in drafts],
         latest_draft_id=drafts[0].id if drafts else None,
-        messages=[MessageRead.model_validate(message) for message in item.messages],
+        messages=[message_dto(message) for message in item.messages],
+    )
+
+
+def message_dto(item: Message) -> MessageRead:
+    return MessageRead(
+        id=item.id,
+        kind=item.kind,
+        author=item.author,
+        timestamp=item.timestamp,
+        body=item.body,
+        status=item.status,
+        source_message_id=item.source_message_id,
+        external_message_id=item.external_message_id,
+        reply_to_message_id=item.reply_to_message_id,
+        reply_to_external_message_id=item.reply_to_external_message_id,
+        metadata=item.meta,
     )
 
 
@@ -62,12 +84,79 @@ def draft_dto(item: Draft) -> DraftRead:
         instruction=item.instruction,
         text=item.text,
         selected_variant_id=item.selected_variant_id,
+        reply_target_message_id=item.reply_target_message_id,
+        send_mode=item.send_mode,
         selected_messages=selected_messages.items,
         references=item.references,
         variants=[DraftVariantRead.model_validate(v) for v in item.variants],
         created_at=item.created_at,
         updated_at=item.updated_at,
     )
+
+
+def _legacy_telegram_route(conversation: Conversation) -> tuple[int, int | None]:
+    source = conversation.source
+    if source.startswith("telegram:"):
+        route = source.removeprefix("telegram:")
+    elif source.startswith("ConnectorKind.TELEGRAM:"):
+        route = source.removeprefix("ConnectorKind.TELEGRAM:")
+    else:
+        raise ConnectorError(
+            "telegram_send_unsupported_conversation",
+            "This draft is not from a Telegram conversation.",
+            status=400,
+        )
+
+    chat_id, separator, message_id = route.rpartition(":")
+    if not separator:
+        try:
+            return int(route), None
+        except ValueError as error:
+            raise ConnectorError(
+                "telegram_route_invalid",
+                "This Telegram conversation is missing routing metadata.",
+                status=400,
+            ) from error
+
+    try:
+        return int(chat_id), int(message_id)
+    except ValueError as error:
+        raise ConnectorError(
+            "telegram_route_invalid",
+            "This Telegram conversation has invalid routing metadata.",
+            status=400,
+        ) from error
+
+
+def _telegram_message_id(message: Message) -> int | None:
+    raw = message.external_message_id or message.source_message_id
+    if raw:
+        _chat_id, separator, message_id = raw.rpartition(":")
+        if separator:
+            try:
+                return int(message_id)
+            except ValueError:
+                pass
+    value = message.meta.get("message_id") if message.meta else None
+    return int(value) if isinstance(value, int | str) and str(value).isdigit() else None
+
+
+def _telegram_chat_id(conversation: Conversation) -> int:
+    if conversation.external_thread_id:
+        try:
+            return int(conversation.external_thread_id)
+        except ValueError:
+            pass
+    value = conversation.meta.get("chat_id") if conversation.meta else None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            pass
+    chat_id, _message_id = _legacy_telegram_route(conversation)
+    return chat_id
 
 
 class RuntimeService:
@@ -130,7 +219,7 @@ class RuntimeService:
         self.db.add(message)
         await self.db.commit()
         await self.db.refresh(message)
-        return MessageRead.model_validate(message)
+        return message_dto(message)
 
     async def drafts(self, conversation_id: UUID | None = None) -> list[DraftRead]:
         query = (
@@ -228,6 +317,98 @@ class RuntimeService:
         await self.db.commit()
         return draft_dto(await self.draft(draft.id))
 
+    async def send_telegram(
+        self,
+        draft_id: UUID,
+        data: DraftTelegramSendRequest,
+    ) -> DraftTelegramSendResponse:
+        draft = await self.draft(draft_id)
+        conversation = await self.conversation(draft.conversation_id)
+        body = (data.body if data.body is not None else draft.text).strip()
+        if not body:
+            raise ConnectorError(
+                "telegram_send_empty_body",
+                "Draft text is empty.",
+                status=400,
+            )
+
+        chat_id = _telegram_chat_id(conversation)
+        reply_target = await self._telegram_reply_target(draft, conversation)
+        legacy_chat_id, legacy_message_id = _legacy_telegram_route(conversation)
+        if legacy_chat_id != chat_id:
+            legacy_message_id = None
+        reply_to = (
+            _telegram_message_id(reply_target)
+            if reply_target and data.reply_to_original
+            else None
+        )
+        reply_to = reply_to or (legacy_message_id if data.reply_to_original else None)
+        sent = await TelegramSender().send_message(chat_id, body, reply_to=reply_to)
+
+        if data.mark_sent:
+            draft.text = body
+            draft.status = "sent"
+            draft.send_mode = "reply" if reply_to else "new_message"
+
+        message = Message(
+            conversation_id=conversation.id,
+            kind="outgoing",
+            author="You",
+            body=body,
+            timestamp=sent.date
+            if isinstance(sent.date, datetime)
+            else datetime.now(UTC),
+            status="Sent via Telegram",
+            source_message_id=f"{chat_id}:{sent.id}",
+            external_message_id=f"{chat_id}:{sent.id}",
+            reply_to_message_id=reply_target.id if reply_target and reply_to else None,
+            reply_to_external_message_id=(
+                reply_target.external_message_id if reply_target and reply_to else None
+            ),
+            meta={
+                "chat_id": chat_id,
+                "message_id": sent.id,
+                "reply_to_msg_id": reply_to,
+            },
+        )
+        conversation.latest_message = body
+        conversation.latest_message_at = message.timestamp
+        self.db.add(message)
+        await self.db.commit()
+        await self.db.refresh(message)
+
+        return DraftTelegramSendResponse(
+            draft=draft_dto(await self.draft(draft.id)),
+            message=message_dto(message),
+            telegram_message_id=str(sent.id),
+            reply_to_message_id=reply_to if not sent.reply_fallback else None,
+            reply_fallback=sent.reply_fallback,
+        )
+
+    async def _telegram_reply_target(
+        self,
+        draft: Draft,
+        conversation: Conversation,
+    ) -> Message | None:
+        if draft.reply_target_message_id:
+            target = (
+                await self.db.scalars(
+                    select(Message).where(Message.id == draft.reply_target_message_id)
+                )
+            ).first()
+            if target:
+                return target
+        return (
+            await self.db.scalars(
+                select(Message)
+                .where(
+                    Message.conversation_id == conversation.id,
+                    Message.kind == "incoming",
+                )
+                .order_by(Message.timestamp.desc())
+            )
+        ).first()
+
     async def generate(self, data: GenerationCreate) -> DraftRead:
         conversation = await self.conversation(data.conversation_id)
         text, provider, instruction = await self._generate_reply(conversation, data)
@@ -238,6 +419,8 @@ class RuntimeService:
             provider=provider,
             instruction=instruction,
             text=text,
+            reply_target_message_id=self._latest_incoming_message_id(conversation),
+            send_mode="reply",
             selected_messages=[
                 {"author": m.author, "detail": m.body}
                 for m in conversation.messages[-5:]
@@ -247,6 +430,12 @@ class RuntimeService:
         self.db.add(row)
         await self.db.commit()
         return draft_dto(await self.draft(row.id))
+
+    def _latest_incoming_message_id(self, conversation: Conversation) -> UUID | None:
+        incoming = [
+            message for message in conversation.messages if message.kind == "incoming"
+        ]
+        return incoming[-1].id if incoming else None
 
     async def _generate_reply(
         self, conversation: Conversation, data: GenerationCreate

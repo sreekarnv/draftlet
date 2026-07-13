@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useParams } from "react-router";
 
 import { AlternativesPanel } from "@/modules/draft-workspace/components/alternatives-panel";
@@ -6,6 +7,16 @@ import { EditorCanvas } from "@/modules/draft-workspace/components/editor-canvas
 import { WorkspaceToast } from "@/modules/draft-workspace/components/workspace-toast";
 import { useDraftWorkspaceController } from "@/modules/draft-workspace/hooks/use-draft-workspace-controller";
 import { MissingResourceState } from "@/shared/components/missing-resource-state";
+import { Button } from "@/shared/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/shared/components/ui/dialog";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -15,6 +26,7 @@ import {
 export function DraftWorkspace() {
   const { draftId } = useParams<{ draftId: string }>();
   const workspace = useDraftWorkspaceController(draftId);
+  const [sendDialogOpen, setSendDialogOpen] = useState(false);
 
   if (!workspace.draft) {
     return (
@@ -32,6 +44,11 @@ export function DraftWorkspace() {
       ? `Editing · ${activeVariant.title}`
       : "Editing"
     : (activeVariant?.title ?? "Custom");
+
+  async function sendViaTelegram() {
+    await workspace.sendTelegram();
+    setSendDialogOpen(false);
+  }
 
   return (
     <section className="relative h-full min-h-0 overflow-hidden bg-background">
@@ -55,6 +72,8 @@ export function DraftWorkspace() {
             status={workspace.statusLabel}
             isInserted={workspace.isInserted}
             draftIsSent={workspace.draftIsSent}
+            canSendTelegram={workspace.canSendTelegram}
+            isSendingTelegram={workspace.isSendingTelegram}
             userIsEditing={workspace.userIsEditing}
             onTextChange={workspace.setDraftText}
             toolbarProps={{
@@ -64,6 +83,7 @@ export function DraftWorkspace() {
               onSave: workspace.save,
               onCopy: workspace.copy,
               onInsert: workspace.insert,
+              onSendTelegram: () => setSendDialogOpen(true),
               onMarkSent: workspace.markSent,
             }}
           />
@@ -83,6 +103,28 @@ export function DraftWorkspace() {
           />
         </ResizablePanel>
       </ResizablePanelGroup>
+      <Dialog open={sendDialogOpen} onOpenChange={setSendDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Send via Telegram?</DialogTitle>
+            <DialogDescription>
+              This will send the current draft text to the original Telegram chat. It is separate
+              from inserting the draft into the local timeline.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-56 overflow-auto rounded-lg border bg-muted/30 p-3 text-sm whitespace-pre-wrap">
+            {workspace.draftText || "No draft text"}
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="ghost">Cancel</Button>
+            </DialogClose>
+            <Button onClick={sendViaTelegram} disabled={workspace.isSendingTelegram}>
+              {workspace.isSendingTelegram ? "Sending..." : "Send message"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <WorkspaceToast toast={workspace.toast} />
     </section>
   );

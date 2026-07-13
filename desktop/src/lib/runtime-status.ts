@@ -5,5 +5,6 @@ export function useRuntimeStatus() {
   return {
     runtime: health.data?.database?.ok ? "ready" : "offline",
     ollama: health.data?.ollama?.ok ? "ready" : "offline",
+    telegram: health.data?.telegram?.ok ? "ready" : "offline",
   } as const;
 }

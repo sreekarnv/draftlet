@@ -9,6 +9,8 @@ export interface EditorCanvasProps {
   status: string;
   isInserted: boolean;
   draftIsSent: boolean;
+  canSendTelegram: boolean;
+  isSendingTelegram: boolean;
   userIsEditing: boolean;
   onTextChange: (next: string) => void;
   toolbarProps: EditorToolbarProps;
@@ -20,6 +22,8 @@ export function EditorCanvas({
   status,
   isInserted,
   draftIsSent,
+  canSendTelegram,
+  isSendingTelegram,
   userIsEditing,
   onTextChange,
   toolbarProps,
@@ -33,9 +37,12 @@ export function EditorCanvas({
         statusDraft={toolbarProps.draftStatus}
         isInserted={isInserted}
         draftIsSent={draftIsSent}
+        canSendTelegram={canSendTelegram}
+        isSendingTelegram={isSendingTelegram}
         onSave={toolbarProps.onSave}
         onCopy={toolbarProps.onCopy}
         onInsert={toolbarProps.onInsert}
+        onSendTelegram={toolbarProps.onSendTelegram}
         onMarkSent={toolbarProps.onMarkSent}
       />
       <ScrollArea className="min-h-0 min-w-0 flex-1">
@@ -71,7 +78,7 @@ export function EditorCanvas({
             />
             {isInserted ? (
               <p className="mt-4 text-xs text-muted-foreground">
-                Inserted into the conversation timeline. Open the conversation to view the accepted
+                Inserted into Draftlet's local conversation timeline. This does not send a Telegram
                 message.
               </p>
             ) : null}

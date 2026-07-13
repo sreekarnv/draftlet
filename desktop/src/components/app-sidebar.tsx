@@ -21,17 +21,9 @@ import {
   SidebarSeparator,
 } from "@/shared/components/ui/sidebar";
 
-
-const workspacePaths = new Set([
-  "/",
-  "/library",
-  "/drafts",
-  "/connectors",
-  "/search",
-]);
+const workspacePaths = new Set(["/", "/messages", "/library", "/drafts", "/connectors", "/search"]);
 const workspaceNavigation = draftletNavigation.filter((item) => workspacePaths.has(item.path));
 const systemNavigation = draftletNavigation.filter((item) => !workspacePaths.has(item.path));
-
 
 interface StatusRowProps {
   label: string;
@@ -81,10 +73,7 @@ function NavigationGroup({ label, items, activePath }: NavigationGroupProps) {
                       "bg-sidebar-accent font-medium text-sidebar-accent-foreground before:absolute before:left-1 before:top-1/2 before:h-4 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-primary",
                   )}
                 >
-                  <Link
-                    to={item.path}
-                    aria-current={isActive ? "page" : undefined}
-                  >
+                  <Link to={item.path} aria-current={isActive ? "page" : undefined}>
                     <item.icon />
                     <span>{item.title}</span>
                   </Link>
@@ -102,10 +91,9 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   activePath: string;
 };
 
-
 export function AppSidebar({ activePath, ...props }: AppSidebarProps) {
   const runtime = useRuntimeStatus();
-  
+
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar" {...props}>
       <SidebarHeader className="h-14 justify-center px-2 py-2">
@@ -119,7 +107,7 @@ export function AppSidebar({ activePath, ...props }: AppSidebarProps) {
                 <div className="grid flex-1 text-left leading-tight">
                   <span className="truncate text-sm font-semibold tracking-tight">Draftlet</span>
                   <span className="truncate text-xs text-sidebar-foreground/55">
-                    Local writing cockpit
+                    Local drafting companion
                   </span>
                 </div>
               </Link>
@@ -140,8 +128,16 @@ export function AppSidebar({ activePath, ...props }: AppSidebarProps) {
           Local status
         </div>
         <div className="space-y-1">
-          <StatusRow label="Draftlet Runtime" value={runtime.runtime === "ready" ? "Connected" : "Not connected"} tone={runtime.runtime} />
-          <StatusRow label="Ollama Provider" value={runtime.ollama === "ready" ? "Available" : "Not connected"} tone={runtime.ollama} />
+          <StatusRow
+            label="Draftlet Runtime"
+            value={runtime.runtime === "ready" ? "Connected" : "Not connected"}
+            tone={runtime.runtime}
+          />
+          <StatusRow
+            label="Ollama Provider"
+            value={runtime.ollama === "ready" ? "Available" : "Not connected"}
+            tone={runtime.ollama}
+          />
         </div>
       </SidebarFooter>
       <SidebarRail />

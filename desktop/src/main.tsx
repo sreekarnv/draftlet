@@ -10,6 +10,7 @@ import { DraftsIndex } from "@/routes/drafts-index";
 import { DraftWorkspace } from "@/routes/draft-workspace";
 import { Home } from "@/routes/home";
 import { Library } from "@/routes/library";
+import { Messages } from "@/routes/messages";
 import { Search } from "@/routes/search";
 import { Settings } from "@/routes/settings";
 import { QueryProvider } from "@/shared/components/query-provider";
@@ -20,6 +21,8 @@ const router = createBrowserRouter([
     Component: DefaultLayout,
     children: [
       { index: true, Component: Home },
+      { path: "messages", Component: Messages },
+      { path: "messages/:conversationId", Component: Messages },
       { path: "library", Component: Library },
       { path: "library/:conversationId", Component: ConversationDetail },
       { path: "drafts", Component: DraftsIndex },

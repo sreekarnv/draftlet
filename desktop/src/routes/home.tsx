@@ -69,7 +69,9 @@ export function Home() {
             />
           </SectionCard>
           <SectionCard title="Runtime and connectors" description="Local readiness at a glance.">
-            <StatusSummary items={getStatusItems(runtime.runtime, runtime.ollama)} />
+            <StatusSummary
+              items={getStatusItems(runtime.runtime, runtime.ollama, runtime.telegram)}
+            />
           </SectionCard>
         </div>
 

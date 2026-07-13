@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from draftlet_api.dtos.message import MessageRead
+
 
 class SelectedMessage(BaseModel):
     author: str
@@ -41,6 +43,8 @@ class DraftCreate(BaseModel):
     text: str = ""
     selected_messages: list[dict[str, str]] = Field(default_factory=list)
     references: list[str] = Field(default_factory=list)
+    reply_target_message_id: UUID | None = None
+    send_mode: str | None = None
 
 
 class DraftUpdate(BaseModel):
@@ -51,6 +55,14 @@ class DraftUpdate(BaseModel):
     selected_variant_id: UUID | None = None
     selected_messages: list[dict[str, str]] | None = None
     references: list[str] | None = None
+    reply_target_message_id: UUID | None = None
+    send_mode: str | None = None
+
+
+class DraftTelegramSendRequest(BaseModel):
+    body: str | None = None
+    reply_to_original: bool = True
+    mark_sent: bool = True
 
 
 class DraftRead(BaseModel):
@@ -62,6 +74,8 @@ class DraftRead(BaseModel):
     instruction: str
     text: str
     selected_variant_id: UUID | None
+    reply_target_message_id: UUID | None = None
+    send_mode: str | None = None
     selected_messages: list[SelectedMessage]
     references: list[str]
     variants: list[DraftVariantRead]
@@ -83,3 +97,11 @@ class DraftRead(BaseModel):
 
 class DraftList(BaseModel):
     items: list[DraftRead]
+
+
+class DraftTelegramSendResponse(BaseModel):
+    draft: DraftRead
+    message: MessageRead
+    telegram_message_id: str
+    reply_to_message_id: int | None = None
+    reply_fallback: bool = False

@@ -11,3 +11,4 @@ class HealthRead(BaseModel):
     version: str
     database: ComponentHealth
     ollama: ComponentHealth
+    telegram: ComponentHealth

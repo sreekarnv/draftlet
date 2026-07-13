@@ -1,7 +1,13 @@
 import { useState } from "react";
 
 import { useCaptureMutation, useCapturesQuery } from "@/lib/queries/captures";
-import { useConnectorsQuery, useUpdateConnector } from "@/lib/queries/connectors";
+import {
+  useConnectorsQuery,
+  useDisconnectTelegram,
+  useTelegramAuthStatusQuery,
+  useUpdateConnector,
+} from "@/lib/queries/connectors";
+import { TelegramConnectModal } from "@/modules/connectors/components/telegram-connect-modal";
 import type { CaptureCreate } from "@/lib/runtime-client";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
@@ -20,9 +26,12 @@ const initialCapture: CaptureCreate = {
 export function Connectors() {
   const connectors = useConnectorsQuery();
   const captures = useCapturesQuery();
+  const telegramAuth = useTelegramAuthStatusQuery();
   const updateConnector = useUpdateConnector();
+  const disconnectTelegram = useDisconnectTelegram();
   const capture = useCaptureMutation();
   const [form, setForm] = useState<CaptureCreate>(initialCapture);
+  const [telegramModalOpen, setTelegramModalOpen] = useState(false);
 
   function updateForm<K extends keyof CaptureCreate>(key: K, value: CaptureCreate[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -34,6 +43,7 @@ export function Connectors() {
   }
 
   const canSubmit = Boolean(form.source_message_id && form.title && form.contact && form.body);
+  const telegramState = telegramAuth.data?.state ?? "disconnected";
 
   return (
     <section className="mx-auto flex w-full max-w-6xl flex-col gap-5 overflow-auto px-6 py-6">
@@ -43,15 +53,22 @@ export function Connectors() {
         </p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">Connectors</h1>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-          Review connector rows and manually capture messages while the Gmail and Telegram producers are still being built.
+          Review connector rows and manually capture messages while the Gmail and Telegram producers
+          are still being built.
         </p>
       </header>
 
-      <SectionCard title="Configured connectors" description="Rows currently persisted in the runtime database.">
+      <SectionCard
+        title="Configured connectors"
+        description="Rows currently persisted in the runtime database."
+      >
         {connectors.data?.length ? (
           <div className="divide-y divide-border rounded-lg border">
             {connectors.data.map((connector) => (
-              <div key={connector.id} className="flex items-center justify-between gap-4 px-3 py-2 text-sm">
+              <div
+                key={connector.id}
+                className="flex items-center justify-between gap-4 px-3 py-2 text-sm"
+              >
                 <div>
                   <p className="font-medium">{connector.name}</p>
                   <p className="text-xs text-muted-foreground">{connector.kind}</p>
@@ -60,7 +77,12 @@ export function Connectors() {
                   type="button"
                   size="sm"
                   variant="secondary"
-                  onClick={() => updateConnector.mutate({ id: connector.id, patch: { enabled: !connector.enabled } })}
+                  onClick={() =>
+                    updateConnector.mutate({
+                      id: connector.id,
+                      patch: { enabled: !connector.enabled },
+                    })
+                  }
                 >
                   {connector.enabled ? "Disable" : "Enable"}
                 </Button>
@@ -68,17 +90,64 @@ export function Connectors() {
             ))}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">No connector rows yet. Manual captures can still be ingested.</p>
+          <p className="text-sm text-muted-foreground">
+            No connector rows yet. Manual captures can still be ingested.
+          </p>
         )}
       </SectionCard>
 
-      <SectionCard title="Manual capture" description="Create a conversation from a captured Gmail or Telegram message.">
+      <SectionCard
+        title="Telegram user client"
+        description="Connect with your Telegram account using MTProto credentials. This is not a bot token."
+      >
+        <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
+          <div className="rounded-lg border bg-card/50 px-3 py-2 text-sm">
+            <p className="font-medium">
+              {telegramAuth.data?.connected
+                ? `Connected${telegramAuth.data.username ? ` as ${telegramAuth.data.username}` : ""}`
+                : `Status: ${telegramState}`}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {telegramAuth.data?.connected
+                ? "Incoming Telegram messages can now be captured by the local runtime."
+                : "Open the login modal to connect with phone verification or QR code."}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2 lg:justify-end">
+            {telegramAuth.data?.connected ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={disconnectTelegram.isPending}
+                onClick={() => disconnectTelegram.mutate()}
+              >
+                Disconnect
+              </Button>
+            ) : (
+              <Button type="button" size="sm" onClick={() => setTelegramModalOpen(true)}>
+                Connect Telegram
+              </Button>
+            )}
+          </div>
+        </div>
+      </SectionCard>
+
+      <TelegramConnectModal open={telegramModalOpen} onOpenChange={setTelegramModalOpen} />
+
+      <SectionCard
+        title="Manual capture"
+        description="Create a conversation from a captured Gmail or Telegram message."
+      >
         <div className="grid gap-3 lg:grid-cols-2">
           <label className="flex flex-col gap-1 text-sm">
             Connector
             <select
               value={form.connector_kind}
-              onChange={(event) => updateForm("connector_kind", event.target.value as CaptureCreate["connector_kind"])}
+              onChange={(event) =>
+                updateForm("connector_kind", event.target.value as CaptureCreate["connector_kind"])
+              }
               className="h-9 rounded-md border border-input bg-background px-3 text-sm"
             >
               <option value="gmail">Gmail</option>
@@ -87,23 +156,43 @@ export function Connectors() {
           </label>
           <label className="flex flex-col gap-1 text-sm">
             Source message id
-            <Input value={form.source_message_id} onChange={(event) => updateForm("source_message_id", event.target.value)} placeholder="gmail-message-123" />
+            <Input
+              value={form.source_message_id}
+              onChange={(event) => updateForm("source_message_id", event.target.value)}
+              placeholder="gmail-message-123"
+            />
           </label>
           <label className="flex flex-col gap-1 text-sm">
             Title
-            <Input value={form.title} onChange={(event) => updateForm("title", event.target.value)} placeholder="Follow up on proposal" />
+            <Input
+              value={form.title}
+              onChange={(event) => updateForm("title", event.target.value)}
+              placeholder="Follow up on proposal"
+            />
           </label>
           <label className="flex flex-col gap-1 text-sm">
             Contact
-            <Input value={form.contact} onChange={(event) => updateForm("contact", event.target.value)} placeholder="Avery" />
+            <Input
+              value={form.contact}
+              onChange={(event) => updateForm("contact", event.target.value)}
+              placeholder="Avery"
+            />
           </label>
           <label className="flex flex-col gap-1 text-sm">
             Author
-            <Input value={form.author ?? ""} onChange={(event) => updateForm("author", event.target.value)} placeholder="Avery" />
+            <Input
+              value={form.author ?? ""}
+              onChange={(event) => updateForm("author", event.target.value)}
+              placeholder="Avery"
+            />
           </label>
           <label className="flex flex-col gap-1 text-sm">
             Participants
-            <Input value={form.participants ?? ""} onChange={(event) => updateForm("participants", event.target.value)} placeholder="Avery, Sreekar" />
+            <Input
+              value={form.participants ?? ""}
+              onChange={(event) => updateForm("participants", event.target.value)}
+              placeholder="Avery, Sreekar"
+            />
           </label>
           <label className="flex flex-col gap-1 text-sm lg:col-span-2">
             Body
@@ -116,24 +205,43 @@ export function Connectors() {
           </label>
         </div>
         <div className="mt-4 flex items-center gap-3">
-          <Button type="button" size="sm" disabled={!canSubmit || capture.isPending} onClick={() => void submitCapture()}>
+          <Button
+            type="button"
+            size="sm"
+            disabled={!canSubmit || capture.isPending}
+            onClick={() => void submitCapture()}
+          >
             {capture.isPending ? "Capturing..." : "Capture message"}
           </Button>
-          {capture.isSuccess ? <span className="text-xs text-muted-foreground">Captured</span> : null}
-          {capture.isError ? <span className="text-xs text-destructive">Capture failed</span> : null}
+          {capture.isSuccess ? (
+            <span className="text-xs text-muted-foreground">Captured</span>
+          ) : null}
+          {capture.isError ? (
+            <span className="text-xs text-destructive">Capture failed</span>
+          ) : null}
         </div>
       </SectionCard>
 
-      <SectionCard title="Recent captures" description="Latest capture events accepted by the local runtime.">
+      <SectionCard
+        title="Recent captures"
+        description="Latest capture events accepted by the local runtime."
+      >
         {captures.data?.length ? (
           <div className="divide-y divide-border rounded-lg border">
             {captures.data.map((item) => (
-              <div key={item.id} className="grid gap-1 px-3 py-2 text-sm md:grid-cols-[1fr_auto] md:items-center">
+              <div
+                key={item.id}
+                className="grid gap-1 px-3 py-2 text-sm md:grid-cols-[1fr_auto] md:items-center"
+              >
                 <div>
-                  <p className="font-medium">{item.connector_kind}:{item.source_message_id}</p>
+                  <p className="font-medium">
+                    {item.connector_kind}:{item.source_message_id}
+                  </p>
                   <p className="text-xs text-muted-foreground">status: {item.status}</p>
                 </div>
-                <p className="text-xs text-muted-foreground">{new Date(item.captured_at).toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground">
+                  {new Date(item.captured_at).toLocaleString()}
+                </p>
               </div>
             ))}
           </div>

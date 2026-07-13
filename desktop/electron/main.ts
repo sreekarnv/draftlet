@@ -30,14 +30,25 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 let win: BrowserWindow | null;
 let runtime: ChildProcess | null = null;
 
+type RuntimeRequestInit = {
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string;
+};
+
 function startRuntime() {
   if (!VITE_DEV_SERVER_URL || runtime) return;
   const runtimeRoot = path.resolve(process.env.APP_ROOT, "..", "api");
-  runtime = spawn("sh", ["-c", "uv run alembic-upgrade && uv run dev"], { cwd: runtimeRoot, stdio: "inherit" });
-  runtime.on("exit", () => { runtime = null; });
+  runtime = spawn("sh", ["-c", "uv run alembic-upgrade && uv run dev"], {
+    cwd: runtimeRoot,
+    stdio: "inherit",
+  });
+  runtime.on("exit", () => {
+    runtime = null;
+  });
 }
 
-ipcMain.handle("runtime:request", async (_event, path: string, init?: RequestInit) => {
+ipcMain.handle("runtime:request", async (_event, path: string, init?: RuntimeRequestInit) => {
   const response = await net.fetch(`http://127.0.0.1:8000${path}`, init);
   const body = await response.text();
   return { ok: response.ok, status: response.status, body };
@@ -65,10 +76,10 @@ function createWindow() {
   });
 
   if (VITE_DEV_SERVER_URL) {
-    win.loadURL(VITE_DEV_SERVER_URL);
+    void win.loadURL(VITE_DEV_SERVER_URL);
   } else {
     // win.loadFile('dist/index.html')
-    win.loadFile(path.join(RENDERER_DIST, "index.html"));
+    void win.loadFile(path.join(RENDERER_DIST, "index.html"));
   }
 }
 
@@ -90,9 +101,11 @@ app.on("activate", () => {
   }
 });
 
-app.on("before-quit", () => { runtime?.kill(); });
+app.on("before-quit", () => {
+  runtime?.kill();
+});
 
-app.whenReady().then(() => {
+void app.whenReady().then(() => {
   startRuntime();
   createWindow();
 });

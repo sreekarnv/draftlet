@@ -15,6 +15,10 @@ class DraftletSettings(BaseSettings):
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_default_model: str = "gemma3:4b"
     cors_origins: list[str] = []
+    telegram_api_id: int | None = None
+    telegram_api_hash: str | None = None
+    telegram_session_path: str | None = None
+    telegram_enabled: bool = False
 
 
 @lru_cache

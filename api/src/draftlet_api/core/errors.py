@@ -15,3 +15,8 @@ class NotFoundError(DraftletApiError):
 class ProviderError(DraftletApiError):
     def __init__(self, detail: str):
         super().__init__(503, "generation_provider_unavailable", detail)
+
+
+class ConnectorError(DraftletApiError):
+    def __init__(self, code: str, detail: str, status: int = 400):
+        super().__init__(status, code, detail)
