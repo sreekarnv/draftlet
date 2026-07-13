@@ -1,11 +1,12 @@
 import asyncio
 import logging
+import sqlite3
 from contextlib import suppress
 
 from telethon import TelegramClient, events
 from telethon.errors import FloodWaitError, RPCError
 
-from draftlet_api.connectors.base import BaseConnector
+from draftlet_api.connectors.base import BaseConnector, ConnectorDaemonStatus
 from draftlet_api.connectors.telegram.config import (
     ensure_private_parent,
     telegram_session_path,
@@ -19,25 +20,67 @@ logger = logging.getLogger(__name__)
 
 
 class TelegramProducer(BaseConnector):
+    kind = "telegram"
+
     def __init__(self) -> None:
         self.task: asyncio.Task[None] | None = None
         self.client: TelegramClient | None = None
         self.state = "offline"
         self.error: str | None = None
+        self.paused = False
+        self._lock = asyncio.Lock()
 
     async def start(self) -> None:
-        if self.task and not self.task.done():
-            return
-        self.task = asyncio.create_task(self._run(), name="telegram-producer")
+        async with self._lock:
+            if self.paused:
+                self.state = "paused"
+                return
+            if self.task and not self.task.done():
+                return
+            self.state = "starting"
+            self.task = asyncio.create_task(self._run(), name="telegram-producer")
 
     async def stop(self) -> None:
-        if self.task:
-            self.task.cancel()
+        async with self._lock:
+            await self._stop_locked()
+
+    def status(self) -> ConnectorDaemonStatus:
+        return ConnectorDaemonStatus(
+            kind=self.kind,
+            state=self.state,
+            running=bool(self.task and not self.task.done()),
+            error=self.error,
+            paused=self.paused,
+        )
+
+    async def pause(self) -> None:
+        async with self._lock:
+            self.paused = True
+            await self._stop_locked(state="paused")
+
+    async def resume(self) -> None:
+        async with self._lock:
+            self.paused = False
+            if self.task and not self.task.done():
+                return
+            self.state = "starting"
+            self.task = asyncio.create_task(self._run(), name="telegram-producer")
+
+    async def _stop_locked(self, state: str = "offline") -> None:
+        task = self.task
+        if task:
+            task.cancel()
             with suppress(asyncio.CancelledError):
-                await self.task
+                await task
         if self.client and self.client.is_connected():
-            await self.client.disconnect()
-        self.state = "offline"
+            try:
+                await self.client.disconnect()
+            except Exception as error:
+                self.error = str(error)
+                logger.warning("Telegram producer disconnect failed: %s", error)
+        self.task = None
+        self.client = None
+        self.state = state
 
     async def _run(self) -> None:
         settings = get_settings()
@@ -80,7 +123,7 @@ class TelegramProducer(BaseConnector):
                 self.state = "warning"
                 self.error = f"Flood wait: retrying in {error.seconds}s"
                 await asyncio.sleep(error.seconds + 1)
-            except (ConnectionError, OSError, RPCError) as error:
+            except (ConnectionError, OSError, RPCError, sqlite3.OperationalError) as error:
                 self.state = "warning"
                 self.error = str(error)
                 logger.warning("Telegram producer disconnected: %s", error)
@@ -88,7 +131,12 @@ class TelegramProducer(BaseConnector):
                 backoff = min(backoff * 2, 60)
             finally:
                 if self.client and self.client.is_connected():
-                    await self.client.disconnect()
+                    try:
+                        await self.client.disconnect()
+                    except Exception as error:
+                        self.state = "warning"
+                        self.error = str(error)
+                        logger.warning("Telegram producer disconnect failed: %s", error)
 
     async def _ingest(self, message) -> None:
         try:

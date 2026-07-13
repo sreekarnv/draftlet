@@ -32,6 +32,9 @@ from draftlet_api.services.ollama_client import OllamaClient
 
 def conversation_dto(item: Conversation) -> ConversationRead:
     drafts = item.drafts or []
+    latest_actionable_draft = next(
+        (draft for draft in drafts if draft.status in {"generating", "ready"}), None
+    )
     return ConversationRead(
         id=item.id,
         connector=item.connector,
@@ -49,7 +52,7 @@ def conversation_dto(item: Conversation) -> ConversationRead:
         needs_follow_up=item.needs_follow_up,
         recently_captured=item.recently_captured,
         draft_ids=[d.id for d in drafts],
-        latest_draft_id=drafts[0].id if drafts else None,
+        latest_draft_id=latest_actionable_draft.id if latest_actionable_draft else None,
         messages=[message_dto(message) for message in item.messages],
     )
 

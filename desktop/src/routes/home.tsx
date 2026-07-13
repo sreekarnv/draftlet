@@ -1,91 +1,70 @@
-import { ActivityList } from "@/modules/home/components/activity-list";
-import { ContinueWorkCard } from "@/modules/home/components/continue-work-card";
-import { StatusSummary } from "@/modules/home/components/status-summary";
-import {
-  getFollowUpDrafts,
-  getPrimaryDraft,
-  getQuickActions,
-  getRecentConversations,
-  getStatusItems,
-} from "@/modules/home/utils";
-import { Button } from "@/shared/components/ui/button";
-import { SectionCard } from "@/shared/components/ui/section-card";
-import { useRuntimeStatus } from "@/lib/runtime-status";
+import { Link, Navigate } from "react-router";
+import { Mail, MessageCircle, Settings } from "lucide-react";
+
+import type { Conversation } from "@/lib/contracts";
 import { useConversationsQuery } from "@/lib/queries/conversations";
-import { useDraftsQuery } from "@/lib/queries/drafts";
-import { Link } from "react-router";
+import { Button } from "@/shared/components/ui/button";
+
+function isMessageConversation(conversation: Conversation) {
+  return conversation.connector === "telegram" || conversation.threadKind === "chat";
+}
+
+function isEmailConversation(conversation: Conversation) {
+  return conversation.connector === "gmail" || conversation.threadKind === "email";
+}
 
 export function Home() {
-  const conversations = useConversationsQuery().data ?? [];
-  const drafts = useDraftsQuery().data ?? [];
-  const runtime = useRuntimeStatus();
-  const primaryDraft = getPrimaryDraft(drafts);
+  const conversationsQuery = useConversationsQuery();
+  const conversations = conversationsQuery.data ?? [];
+  const firstMessage = conversations.find(isMessageConversation);
+  const firstEmail = conversations.find(isEmailConversation);
+
+  if (firstMessage) {
+    return <Navigate to={`/messages/${firstMessage.id}`} replace />;
+  }
+
+  if (firstEmail) {
+    return <Navigate to={`/email/${firstEmail.id}`} replace />;
+  }
 
   return (
-    <section className="mx-auto flex w-full max-w-7xl flex-col gap-6 overflow-x-hidden px-7 py-7">
-      <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-        <div className="min-w-0 max-w-3xl">
-          <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-            Draftlet workspace
-          </p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em]">
-            Continue the writing work that matters.
-          </h1>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-            Local conversation memory, saved context, and draft follow-ups arranged for a focused
-            desktop writing flow.
-          </p>
-        </div>
+    <section className="flex h-full items-center justify-center bg-background p-6">
+      <div className="w-full max-w-xl rounded-2xl border bg-card p-6 text-card-foreground shadow-sm">
+        <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+          Draftlet
+        </p>
+        <h1 className="mt-2 text-2xl font-semibold tracking-[-0.03em]">
+          Local-first drafting for messages and email.
+        </h1>
+        <p className="mt-3 text-sm leading-6 text-muted-foreground">
+          Captured Telegram chats and Gmail threads stay local, then open directly into focused
+          drafting context when they are available.
+        </p>
 
-        <div className="flex shrink-0 flex-wrap gap-2">
-          {getQuickActions(primaryDraft).map((action) => (
-            <Button
-              key={action.label}
-              variant={action.primary ? "default" : "secondary"}
-              size="sm"
-              asChild
-            >
-              <Link to={action.to}>
-                <action.icon className="size-3.5" />
-                {action.label}
+        {conversationsQuery.isLoading ? (
+          <div className="mt-6 h-9 w-40 rounded-md bg-muted" />
+        ) : (
+          <div className="mt-6 flex flex-wrap gap-2">
+            <Button asChild>
+              <Link to="/messages">
+                <MessageCircle className="size-4" />
+                Messages
               </Link>
             </Button>
-          ))}
-        </div>
-      </header>
-
-      <div className="grid auto-rows-min gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-        <ContinueWorkCard primaryDraft={primaryDraft} />
-
-        <div className="grid auto-rows-min gap-4">
-          <SectionCard
-            title="Recent conversations"
-            description="New local captures ready to become context."
-          >
-            <ActivityList
-              items={getRecentConversations(conversations)}
-              emptyTitle="No recent conversations"
-              emptyDescription="New Gmail and Telegram Desktop captures will appear here."
-            />
-          </SectionCard>
-          <SectionCard title="Runtime and connectors" description="Local readiness at a glance.">
-            <StatusSummary
-              items={getStatusItems(runtime.runtime, runtime.ollama, runtime.telegram)}
-            />
-          </SectionCard>
-        </div>
-
-        <SectionCard
-          title="Follow-up drafts"
-          description="Draft work that still needs review."
-          className="xl:col-span-2"
-        >
-          <ActivityList
-            items={getFollowUpDrafts(drafts)}
-            emptyTitle="No drafts need follow-up"
-            emptyDescription="Follow-up drafts will appear here when they need attention."
-          />
-        </SectionCard>
+            <Button asChild variant="secondary">
+              <Link to="/email">
+                <Mail className="size-4" />
+                Email
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link to="/settings">
+                <Settings className="size-4" />
+                Settings
+              </Link>
+            </Button>
+          </div>
+        )}
       </div>
     </section>
   );

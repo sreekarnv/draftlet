@@ -1,4 +1,4 @@
-import { ArrowLeft, Copy, ExternalLink } from "lucide-react";
+import { ArrowLeft, Copy } from "lucide-react";
 import { Link } from "react-router";
 
 import { ConnectorBadge } from "@/components/connector-badge";
@@ -50,18 +50,11 @@ export function MessagesConversationHeader({
           <Copy className="size-3.5" />
           Copy latest
         </Button>
-        {latestDraft ? (
-          <Button size="sm" asChild>
-            <Link to={`/drafts/${latestDraft.id}`}>
-              Open draft
-              <ExternalLink className="size-3.5" />
-            </Link>
-          </Button>
-        ) : (
+        {!latestDraft ? (
           <Button size="sm" onClick={onGenerate} disabled={isGenerating}>
             {isGenerating ? "Drafting..." : "Draft reply"}
           </Button>
-        )}
+        ) : null}
       </div>
     </header>
   );

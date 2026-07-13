@@ -41,8 +41,7 @@ export function Messages() {
 
   async function handleGenerate() {
     if (!selectedConversation) return;
-    const draft = await generateDraft.mutateAsync({ conversationId: selectedConversation.id });
-    void navigate(`/drafts/${draft.id}`);
+    await generateDraft.mutateAsync({ conversationId: selectedConversation.id });
   }
 
   function handleCopyLatest() {
@@ -82,7 +81,13 @@ export function Messages() {
         hiddenOnMobile={Boolean(conversationId)}
       />
 
-      <div className={conversationId ? "min-h-0" : "hidden min-h-0 lg:block"}>
+      <div
+        className={
+          conversationId
+            ? "h-full min-h-0 overflow-hidden"
+            : "hidden h-full min-h-0 overflow-hidden lg:block"
+        }
+      >
         {selectedConversation ? (
           <MessagesWorkspace
             conversation={selectedConversation}

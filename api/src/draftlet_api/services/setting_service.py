@@ -12,6 +12,7 @@ from draftlet_api.repositories.setting_repository import SettingRepository
 
 DEFAULT_SETTINGS: dict[str, Callable[[], object]] = {
     "ollama_default_model": lambda: get_settings().ollama_default_model,
+    "run_in_background": lambda: False,
 }
 
 
