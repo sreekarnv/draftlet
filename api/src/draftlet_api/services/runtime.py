@@ -17,6 +17,7 @@ from draftlet_api.dtos.draft import (
     DraftRead,
     DraftUpdate,
     DraftVariantCreate,
+    DraftVariantGenerate,
     DraftVariantRead,
     SelectedMessageList,
 )
@@ -48,7 +49,9 @@ def conversation_dto(item: Conversation) -> ConversationRead:
 
 
 def draft_dto(item: Draft) -> DraftRead:
-    selected_messages = SelectedMessageList.model_validate({ "items": item.selected_messages })
+    selected_messages = SelectedMessageList.model_validate(
+        {"items": item.selected_messages}
+    )
 
     return DraftRead(
         id=item.id,
@@ -182,6 +185,34 @@ class RuntimeService:
         await self.db.refresh(variant)
         return DraftVariantRead.model_validate(variant)
 
+    async def generate_variant(
+        self, draft_id: UUID, data: DraftVariantGenerate
+    ) -> DraftVariantRead:
+        draft = await self.draft(draft_id)
+        conversation = await self.conversation(draft.conversation_id)
+        text, provider, _instruction = await self._generate_reply(
+            conversation,
+            GenerationCreate(
+                conversation_id=conversation.id,
+                instruction=data.instruction,
+                tone=data.tone,
+                length=data.length,
+                coverage=data.coverage,
+                model_override=data.model_override,
+            ),
+        )
+        variant = await self.add_variant(
+            draft.id,
+            DraftVariantCreate(
+                title=f"{data.tone} {data.length.lower()} · {data.coverage.lower()}",
+                detail=provider,
+                body=text,
+            ),
+        )
+        draft.selected_variant_id = variant.id
+        await self.db.commit()
+        return variant
+
     async def accept(self, draft_id: UUID) -> DraftRead:
         draft = await self.draft(draft_id)
         draft.status = "accepted"
@@ -199,10 +230,33 @@ class RuntimeService:
 
     async def generate(self, data: GenerationCreate) -> DraftRead:
         conversation = await self.conversation(data.conversation_id)
+        text, provider, instruction = await self._generate_reply(conversation, data)
+        row = Draft(
+            conversation_id=conversation.id,
+            status="ready",
+            title=f"Reply to {conversation.title}",
+            provider=provider,
+            instruction=instruction,
+            text=text,
+            selected_messages=[
+                {"author": m.author, "detail": m.body}
+                for m in conversation.messages[-5:]
+            ],
+            references=[conversation.participants] if conversation.participants else [],
+        )
+        self.db.add(row)
+        await self.db.commit()
+        return draft_dto(await self.draft(row.id))
+
+    async def _generate_reply(
+        self, conversation: Conversation, data: GenerationCreate
+    ) -> tuple[str, str, str]:
         ollama = OllamaClient()
         model_setting = await SettingRepository(self.db).get("ollama_default_model")
         model = data.model_override or (
-            model_setting.value if model_setting and isinstance(model_setting.value, str) else ollama.settings.ollama_default_model
+            model_setting.value
+            if model_setting and isinstance(model_setting.value, str)
+            else ollama.settings.ollama_default_model
         )
         context = "\n".join(f"{m.author}: {m.body}" for m in conversation.messages)
         instruction = (
@@ -222,19 +276,4 @@ class RuntimeService:
             ],
             model,
         )
-        row = Draft(
-            conversation_id=conversation.id,
-            status="ready",
-            title=f"Reply to {conversation.title}",
-            provider=f"ollama:{model}",
-            instruction=instruction,
-            text=text,
-            selected_messages=[
-                {"author": m.author, "detail": m.body}
-                for m in conversation.messages[-5:]
-            ],
-            references=[conversation.participants] if conversation.participants else [],
-        )
-        self.db.add(row)
-        await self.db.commit()
-        return draft_dto(await self.draft(row.id))
+        return text, f"ollama:{model}", instruction

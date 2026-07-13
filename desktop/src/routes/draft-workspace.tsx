@@ -40,6 +40,7 @@ export function DraftWorkspace() {
           <AlternativesPanel
             variants={draft.variants}
             selectedVariant={workspace.selectedVariant}
+            isGeneratingVariant={workspace.isGeneratingVariant}
             onSelectVariant={workspace.selectVariant}
             onGenerateVariant={workspace.generateVariant}
           />

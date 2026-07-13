@@ -5,7 +5,7 @@ import { queryKeys } from "@/lib/queries/keys";
 import { runtimeClient } from "@/lib/runtime-client";
 
 export function useDraftsQuery() {
-  return useQuery({ queryKey: queryKeys.drafts, queryFn: runtimeClient.listDrafts });
+  return useQuery({ queryKey: queryKeys.drafts, queryFn: () => runtimeClient.listDrafts() });
 }
 
 export function useDraftQuery(id: string | undefined) {
@@ -48,10 +48,24 @@ export function useAddDraftVariant() {
   });
 }
 
+export function useGenerateDraftVariant() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      options,
+    }: {
+      id: string;
+      options?: { tone?: Tone; length?: Length; coverage?: Coverage };
+    }) => runtimeClient.generateVariant(id, options),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.drafts }),
+  });
+}
+
 export function useAcceptDraft() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: runtimeClient.acceptDraft,
+    mutationFn: (id: string) => runtimeClient.acceptDraft(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.drafts });
       void queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
@@ -62,7 +76,7 @@ export function useAcceptDraft() {
 export function useMarkDraftSent() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: runtimeClient.markDraftSent,
+    mutationFn: (id: string) => runtimeClient.markDraftSent(id),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.drafts }),
   });
 }

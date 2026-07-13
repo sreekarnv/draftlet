@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -17,6 +18,14 @@ class DraftVariantCreate(BaseModel):
     title: str
     detail: str = ""
     body: str
+
+
+class DraftVariantGenerate(BaseModel):
+    instruction: str = ""
+    tone: Literal["Direct", "Warm", "Formal", "Friendly"] = "Direct"
+    length: Literal["Short", "Medium", "Long"] = "Short"
+    coverage: Literal["Brief", "Answer all points", "Detailed"] = "Answer all points"
+    model_override: str | None = None
 
 
 class DraftVariantRead(DraftVariantCreate):
@@ -64,7 +73,9 @@ class DraftRead(BaseModel):
     def coerce_selected_messages(cls, value: object) -> object:
         if isinstance(value, list):
             return [
-                item if isinstance(item, SelectedMessage) else SelectedMessage.model_validate(item)
+                item
+                if isinstance(item, SelectedMessage)
+                else SelectedMessage.model_validate(item)
                 for item in value
             ]
         return value

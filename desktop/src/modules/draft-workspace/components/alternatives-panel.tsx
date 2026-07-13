@@ -8,6 +8,7 @@ import { ScrollArea } from "@/shared/components/ui/scroll-area";
 export interface AlternativesPanelProps {
   variants: DraftVariantListItem[];
   selectedVariant: string;
+  isGeneratingVariant: boolean;
   onSelectVariant: (id: string) => void;
   onGenerateVariant: () => void;
 }
@@ -15,6 +16,7 @@ export interface AlternativesPanelProps {
 export function AlternativesPanel({
   variants,
   selectedVariant,
+  isGeneratingVariant,
   onSelectVariant,
   onGenerateVariant,
 }: AlternativesPanelProps) {
@@ -34,9 +36,15 @@ export function AlternativesPanel({
         />
       </ScrollArea>
       <div className="p-3">
-        <Button className="w-full" size="sm" variant="secondary" onClick={onGenerateVariant}>
-          <RefreshCw className="size-3.5" />
-          Generate variant
+        <Button
+          className="w-full"
+          size="sm"
+          variant="secondary"
+          onClick={onGenerateVariant}
+          disabled={isGeneratingVariant}
+        >
+          <RefreshCw className={`size-3.5 ${isGeneratingVariant ? "animate-spin" : ""}`} />
+          {isGeneratingVariant ? "Generating…" : "Generate variant"}
         </Button>
       </div>
     </aside>

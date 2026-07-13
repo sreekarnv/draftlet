@@ -39,6 +39,7 @@ export type DraftWorkspaceView = {
   statusLabel: string;
   isInserted: boolean;
   draftIsSent: boolean;
+  isGeneratingVariant: boolean;
   userIsEditing: boolean;
   toast: WorkspaceToast | null;
   setTone: (value: Tone) => void;

@@ -109,9 +109,14 @@ function searchResult(value: ApiSearchResult): SearchResult {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
   const requestInit: RequestInit = {
     ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
+    headers,
   };
 
   if (window.draftlet) {
@@ -201,6 +206,15 @@ export const runtimeClient = {
     return request<DraftVariant>(`/drafts/${id}/variants`, {
       method: "POST",
       body: JSON.stringify(variant),
+    });
+  },
+  async generateVariant(
+    id: string,
+    options: { tone?: Tone; length?: Length; coverage?: Coverage } = {},
+  ) {
+    return request<DraftVariant>(`/drafts/${id}/variants/generate`, {
+      method: "POST",
+      body: JSON.stringify(options),
     });
   },
   async acceptDraft(id: string) {

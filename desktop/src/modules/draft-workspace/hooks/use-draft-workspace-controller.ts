@@ -2,19 +2,23 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { Coverage, Length, Tone } from "@/lib/contracts";
 import { useConversationsQuery } from "@/lib/queries/conversations";
-import { useAcceptDraft, useAddDraftVariant, useDraftQuery, useMarkDraftSent, useUpdateDraft } from "@/lib/queries/drafts";
-import type { DraftWorkspaceView, WorkspaceToast } from "@/modules/draft-workspace/types";
 import {
-  generateDraftVariant,
-  getDraftSource,
-  getDraftStatusLabel,
-} from "@/modules/draft-workspace/utils";
+  useAcceptDraft,
+  useDraftQuery,
+  useGenerateDraftVariant,
+  useMarkDraftSent,
+  useUpdateDraft,
+} from "@/lib/queries/drafts";
+import type { DraftWorkspaceView, WorkspaceToast } from "@/modules/draft-workspace/types";
+import { getDraftSource, getDraftStatusLabel } from "@/modules/draft-workspace/utils";
 
 export function useDraftWorkspaceController(draftId: string | undefined): DraftWorkspaceView {
   const draft = useDraftQuery(draftId).data;
-  const conversation = useConversationsQuery().data?.find((item) => item.id === draft?.conversationId);
+  const conversation = useConversationsQuery().data?.find(
+    (item) => item.id === draft?.conversationId,
+  );
   const updateDraft = useUpdateDraft();
-  const addDraftVariant = useAddDraftVariant();
+  const generateVariantMutation = useGenerateDraftVariant();
   const acceptDraft = useAcceptDraft();
   const markDraftSent = useMarkDraftSent();
 
@@ -24,6 +28,7 @@ export function useDraftWorkspaceController(draftId: string | undefined): DraftW
   const [selectedVariant, setSelectedVariant] = useState<string>("");
   const [draftText, setDraftText] = useState<string>("");
   const [toast, setToast] = useState<WorkspaceToast | null>(null);
+  const initializedDraftIdRef = useRef<string | undefined>(undefined);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastIdRef = useRef(0);
 
@@ -34,17 +39,24 @@ export function useDraftWorkspaceController(draftId: string | undefined): DraftW
 
   useEffect(() => {
     if (!draft) {
+      initializedDraftIdRef.current = undefined;
       setSelectedVariant("");
       setDraftText("");
       return;
     }
+
+    if (initializedDraftIdRef.current === draft.id) {
+      return;
+    }
+
+    initializedDraftIdRef.current = draft.id;
 
     const initialVariantId = draft.selectedVariantId ?? draft.variants[0]?.id ?? "";
     setSelectedVariant(initialVariantId);
 
     const initialVariant = draft.variants.find((variant) => variant.id === initialVariantId);
     setDraftText(initialVariant?.body ?? draft.text);
-  }, [draft?.id]);
+  }, [draft]);
 
   useEffect(() => {
     return () => {
@@ -86,10 +98,13 @@ export function useDraftWorkspaceController(draftId: string | undefined): DraftW
       return;
     }
 
-    updateDraft.mutate({ id: draft.id, patch: {
-      text: draftText,
-      selectedVariantId: selectedVariant || undefined,
-    } });
+    updateDraft.mutate({
+      id: draft.id,
+      patch: {
+        text: draftText,
+        selectedVariantId: selectedVariant || undefined,
+      },
+    });
     flashToast("Saved");
   }
 
@@ -119,20 +134,22 @@ export function useDraftWorkspaceController(draftId: string | undefined): DraftW
     flashToast("Marked as sent");
   }
 
-  function generateVariant() {
+  async function generateVariant() {
     if (!draft || !conversation) {
       return;
     }
 
-    const variant = generateDraftVariant(conversation, {
-      tone,
-      length,
-      coverage,
-      variantNumber: draft.variants.length + 1,
-    });
-
-    addDraftVariant.mutate({ id: draft.id, variant });
-    flashToast(`Variant “${variant.title}” added`);
+    try {
+      const variant = await generateVariantMutation.mutateAsync({
+        id: draft.id,
+        options: { tone, length, coverage },
+      });
+      setSelectedVariant(variant.id);
+      setDraftText(variant.body);
+      flashToast(`Variant “${variant.title}” added`);
+    } catch (error) {
+      flashToast(error instanceof Error ? error.message : "Unable to generate variant");
+    }
   }
 
   return {
@@ -145,6 +162,7 @@ export function useDraftWorkspaceController(draftId: string | undefined): DraftW
     statusLabel,
     isInserted,
     draftIsSent,
+    isGeneratingVariant: generateVariantMutation.isPending,
     userIsEditing,
     toast,
     setTone,
