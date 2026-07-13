@@ -36,8 +36,8 @@ export function ConversationAiPanel({ conversation, latestDraft }: ConversationA
             {getDraftStateLabel(latestDraft)}
           </div>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            Drafts are generated locally. Opening the draft workspace is required before inserting
-            or sending.
+            Drafts are generated and edited inline. Insert locally when you want a Draftlet-only
+            timeline entry, or explicitly confirm a supported external send.
           </p>
         </section>
 

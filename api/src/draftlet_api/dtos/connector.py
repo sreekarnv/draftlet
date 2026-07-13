@@ -26,6 +26,14 @@ class ConnectorRead(BaseModel):
     updated_at: datetime
 
 
+class ConnectorDaemonStatusRead(BaseModel):
+    kind: str
+    state: str
+    running: bool
+    error: str | None = None
+    paused: bool = False
+
+
 class TelegramAuthStartRequest(BaseModel):
     phone: str = Field(min_length=4, max_length=32)
 

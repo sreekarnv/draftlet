@@ -28,6 +28,9 @@ interface Window {
         path: string,
         init?: { method?: string; headers?: Record<string, string>; body?: string },
       ) => Promise<{ ok: boolean; status: number; body: string }>;
+      onEvent: (
+        callback: (event: Record<string, unknown> & { type?: string }) => void,
+      ) => () => void;
     };
   };
 }

@@ -1,5 +1,4 @@
 import { Copy } from "lucide-react";
-import { Link } from "react-router";
 
 import { ConnectorBadge } from "@/components/connector-badge";
 import { StatusBadge } from "@/components/status-dot";
@@ -67,15 +66,11 @@ export function ConversationHeader({
         </div>
 
         <div className="flex shrink-0 flex-wrap gap-2">
-          {latestDraft ? (
-            <Button size="sm" asChild>
-              <Link to={`/drafts/${latestDraft.id}`}>Open draft</Link>
-            </Button>
-          ) : (
+          {!latestDraft ? (
             <Button size="sm" onClick={onGenerate} disabled={isGenerating}>
               {isGenerating ? "Drafting..." : "Draft reply"}
             </Button>
-          )}
+          ) : null}
           <Button variant="outline" size="sm" onClick={onCopyLatest}>
             <Copy className="size-3.5" />
             Copy latest

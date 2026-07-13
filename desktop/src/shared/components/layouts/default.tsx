@@ -94,9 +94,9 @@ export const DefaultLayout = () => {
   const crumbs = getBreadcrumbs(location.pathname);
   return (
     <TooltipProvider>
-      <SidebarProvider>
-        <AppSidebar activePath={activeItem.path} />
-        <SidebarInset className="min-w-0 overflow-hidden bg-background shadow-none md:m-0 md:rounded-none">
+      <SidebarProvider className="h-svh min-h-0 overflow-hidden">
+        <AppSidebar activePath={location.pathname} />
+        <SidebarInset className="h-full min-h-0 min-w-0 overflow-hidden bg-background shadow-none md:m-0 md:rounded-none">
           <header className="flex h-14 shrink-0 items-center gap-3 border-b border-sidebar-border/55 bg-background/95 px-4">
             <SidebarTrigger className="md:hidden" />
             <Breadcrumb className="min-w-0 flex-1">
@@ -131,7 +131,7 @@ export const DefaultLayout = () => {
 
             <h1 className="sr-only">{crumbs[crumbs.length - 1]?.label ?? activeItem.title}</h1>
           </header>
-          <main className="min-h-0 flex-1 overflow-hidden bg-background">
+          <main className="h-full min-h-0 flex-1 overflow-hidden bg-background">
             <ErrorBoundary>
               <Outlet />
             </ErrorBoundary>

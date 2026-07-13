@@ -9,7 +9,7 @@ export function useMarkConversationCaptured(
   const markConversationCaptured = useMarkConversationCapturedMutation();
 
   useEffect(() => {
-    if (!conversationId || recentlyCaptured) {
+    if (!conversationId || !recentlyCaptured) {
       return;
     }
 

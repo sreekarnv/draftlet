@@ -379,7 +379,7 @@ export const runtimeClient = {
     return conversation(
       await request<ApiConversation>(`/conversations/${id}`, {
         method: "PATCH",
-        body: JSON.stringify({ recently_captured: true }),
+        body: JSON.stringify({ recently_captured: false }),
       }),
     );
   },

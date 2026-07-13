@@ -1,5 +1,4 @@
-import { Bot, ExternalLink, ShieldCheck } from "lucide-react";
-import { Link } from "react-router";
+import { Bot, ShieldCheck } from "lucide-react";
 
 import type { Conversation, Draft } from "@/lib/contracts";
 import { getDraftReplyTarget, getDraftStateLabel } from "@/modules/conversation-detail/utils";
@@ -36,22 +35,15 @@ export function MessagesDraftDock({
             </p>
             <p className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
               <ShieldCheck className="size-3.5" />
-              Nothing sends from this page. Review and send in the draft workspace.
+              Draft inline here. Insert locally does not send externally.
             </p>
           </div>
           <div className="flex shrink-0 gap-2">
-            {latestDraft ? (
-              <Button size="sm" asChild>
-                <Link to={`/drafts/${latestDraft.id}`}>
-                  Open workspace
-                  <ExternalLink className="size-3.5" />
-                </Link>
-              </Button>
-            ) : (
+            {!latestDraft ? (
               <Button size="sm" onClick={onGenerate} disabled={isGenerating}>
                 {isGenerating ? "Drafting..." : "Draft reply"}
               </Button>
-            )}
+            ) : null}
           </div>
         </div>
       </div>

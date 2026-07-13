@@ -75,15 +75,11 @@ export function ConversationPreview({ conversation, onGenerate }: ConversationPr
           <Button variant="secondary" size="sm" asChild>
             <Link to={`/library/${conversation.id}`}>Open Conversation</Link>
           </Button>
-          {conversation.latestDraftId ? (
-            <Button size="sm" asChild>
-              <Link to={`/drafts/${conversation.latestDraftId}`}>Open draft</Link>
-            </Button>
-          ) : (
+          {!conversation.latestDraftId ? (
             <Button size="sm" onClick={() => onGenerate(conversation.id)}>
               Generate Follow-up
             </Button>
-          )}
+          ) : null}
         </div>
       </div>
     </aside>

@@ -1,8 +1,10 @@
 import type * as React from "react";
 import { Link } from "react-router";
-import { Command } from "lucide-react";
+import { Command, Mail, MessageCircle } from "lucide-react";
 
 import { draftletNavigation } from "@/lib/navigation";
+import type { Conversation } from "@/lib/contracts";
+import { useConversationsQuery } from "@/lib/queries/conversations";
 import { useRuntimeStatus } from "@/lib/runtime-status";
 import { StatusDot } from "@/components/status-dot";
 import { cn } from "@/shared/lib/utils";
@@ -21,9 +23,41 @@ import {
   SidebarSeparator,
 } from "@/shared/components/ui/sidebar";
 
-const workspacePaths = new Set(["/", "/messages", "/library", "/drafts", "/connectors", "/search"]);
-const workspaceNavigation = draftletNavigation.filter((item) => workspacePaths.has(item.path));
-const systemNavigation = draftletNavigation.filter((item) => !workspacePaths.has(item.path));
+const settingsNavigation = draftletNavigation.find((item) => item.path === "/settings");
+
+function TelegramIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={className} fill="currentColor">
+      <path d="M21.93 4.14c.28-1.05-.75-1.9-1.72-1.42L2.92 11.18c-1.05.51-.94 2.05.16 2.41l4.36 1.42 1.68 5.31c.33 1.05 1.67 1.33 2.38.5l2.45-2.86 4.42 3.23c.9.66 2.17.16 2.45-.92l3.11-16.13ZM8.21 13.63l8.51-5.28c.4-.25.81.29.47.62l-6.99 6.7-.27 2.83-1.05-3.32-.67-1.55Zm2.57 3.46 1.94-1.86 1.64 1.2-2.94 3.44-.64-2.78Z" />
+    </svg>
+  );
+}
+
+function isMessageConversation(conversation: Conversation) {
+  return conversation.connector === "telegram" || conversation.threadKind === "chat";
+}
+
+function isEmailConversation(conversation: Conversation) {
+  return conversation.connector === "gmail" || conversation.threadKind === "email";
+}
+
+function getConversationName(conversation: Conversation) {
+  return (
+    conversation.title || conversation.contact || conversation.participants || "Untitled thread"
+  );
+}
+
+function getEmailSender(conversation: Conversation) {
+  return (
+    conversation.contact || conversation.participants || conversation.title || "Unknown sender"
+  );
+}
+
+function getConversationIcon(conversation: Conversation, kind: ConversationGroupProps["kind"]) {
+  if (conversation.connector === "telegram") return TelegramIcon;
+  if (conversation.connector === "gmail" || kind === "email") return Mail;
+  return MessageCircle;
+}
 
 interface StatusRowProps {
   label: string;
@@ -44,13 +78,17 @@ function StatusRow({ label, value, tone }: StatusRowProps) {
   );
 }
 
-interface NavigationGroupProps {
+interface ConversationGroupProps {
   label: string;
-  items: typeof draftletNavigation;
+  conversations: Conversation[];
   activePath: string;
+  kind: "messages" | "email";
 }
 
-function NavigationGroup({ label, items, activePath }: NavigationGroupProps) {
+function ConversationGroup({ label, conversations, activePath, kind }: ConversationGroupProps) {
+  const Icon = kind === "email" ? Mail : MessageCircle;
+  const emptyLabel = kind === "email" ? "No Gmail threads yet" : "No Telegram chats yet";
+
   return (
     <SidebarGroup>
       <SidebarGroupLabel className="px-2 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
@@ -58,29 +96,97 @@ function NavigationGroup({ label, items, activePath }: NavigationGroupProps) {
       </SidebarGroupLabel>
       <SidebarGroupContent>
         <SidebarMenu className="gap-0.5">
-          {items.map((item) => {
-            const isActive = item.path === activePath;
+          {conversations.length > 0 ? (
+            conversations.map((conversation) => {
+              const href =
+                kind === "email" ? `/email/${conversation.id}` : `/messages/${conversation.id}`;
+              const isActive = activePath === href;
+              const title =
+                kind === "email" ? getEmailSender(conversation) : getConversationName(conversation);
+              const subtitle = kind === "email" ? conversation.title : undefined;
+              const preview = conversation.latestMessage;
+              const RowIcon = getConversationIcon(conversation, kind);
 
-            return (
-              <SidebarMenuItem key={item.path}>
-                <SidebarMenuButton
-                  asChild
-                  isActive={isActive}
-                  tooltip={item.title}
-                  className={cn(
-                    "relative h-8 rounded-md text-sidebar-foreground/70 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
-                    isActive &&
-                      "bg-sidebar-accent font-medium text-sidebar-accent-foreground before:absolute before:left-1 before:top-1/2 before:h-4 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-primary",
-                  )}
-                >
-                  <Link to={item.path} aria-current={isActive ? "page" : undefined}>
-                    <item.icon />
-                    <span>{item.title}</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            );
-          })}
+              return (
+                <SidebarMenuItem key={conversation.id}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActive}
+                    tooltip={title}
+                    className={cn(
+                      "relative h-auto min-h-10 items-start rounded-md py-2 pl-4 pr-2 text-sidebar-foreground/75 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:px-2",
+                      isActive &&
+                        "bg-sidebar-accent font-medium text-sidebar-accent-foreground before:absolute before:left-2 before:top-1/2 before:h-5 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-primary group-data-[collapsible=icon]:before:left-1",
+                    )}
+                  >
+                    <Link to={href} aria-current={isActive ? "page" : undefined}>
+                      <RowIcon className="mt-0.5 size-4 shrink-0" />
+                      <span className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
+                        <span className="block truncate text-sm leading-4">{title}</span>
+                        {subtitle ? (
+                          <span className="mt-0.5 block truncate text-xs leading-4 text-sidebar-foreground/55">
+                            {subtitle}
+                          </span>
+                        ) : null}
+                        {preview ? (
+                          <span className="mt-0.5 block truncate text-xs leading-4 text-sidebar-foreground/55">
+                            {preview}
+                          </span>
+                        ) : null}
+                      </span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              );
+            })
+          ) : (
+            <SidebarMenuItem>
+              <div className="flex items-center gap-2 rounded-md px-2 py-2 text-xs text-sidebar-foreground/45 group-data-[collapsible=icon]:justify-center">
+                <Icon className="size-4 shrink-0" />
+                <span className="truncate group-data-[collapsible=icon]:hidden">{emptyLabel}</span>
+              </div>
+            </SidebarMenuItem>
+          )}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  );
+}
+
+interface SystemGroupProps {
+  activePath: string;
+}
+
+function SystemGroup({ activePath }: SystemGroupProps) {
+  if (!settingsNavigation) return null;
+
+  const isActive = activePath === settingsNavigation.path;
+  const Icon = settingsNavigation.icon;
+
+  return (
+    <SidebarGroup>
+      <SidebarGroupLabel className="px-2 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+        System
+      </SidebarGroupLabel>
+      <SidebarGroupContent>
+        <SidebarMenu className="gap-0.5">
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              isActive={isActive}
+              tooltip={settingsNavigation.title}
+              className={cn(
+                "relative h-8 rounded-md text-sidebar-foreground/70 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
+                isActive &&
+                  "bg-sidebar-accent font-medium text-sidebar-accent-foreground before:absolute before:left-1 before:top-1/2 before:h-4 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-primary",
+              )}
+            >
+              <Link to={settingsNavigation.path} aria-current={isActive ? "page" : undefined}>
+                <Icon />
+                <span>{settingsNavigation.title}</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>
@@ -93,6 +199,9 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
 
 export function AppSidebar({ activePath, ...props }: AppSidebarProps) {
   const runtime = useRuntimeStatus();
+  const conversations = useConversationsQuery().data ?? [];
+  const messageConversations = conversations.filter(isMessageConversation);
+  const emailConversations = conversations.filter(isEmailConversation);
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar" {...props}>
@@ -119,8 +228,19 @@ export function AppSidebar({ activePath, ...props }: AppSidebarProps) {
       <SidebarSeparator className="opacity-60" />
 
       <SidebarContent className="gap-1 px-1 py-2">
-        <NavigationGroup label="Workspace" items={workspaceNavigation} activePath={activePath} />
-        <NavigationGroup label="System" items={systemNavigation} activePath={activePath} />
+        <ConversationGroup
+          label="Messages"
+          conversations={messageConversations}
+          activePath={activePath}
+          kind="messages"
+        />
+        <ConversationGroup
+          label="Email"
+          conversations={emailConversations}
+          activePath={activePath}
+          kind="email"
+        />
+        <SystemGroup activePath={activePath} />
       </SidebarContent>
 
       <SidebarFooter className="gap-2 px-3 py-3 group-data-[collapsible=icon]:hidden">

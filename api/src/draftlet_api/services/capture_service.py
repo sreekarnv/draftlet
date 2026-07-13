@@ -10,6 +10,7 @@ from draftlet_api.core.enums import CaptureStatus
 from draftlet_api.database.models import Capture, Conversation, Message
 from draftlet_api.dtos.capture import CaptureCreate, CaptureRead
 from draftlet_api.repositories.capture_repository import CaptureRepository
+from draftlet_api.services.event_bus import runtime_event_bus
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +83,34 @@ class CaptureService:
         )
 
         try:
-            return CaptureRead.model_validate(await self.repository.add(capture)), True
+            created = await self.repository.add(capture)
+            await runtime_event_bus.broadcast(
+                {
+                    "type": "message.created",
+                    "connector": connector_kind,
+                    "conversation_id": str(conversation.id),
+                    "capture_id": str(created.id),
+                    "latest_message": conversation.latest_message,
+                    "timestamp": message.timestamp.isoformat(),
+                    "recently_captured": conversation.recently_captured,
+                    "message": {
+                        "id": str(message.id),
+                        "kind": message.kind,
+                        "author": message.author,
+                        "timestamp": message.timestamp.isoformat(),
+                        "body": message.body,
+                        "status": message.status,
+                        "sourceMessageId": message.source_message_id,
+                        "externalMessageId": message.external_message_id,
+                        "replyToMessageId": str(message.reply_to_message_id)
+                        if message.reply_to_message_id
+                        else None,
+                        "replyToExternalMessageId": message.reply_to_external_message_id,
+                        "metadata": message.meta,
+                    },
+                }
+            )
+            return CaptureRead.model_validate(created), True
         except IntegrityError:
             await self.db.rollback()
             existing = await self.repository.get_by_dedupe(

@@ -1,4 +1,3 @@
-import { ArrowRight } from "lucide-react";
 import { Link } from "react-router";
 
 import type { Draft } from "@/lib/contracts";
@@ -30,14 +29,8 @@ export function ContinueWorkCard({ primaryDraft }: ContinueWorkCardProps) {
             "Captured conversations and generated drafts will appear here when there is work to continue."}
         </p>
         <div className="flex flex-wrap items-center gap-2 pt-2">
-          <Button asChild>
-            <Link to={primaryDraft ? `/drafts/${primaryDraft.id}` : "/drafts"}>
-              Open draft workspace
-              <ArrowRight className="size-3.5" />
-            </Link>
-          </Button>
           <Button variant="ghost" asChild>
-            <Link to="/library">Review source context</Link>
+            <Link to="/messages">Review messages</Link>
           </Button>
         </div>
       </div>

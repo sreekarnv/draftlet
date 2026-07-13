@@ -8,6 +8,7 @@ from draftlet_api.connectors.telegram import auth as telegram_auth
 from draftlet_api.database.engine import get_db
 from draftlet_api.dtos.connector import (
     ConnectorCreate,
+    ConnectorDaemonStatusRead,
     ConnectorRead,
     ConnectorUpdate,
     TelegramAuthCodeRequest,
@@ -31,12 +32,26 @@ async def _activate_telegram(db: AsyncSession, username: str | None) -> None:
             config={"username": username},
         )
     )
-    await connector_registry.start_all()
+    await connector_registry.start("telegram")
+
+
+def _daemon_status(kind: str) -> ConnectorDaemonStatusRead:
+    return ConnectorDaemonStatusRead.model_validate(
+        connector_registry.status(kind)[0], from_attributes=True
+    )
 
 
 @router.get("", response_model=list[ConnectorRead])
 async def list_connectors(db: AsyncSession = Depends(get_db)) -> list[ConnectorRead]:
     return await ConnectorService(db).list()
+
+
+@router.get("/status", response_model=list[ConnectorDaemonStatusRead])
+async def list_connector_statuses() -> list[ConnectorDaemonStatusRead]:
+    return [
+        ConnectorDaemonStatusRead.model_validate(status, from_attributes=True)
+        for status in connector_registry.status()
+    ]
 
 
 @router.post("", response_model=ConnectorRead)
@@ -50,7 +65,37 @@ async def create_connector(
 async def update_connector(
     connector_id: UUID, data: ConnectorUpdate, db: AsyncSession = Depends(get_db)
 ) -> ConnectorRead:
-    return await ConnectorService(db).update(connector_id, data)
+    connector = await ConnectorService(db).update(connector_id, data)
+    if not connector_registry.has(connector.kind):
+        return connector
+    if data.enabled is True:
+        await connector_registry.start(connector.kind)
+    elif data.enabled is False:
+        await connector_registry.stop(connector.kind)
+    return connector
+
+
+@router.get("/{kind}/status", response_model=ConnectorDaemonStatusRead)
+async def connector_status(kind: str) -> ConnectorDaemonStatusRead:
+    return _daemon_status(kind)
+
+
+@router.post("/{kind}/pause", response_model=ConnectorDaemonStatusRead)
+async def pause_connector(kind: str) -> ConnectorDaemonStatusRead:
+    status = await connector_registry.pause(kind)
+    return ConnectorDaemonStatusRead.model_validate(status, from_attributes=True)
+
+
+@router.post("/{kind}/resume", response_model=ConnectorDaemonStatusRead)
+async def resume_connector(kind: str) -> ConnectorDaemonStatusRead:
+    status = await connector_registry.resume(kind)
+    return ConnectorDaemonStatusRead.model_validate(status, from_attributes=True)
+
+
+@router.post("/{kind}/sync", response_model=ConnectorDaemonStatusRead)
+async def sync_connector(kind: str) -> ConnectorDaemonStatusRead:
+    status = await connector_registry.sync_once(kind)
+    return ConnectorDaemonStatusRead.model_validate(status, from_attributes=True)
 
 
 @router.post("/telegram/auth/send-code", response_model=TelegramAuthStatus)
@@ -107,7 +152,7 @@ async def disconnect_telegram(db: AsyncSession = Depends(get_db)) -> TelegramAut
         await ConnectorService(db).update(
             existing.id, ConnectorUpdate(enabled=False, config={})
         )
-    await connector_registry.stop_all()
+    await connector_registry.stop("telegram")
     return status
 
 
