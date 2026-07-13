@@ -43,6 +43,8 @@ class DraftCreate(BaseModel):
     text: str = ""
     selected_messages: list[dict[str, str]] = Field(default_factory=list)
     references: list[str] = Field(default_factory=list)
+    reply_target_message_id: UUID | None = None
+    send_mode: str | None = None
 
 
 class DraftUpdate(BaseModel):
@@ -53,6 +55,8 @@ class DraftUpdate(BaseModel):
     selected_variant_id: UUID | None = None
     selected_messages: list[dict[str, str]] | None = None
     references: list[str] | None = None
+    reply_target_message_id: UUID | None = None
+    send_mode: str | None = None
 
 
 class DraftTelegramSendRequest(BaseModel):
@@ -70,6 +74,8 @@ class DraftRead(BaseModel):
     instruction: str
     text: str
     selected_variant_id: UUID | None
+    reply_target_message_id: UUID | None = None
+    send_mode: str | None = None
     selected_messages: list[SelectedMessage]
     references: list[str]
     variants: list[DraftVariantRead]

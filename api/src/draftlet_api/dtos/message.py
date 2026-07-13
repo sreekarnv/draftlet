@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class MessageCreate(BaseModel):
@@ -21,3 +21,8 @@ class MessageRead(BaseModel):
     timestamp: datetime
     body: str
     status: str | None
+    source_message_id: str | None = None
+    external_message_id: str | None = None
+    reply_to_message_id: UUID | None = None
+    reply_to_external_message_id: str | None = None
+    metadata: dict[str, object] = Field(default_factory=dict)

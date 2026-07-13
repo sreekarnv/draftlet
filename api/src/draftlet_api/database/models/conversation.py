@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, DateTime, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from draftlet_api.database.base import Base
@@ -28,6 +28,11 @@ class Conversation(Base):
     contact: Mapped[str] = mapped_column(String(500))
     participants: Mapped[str] = mapped_column(Text, default="")
     source: Mapped[str] = mapped_column(String(500), default="")
+    external_thread_id: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, index=True
+    )
+    thread_kind: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    meta: Mapped[dict[str, object]] = mapped_column("metadata", JSON, default=dict)
     latest_message: Mapped[str] = mapped_column(Text, default="")
     latest_message_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow

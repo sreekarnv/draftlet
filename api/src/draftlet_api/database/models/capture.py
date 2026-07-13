@@ -26,6 +26,12 @@ class Capture(Base):
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     connector_kind: Mapped[str] = mapped_column(String(64), index=True)
     source_message_id: Mapped[str] = mapped_column(String(255), index=True)
+    external_thread_id: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, index=True
+    )
+    external_message_id: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, index=True
+    )
     conversation_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True
     )

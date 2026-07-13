@@ -14,6 +14,22 @@ from draftlet_api.dtos.message import MessageCreate, MessageRead
 from draftlet_api.repositories.conversation_repository import ConversationRepository
 
 
+def message_read(item: Message) -> MessageRead:
+    return MessageRead(
+        id=item.id,
+        kind=item.kind,
+        author=item.author,
+        timestamp=item.timestamp,
+        body=item.body,
+        status=item.status,
+        source_message_id=item.source_message_id,
+        external_message_id=item.external_message_id,
+        reply_to_message_id=item.reply_to_message_id,
+        reply_to_external_message_id=item.reply_to_external_message_id,
+        metadata=item.meta,
+    )
+
+
 def conversation_read(item: Conversation) -> ConversationRead:
     drafts = item.drafts or []
 
@@ -24,6 +40,9 @@ def conversation_read(item: Conversation) -> ConversationRead:
         contact=item.contact,
         participants=item.participants,
         source=item.source,
+        external_thread_id=item.external_thread_id,
+        thread_kind=item.thread_kind,
+        metadata=item.meta,
         latest_message=item.latest_message,
         timestamp=item.latest_message_at,
         captured_at=item.captured_at,
@@ -32,7 +51,7 @@ def conversation_read(item: Conversation) -> ConversationRead:
         recently_captured=item.recently_captured,
         draft_ids=[draft.id for draft in drafts],
         latest_draft_id=drafts[0].id if drafts else None,
-        messages=[MessageRead.model_validate(message) for message in item.messages],
+        messages=[message_read(message) for message in item.messages],
     )
 
 
@@ -74,4 +93,4 @@ class ConversationService:
         message = await self.repo.add_message(
             conversation, Message(conversation_id=conversation.id, **values)
         )
-        return MessageRead.model_validate(message)
+        return message_read(message)

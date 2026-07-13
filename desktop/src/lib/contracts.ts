@@ -13,6 +13,11 @@ export type Message = {
   timestamp: string;
   body: string;
   status?: string;
+  sourceMessageId?: string;
+  externalMessageId?: string;
+  replyToMessageId?: string;
+  replyToExternalMessageId?: string;
+  metadata: Record<string, unknown>;
 };
 
 export type TelegramSendResult = {
@@ -39,6 +44,8 @@ export type Draft = {
   instruction: string;
   text: string;
   selectedVariantId?: string;
+  replyTargetMessageId?: string;
+  sendMode?: string;
   selectedMessages: Array<{ author: string; detail: string }>;
   references: string[];
   variants: DraftVariant[];
@@ -53,6 +60,9 @@ export type Conversation = {
   contact: string;
   participants: string;
   source: string;
+  externalThreadId?: string;
+  threadKind?: string;
+  metadata: Record<string, unknown>;
   latestMessage: string;
   timestamp: string;
   capturedAt: string;

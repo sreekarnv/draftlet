@@ -31,6 +31,9 @@ class ConversationRead(BaseModel):
     contact: str
     participants: str
     source: str
+    external_thread_id: str | None = None
+    thread_kind: str | None = None
+    metadata: dict[str, object] = Field(default_factory=dict)
     latest_message: str
     timestamp: datetime
     captured_at: datetime

@@ -21,6 +21,9 @@ type ApiConversation = Omit<
   | "recentlyCaptured"
   | "draftIds"
   | "latestDraftId"
+  | "externalThreadId"
+  | "threadKind"
+  | "messages"
 > & {
   latest_message: string;
   captured_at: string;
@@ -29,21 +32,43 @@ type ApiConversation = Omit<
   recently_captured: boolean;
   draft_ids: string[];
   latest_draft_id: string | null;
+  external_thread_id: string | null;
+  thread_kind: string | null;
+  messages: ApiMessage[];
+};
+
+type ApiMessage = Omit<
+  Message,
+  "sourceMessageId" | "externalMessageId" | "replyToMessageId" | "replyToExternalMessageId"
+> & {
+  source_message_id?: string | null;
+  external_message_id?: string | null;
+  reply_to_message_id?: string | null;
+  reply_to_external_message_id?: string | null;
 };
 
 type ApiDraft = Omit<
   Draft,
-  "conversationId" | "selectedVariantId" | "selectedMessages" | "createdAt" | "updatedAt"
+  | "conversationId"
+  | "selectedVariantId"
+  | "replyTargetMessageId"
+  | "sendMode"
+  | "selectedMessages"
+  | "createdAt"
+  | "updatedAt"
 > & {
   conversation_id: string;
   selected_variant_id: string | null;
+  reply_target_message_id: string | null;
+  send_mode: string | null;
   selected_messages: Draft["selectedMessages"];
   created_at: string;
   updated_at: string;
 };
 
-type ApiTelegramSendResult = Omit<TelegramSendResult, "draft"> & {
+type ApiTelegramSendResult = Omit<TelegramSendResult, "draft" | "message"> & {
   draft: ApiDraft;
+  message: ApiMessage;
 };
 
 type ApiConnector = {
@@ -127,6 +152,19 @@ function conversation(value: ApiConversation): Conversation {
     recentlyCaptured: value.recently_captured,
     draftIds: value.draft_ids,
     latestDraftId: value.latest_draft_id ?? undefined,
+    externalThreadId: value.external_thread_id ?? undefined,
+    threadKind: value.thread_kind ?? undefined,
+    messages: value.messages.map(message),
+  };
+}
+
+function message(value: ApiMessage): Message {
+  return {
+    ...value,
+    sourceMessageId: value.source_message_id ?? undefined,
+    externalMessageId: value.external_message_id ?? undefined,
+    replyToMessageId: value.reply_to_message_id ?? undefined,
+    replyToExternalMessageId: value.reply_to_external_message_id ?? undefined,
   };
 }
 
@@ -135,6 +173,8 @@ function draft(value: ApiDraft): Draft {
     ...value,
     conversationId: value.conversation_id,
     selectedVariantId: value.selected_variant_id ?? undefined,
+    replyTargetMessageId: value.reply_target_message_id ?? undefined,
+    sendMode: value.send_mode ?? undefined,
     selectedMessages: value.selected_messages,
     createdAt: value.created_at,
     updatedAt: value.updated_at,
@@ -145,7 +185,7 @@ function telegramSendResult(value: ApiTelegramSendResult): TelegramSendResult {
   return {
     ...value,
     draft: draft(value.draft),
-    message: value.message as Message,
+    message: message(value.message),
   };
 }
 

@@ -31,6 +31,8 @@ def draft_read(item: Draft) -> DraftRead:
         instruction=item.instruction,
         text=item.text,
         selected_variant_id=item.selected_variant_id,
+        reply_target_message_id=item.reply_target_message_id,
+        send_mode=item.send_mode,
         selected_messages=selected_messages.items,
         references=item.references,
         variants=[

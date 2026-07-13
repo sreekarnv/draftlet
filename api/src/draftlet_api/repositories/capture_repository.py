@@ -13,13 +13,16 @@ class CaptureRepository:
         self,
         connector_kind: ConnectorKind,
         source_message_id: str,
+        external_message_id: str | None = None,
     ) -> Capture | None:
         # Database errors intentionally propagate to the API layer; empty results return None.
+        message_id = external_message_id or source_message_id
         return (
             await self.db.scalars(
                 select(Capture).where(
                     Capture.connector_kind == connector_kind.value,
-                    Capture.source_message_id == source_message_id,
+                    (Capture.external_message_id == message_id)
+                    | (Capture.source_message_id == source_message_id),
                 )
             )
         ).first()

@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from draftlet_api.database.base import Base
@@ -28,4 +28,14 @@ class Message(Base):
     source_message_id: Mapped[str | None] = mapped_column(
         String(255), nullable=True, index=True
     )
+    external_message_id: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, index=True
+    )
+    reply_to_message_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("messages.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    reply_to_external_message_id: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, index=True
+    )
+    meta: Mapped[dict[str, object]] = mapped_column("metadata", JSON, default=dict)
     conversation: Mapped["Conversation"] = relationship(back_populates="messages")
