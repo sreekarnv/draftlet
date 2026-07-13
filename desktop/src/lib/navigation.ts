@@ -4,6 +4,7 @@ import {
   DraftingCompass,
   Home,
   Library,
+  MessageCircle,
   PlugZap,
   Search,
   Settings,
@@ -24,10 +25,16 @@ export const draftletNavigation: DraftletNavItem[] = [
     description: "Local writing workspace",
   },
   {
+    title: "Messages",
+    path: "/messages",
+    icon: MessageCircle,
+    description: "Local texting companion",
+  },
+  {
     title: "Library",
     path: "/library",
     icon: Library,
-    description: "Conversation memory and context",
+    description: "All local conversation memory",
   },
   {
     title: "Drafts",
