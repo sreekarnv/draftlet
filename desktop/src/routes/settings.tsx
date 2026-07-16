@@ -1,11 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import {
-  useCaptureMutation,
-  useCapturesQuery,
-  useGmailCaptureMutation,
-} from "@/lib/queries/captures";
+import { useCapturesQuery } from "@/lib/queries/captures";
 import {
   useConnectorsQuery,
   useDisconnectTelegram,
@@ -17,23 +13,13 @@ import { queryKeys } from "@/lib/queries/keys";
 import { useOllamaModelsQuery } from "@/lib/queries/ollama";
 import { useSettingQuery, useUpdateSetting } from "@/lib/queries/settings";
 import { TelegramConnectModal } from "@/modules/connectors/components/telegram-connect-modal";
-import type { CaptureCreate } from "@/lib/runtime-client";
+import { ManualCaptureForm } from "@/modules/settings/components/manual-capture-form";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { SectionCard } from "@/shared/components/ui/section-card";
 
 const OLLAMA_MODEL_KEY = "ollama_default_model";
 const RUN_IN_BACKGROUND_KEY = "run_in_background";
-
-const initialCapture: CaptureCreate = {
-  connector_kind: "gmail",
-  source_message_id: "",
-  title: "",
-  contact: "",
-  participants: "",
-  body: "",
-  author: "Unknown",
-};
 
 export function Settings() {
   const modelSetting = useSettingQuery(OLLAMA_MODEL_KEY);
@@ -46,13 +32,10 @@ export function Settings() {
   const updateSetting = useUpdateSetting();
   const updateConnector = useUpdateConnector();
   const disconnectTelegram = useDisconnectTelegram();
-  const capture = useCaptureMutation();
-  const gmailCapture = useGmailCaptureMutation();
   const queryClient = useQueryClient();
 
   const [model, setModel] = useState("");
   const [runInBackground, setRunInBackground] = useState(false);
-  const [form, setForm] = useState<CaptureCreate>(initialCapture);
   const [telegramModalOpen, setTelegramModalOpen] = useState(false);
 
   useEffect(() => {
@@ -65,10 +48,6 @@ export function Settings() {
     setRunInBackground(backgroundSetting.data?.value === true);
   }, [backgroundSetting.data?.value]);
 
-  function updateForm<K extends keyof CaptureCreate>(key: K, value: CaptureCreate[K]) {
-    setForm((current) => ({ ...current, [key]: value }));
-  }
-
   async function saveModel() {
     await updateSetting.mutateAsync({ key: OLLAMA_MODEL_KEY, value: model });
   }
@@ -78,46 +57,6 @@ export function Settings() {
     await updateSetting.mutateAsync({ key: RUN_IN_BACKGROUND_KEY, value });
   }
 
-  async function submitCapture() {
-    const externalThreadId = form.external_thread_id?.trim() || undefined;
-    const externalMessageId = form.external_message_id?.trim() || undefined;
-    const replyToExternalMessageId = form.reply_to_external_message_id?.trim() || undefined;
-    const timestamp = form.timestamp?.trim() || undefined;
-
-    if (form.connector_kind === "gmail") {
-      await gmailCapture.mutateAsync({
-        gmail_message_id: externalMessageId || form.source_message_id,
-        gmail_thread_id: externalThreadId,
-        reply_to_gmail_message_id: replyToExternalMessageId,
-        subject: form.title,
-        sender: form.contact,
-        to: form.participants ? form.participants.split(",").map((item) => item.trim()) : [],
-        body: form.body,
-        body_format: "plain",
-        timestamp,
-        metadata: {
-          ...form.metadata,
-          capture_source: "desktop-manual-gmail",
-        },
-      });
-      setForm({ ...initialCapture, connector_kind: form.connector_kind });
-      return;
-    }
-
-    const payload: CaptureCreate = {
-      ...form,
-      external_thread_id: externalThreadId,
-      external_message_id: externalMessageId,
-      reply_to_external_message_id: replyToExternalMessageId,
-      timestamp,
-      metadata: form.metadata,
-    };
-
-    await capture.mutateAsync(payload);
-
-    setForm({ ...initialCapture, connector_kind: form.connector_kind });
-  }
-
   function refreshDiagnostics() {
     void queryClient.invalidateQueries({ queryKey: queryKeys.health });
     void queryClient.invalidateQueries({ queryKey: queryKeys.connectors });
@@ -125,9 +64,6 @@ export function Settings() {
   }
 
   const telegramState = telegramAuth.data?.state ?? "disconnected";
-  const canSubmitCapture = Boolean(
-    form.source_message_id && form.title && form.contact && form.body,
-  );
 
   return (
     <section className="h-full min-h-0 overflow-auto bg-background">
@@ -290,134 +226,7 @@ export function Settings() {
               </span>
             </label>
 
-            <div id="manual-capture" className="scroll-mt-6">
-              <h3 className="text-sm font-semibold">Manual capture</h3>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Create a conversation from a captured Gmail or Telegram message while background
-                producers are still evolving.
-              </p>
-              <div className="mt-3 grid gap-3 lg:grid-cols-2">
-                <label className="flex flex-col gap-1 text-sm">
-                  Connector
-                  <select
-                    value={form.connector_kind}
-                    onChange={(event) =>
-                      updateForm(
-                        "connector_kind",
-                        event.target.value as CaptureCreate["connector_kind"],
-                      )
-                    }
-                    className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                  >
-                    <option value="gmail">Gmail</option>
-                    <option value="telegram">Telegram</option>
-                  </select>
-                </label>
-                <label className="flex flex-col gap-1 text-sm">
-                  Source message id
-                  <Input
-                    value={form.source_message_id}
-                    onChange={(event) => updateForm("source_message_id", event.target.value)}
-                    placeholder={form.connector_kind === "gmail" ? "gmail-message-123" : "chat:123"}
-                  />
-                </label>
-                {form.connector_kind === "gmail" ? (
-                  <>
-                    <label className="flex flex-col gap-1 text-sm">
-                      Gmail thread id
-                      <Input
-                        value={form.external_thread_id ?? ""}
-                        onChange={(event) => updateForm("external_thread_id", event.target.value)}
-                        placeholder="thread-a:r123"
-                      />
-                    </label>
-                    <label className="flex flex-col gap-1 text-sm">
-                      Gmail message id
-                      <Input
-                        value={form.external_message_id ?? ""}
-                        onChange={(event) => updateForm("external_message_id", event.target.value)}
-                        placeholder="msg-a:r456"
-                      />
-                    </label>
-                    <label className="flex flex-col gap-1 text-sm">
-                      Reply-to Gmail message id
-                      <Input
-                        value={form.reply_to_external_message_id ?? ""}
-                        onChange={(event) =>
-                          updateForm("reply_to_external_message_id", event.target.value)
-                        }
-                        placeholder="msg-a:r123"
-                      />
-                    </label>
-                    <label className="flex flex-col gap-1 text-sm">
-                      Timestamp
-                      <Input
-                        value={form.timestamp ?? ""}
-                        onChange={(event) => updateForm("timestamp", event.target.value)}
-                        placeholder="2026-07-16T12:00:00Z"
-                      />
-                    </label>
-                  </>
-                ) : null}
-                <label className="flex flex-col gap-1 text-sm">
-                  Title
-                  <Input
-                    value={form.title}
-                    onChange={(event) => updateForm("title", event.target.value)}
-                    placeholder="Follow up on proposal"
-                  />
-                </label>
-                <label className="flex flex-col gap-1 text-sm">
-                  Contact
-                  <Input
-                    value={form.contact}
-                    onChange={(event) => updateForm("contact", event.target.value)}
-                    placeholder="Avery"
-                  />
-                </label>
-                <label className="flex flex-col gap-1 text-sm">
-                  Author
-                  <Input
-                    value={form.author ?? ""}
-                    onChange={(event) => updateForm("author", event.target.value)}
-                    placeholder="Avery"
-                  />
-                </label>
-                <label className="flex flex-col gap-1 text-sm">
-                  Participants
-                  <Input
-                    value={form.participants ?? ""}
-                    onChange={(event) => updateForm("participants", event.target.value)}
-                    placeholder="Avery, Sreekar"
-                  />
-                </label>
-                <label className="flex flex-col gap-1 text-sm lg:col-span-2">
-                  Body
-                  <textarea
-                    value={form.body}
-                    onChange={(event) => updateForm("body", event.target.value)}
-                    placeholder="Paste the captured message body"
-                    className="min-h-28 rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  />
-                </label>
-              </div>
-              <div className="mt-4 flex items-center gap-3">
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={!canSubmitCapture || capture.isPending || gmailCapture.isPending}
-                  onClick={() => void submitCapture()}
-                >
-                  {capture.isPending || gmailCapture.isPending ? "Capturing..." : "Capture message"}
-                </Button>
-                {capture.isSuccess || gmailCapture.isSuccess ? (
-                  <span className="text-xs text-muted-foreground">Captured</span>
-                ) : null}
-                {capture.isError || gmailCapture.isError ? (
-                  <span className="text-xs text-destructive">Capture failed</span>
-                ) : null}
-              </div>
-            </div>
+            <ManualCaptureForm />
           </div>
         </SectionCard>
 
