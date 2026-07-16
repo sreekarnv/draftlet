@@ -1,7 +1,8 @@
 import type * as React from "react";
 import { Link } from "react-router";
-import { Command, Mail, MessageCircle } from "lucide-react";
+import { Mail, MessageCircle } from "lucide-react";
 
+import draftletLogo from "../../../.github/assets/logo.webp";
 import { draftletNavigation } from "@/lib/navigation";
 import type { Conversation } from "@/lib/contracts";
 import { useConversationsQuery } from "@/lib/queries/conversations";
@@ -216,8 +217,8 @@ export function AppSidebar({ activePath, ...props }: AppSidebarProps) {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild tooltip="Draftlet">
               <Link to="/">
-                <div className="flex aspect-square size-7 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
-                  <Command className="size-4" />
+                <div className="flex aspect-square size-7 items-center justify-center overflow-hidden rounded-md bg-sidebar-primary/10 ring-1 ring-sidebar-border">
+                  <img src={draftletLogo} alt="" className="size-full object-cover" />
                 </div>
                 <div className="grid flex-1 text-left leading-tight">
                   <span className="truncate text-sm font-semibold tracking-tight">Draftlet</span>
