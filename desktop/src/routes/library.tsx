@@ -38,10 +38,10 @@ export function Library() {
     selectedId: selectedLibraryConversationId,
   });
   const hasSearch = state.query.trim().length > 0;
+  const conversationsData = conversations.data ?? [];
 
   const filteredConversations = useMemo(() => {
     const normalizedQuery = state.query.trim().toLowerCase();
-    const conversationsData = conversations.data ?? []
 
     return conversationsData.filter((conversation) => {
       const matchesQuery = normalizedQuery
@@ -60,10 +60,10 @@ export function Library() {
 
       return matchesQuery && matchesFilter(conversation, state.activeFilter);
     });
-  }, [state.activeFilter, conversations, state.query]);
+  }, [state.activeFilter, conversationsData, state.query]);
 
   const selectedConversation =
-    conversations?.data!.find((conversation) => conversation.id === state.selectedId) ??
+    conversationsData.find((conversation) => conversation.id === state.selectedId) ??
     filteredConversations[0];
 
   async function handleGenerate(conversationId: string) {
@@ -82,7 +82,7 @@ export function Library() {
               </p>
               <h1 className="mt-1 text-lg font-semibold tracking-tight">Conversation memory</h1>
               <p className="mt-1 text-xs text-muted-foreground">
-                {filteredConversations.length} of {conversations?.data!.length} local captures shown
+                {filteredConversations.length} of {conversationsData.length} local captures shown
               </p>
             </div>
             <div className="relative w-full xl:max-w-sm">
