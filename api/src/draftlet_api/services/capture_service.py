@@ -14,6 +14,11 @@ from draftlet_api.services.event_bus import runtime_event_bus
 
 logger = logging.getLogger(__name__)
 
+THREAD_KIND_BY_CONNECTOR = {
+    "gmail": "email",
+    "telegram": "chat",
+}
+
 
 class CaptureService:
     def __init__(self, db: AsyncSession):
@@ -152,7 +157,7 @@ class CaptureService:
                 else f"{connector_kind}:{payload.source_message_id}"
             ),
             external_thread_id=payload.external_thread_id,
-            thread_kind="chat" if connector_kind == "telegram" else None,
+            thread_kind=THREAD_KIND_BY_CONNECTOR.get(connector_kind),
             meta=payload.metadata,
             latest_message=payload.body,
             latest_message_at=timestamp,

@@ -120,17 +120,40 @@ type RuntimeRequestInit = {
 export type CaptureCreate = {
   connector_kind: "gmail" | "telegram";
   source_message_id: string;
+  external_thread_id?: string;
+  external_message_id?: string;
+  reply_to_external_message_id?: string;
+  metadata?: Record<string, unknown>;
   title: string;
   contact: string;
   participants?: string;
   body: string;
   author?: string;
+  timestamp?: string;
+};
+
+export type GmailCaptureCreate = {
+  gmail_message_id: string;
+  gmail_thread_id?: string;
+  reply_to_gmail_message_id?: string;
+  subject?: string;
+  sender?: string;
+  to?: string[];
+  cc?: string[];
+  bcc?: string[];
+  body: string;
+  body_format?: string;
+  gmail_url?: string;
+  timestamp?: string;
+  metadata?: Record<string, unknown>;
 };
 
 export type ApiCapture = {
   id: string;
   connector_kind: string;
   source_message_id: string;
+  external_thread_id: string | null;
+  external_message_id: string | null;
   conversation_id: string | null;
   message_id: string | null;
   status: string;
@@ -313,6 +336,12 @@ export const runtimeClient = {
   },
   async ingestCapture(payload: CaptureCreate) {
     return request<ApiCapture>("/captures", { method: "POST", body: JSON.stringify(payload) });
+  },
+  async ingestGmailCapture(payload: GmailCaptureCreate) {
+    return request<ApiCapture>("/connectors/gmail/captures", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   },
   async search(q: string) {
     const value = await request<{ items: ApiSearchResult[] }>(`/search?q=${encodeURIComponent(q)}`);

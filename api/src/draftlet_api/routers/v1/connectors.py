@@ -1,11 +1,13 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from draftlet_api.connectors.gmail.mapper import GmailCapture, capture_from_gmail
 from draftlet_api.connectors.registry import connector_registry
 from draftlet_api.connectors.telegram import auth as telegram_auth
 from draftlet_api.database.engine import get_db
+from draftlet_api.dtos.capture import CaptureRead
 from draftlet_api.dtos.connector import (
     ConnectorCreate,
     ConnectorDaemonStatusRead,
@@ -18,6 +20,7 @@ from draftlet_api.dtos.connector import (
     TelegramQrStart,
     TelegramQrStatus,
 )
+from draftlet_api.services.capture_service import CaptureService
 from draftlet_api.services.connector_service import ConnectorService
 
 router = APIRouter(prefix="/connectors", tags=["connectors"])
@@ -78,6 +81,22 @@ async def update_connector(
 @router.get("/{kind}/status", response_model=ConnectorDaemonStatusRead)
 async def connector_status(kind: str) -> ConnectorDaemonStatusRead:
     return _daemon_status(kind)
+
+
+@router.post(
+    "/gmail/captures",
+    response_model=CaptureRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def ingest_gmail_capture(
+    payload: GmailCapture,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+) -> CaptureRead:
+    capture, created = await CaptureService(db).ingest(capture_from_gmail(payload))
+    if not created:
+        response.status_code = status.HTTP_200_OK
+    return capture
 
 
 @router.post("/{kind}/pause", response_model=ConnectorDaemonStatusRead)

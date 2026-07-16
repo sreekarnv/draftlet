@@ -23,7 +23,9 @@ import {
   SidebarSeparator,
 } from "@/shared/components/ui/sidebar";
 
-const settingsNavigation = draftletNavigation.find((item) => item.path === "/settings");
+const systemNavigation = draftletNavigation.filter((item) =>
+  ["/connectors", "/settings"].includes(item.path),
+);
 
 function TelegramIcon({ className }: { className?: string }) {
   return (
@@ -158,10 +160,7 @@ interface SystemGroupProps {
 }
 
 function SystemGroup({ activePath }: SystemGroupProps) {
-  if (!settingsNavigation) return null;
-
-  const isActive = activePath === settingsNavigation.path;
-  const Icon = settingsNavigation.icon;
+  if (systemNavigation.length === 0) return null;
 
   return (
     <SidebarGroup>
@@ -170,23 +169,30 @@ function SystemGroup({ activePath }: SystemGroupProps) {
       </SidebarGroupLabel>
       <SidebarGroupContent>
         <SidebarMenu className="gap-0.5">
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              asChild
-              isActive={isActive}
-              tooltip={settingsNavigation.title}
-              className={cn(
-                "relative h-8 rounded-md text-sidebar-foreground/70 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
-                isActive &&
-                  "bg-sidebar-accent font-medium text-sidebar-accent-foreground before:absolute before:left-1 before:top-1/2 before:h-4 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-primary",
-              )}
-            >
-              <Link to={settingsNavigation.path} aria-current={isActive ? "page" : undefined}>
-                <Icon />
-                <span>{settingsNavigation.title}</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {systemNavigation.map((item) => {
+            const isActive = activePath === item.path || activePath.startsWith(`${item.path}/`);
+            const Icon = item.icon;
+
+            return (
+              <SidebarMenuItem key={item.path}>
+                <SidebarMenuButton
+                  asChild
+                  isActive={isActive}
+                  tooltip={item.title}
+                  className={cn(
+                    "relative h-8 rounded-md text-sidebar-foreground/70 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
+                    isActive &&
+                      "bg-sidebar-accent font-medium text-sidebar-accent-foreground before:absolute before:left-1 before:top-1/2 before:h-4 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-primary",
+                  )}
+                >
+                  <Link to={item.path} aria-current={isActive ? "page" : undefined}>
+                    <Icon />
+                    <span>{item.title}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            );
+          })}
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>

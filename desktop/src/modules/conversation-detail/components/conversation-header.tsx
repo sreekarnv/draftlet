@@ -9,6 +9,9 @@ import {
   getThreadViewKind,
 } from "@/modules/conversation-detail/utils";
 import { Button } from "@/shared/components/ui/button";
+import { cn } from "@/shared/lib/utils";
+
+type ConversationHeaderVariant = "page" | "compact" | "rail";
 
 export interface ConversationHeaderProps {
   conversation: Conversation;
@@ -16,6 +19,8 @@ export interface ConversationHeaderProps {
   isGenerating: boolean;
   onGenerate: () => void;
   onCopyLatest: () => void;
+  variant?: ConversationHeaderVariant;
+  className?: string;
 }
 
 export function ConversationHeader({
@@ -24,6 +29,8 @@ export function ConversationHeader({
   isGenerating,
   onGenerate,
   onCopyLatest,
+  variant = "page",
+  className,
 }: ConversationHeaderProps) {
   const hasAccepted = conversation.messages.some((message) => message.kind === "accepted");
   const hasDraft = Boolean(latestDraft);
@@ -32,16 +39,44 @@ export function ConversationHeader({
   const threadLabel =
     threadKind === "chat" ? "Chat thread" : threadKind === "email" ? "Email thread" : "Timeline";
 
+  const isRail = variant === "rail";
+  const isCompact = variant === "compact";
+
   return (
-    <div className="border-b bg-background/95 px-6 py-6">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+    <div
+      className={cn(
+        variant === "page" && "border-b bg-background/95 px-6 py-6",
+        isCompact && "shrink-0 border-b bg-background/95 px-4 py-3 sm:px-6",
+        isRail && "rounded-2xl border bg-card p-4 text-card-foreground shadow-sm",
+        className,
+      )}
+    >
+      <div
+        className={cn(
+          "flex w-full flex-col gap-4",
+          variant === "page" && "mx-auto max-w-5xl lg:flex-row lg:items-start lg:justify-between",
+          isCompact && "sm:flex-row sm:items-start sm:justify-between",
+        )}
+      >
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <ConnectorBadge connector={conversation.connector} status="ready" />
             <StatusBadge tone="ready">{threadLabel}</StatusBadge>
           </div>
-          <h1 className="mt-3 text-2xl font-semibold tracking-[-0.03em]">{conversation.title}</h1>
-          <p className="mt-2 flex flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
+          <h1
+            className={cn(
+              "mt-3 font-semibold tracking-[-0.03em]",
+              isRail ? "text-base leading-6" : isCompact ? "text-lg" : "text-2xl",
+            )}
+          >
+            {conversation.title}
+          </h1>
+          <p
+            className={cn(
+              "mt-2 flex flex-wrap items-center gap-x-1.5 text-muted-foreground",
+              isRail || isCompact ? "text-xs" : "text-sm",
+            )}
+          >
             <span>{conversation.participants || conversation.contact}</span>
             <span aria-hidden>·</span>
             <span>{conversation.messages.length} messages</span>
@@ -52,7 +87,12 @@ export function ConversationHeader({
               <span>Thread {conversation.externalThreadId}</span>
             ) : null}
           </p>
-          <p className="mt-2 max-w-2xl truncate text-sm text-muted-foreground">
+          <p
+            className={cn(
+              "mt-2 text-muted-foreground",
+              isRail ? "line-clamp-3 text-xs leading-5" : "max-w-2xl truncate text-sm",
+            )}
+          >
             Latest: {conversation.latestMessage}
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -65,13 +105,23 @@ export function ConversationHeader({
           </div>
         </div>
 
-        <div className="flex shrink-0 flex-wrap gap-2">
+        <div className={cn("flex shrink-0 gap-2", isRail ? "flex-col" : "flex-wrap")}>
           {!latestDraft ? (
-            <Button size="sm" onClick={onGenerate} disabled={isGenerating}>
+            <Button
+              size="sm"
+              className={cn(isRail && "w-full")}
+              onClick={onGenerate}
+              disabled={isGenerating}
+            >
               {isGenerating ? "Drafting..." : "Draft reply"}
             </Button>
           ) : null}
-          <Button variant="outline" size="sm" onClick={onCopyLatest}>
+          <Button
+            variant="outline"
+            size="sm"
+            className={cn(isRail && "w-full")}
+            onClick={onCopyLatest}
+          >
             <Copy className="size-3.5" />
             Copy latest
           </Button>

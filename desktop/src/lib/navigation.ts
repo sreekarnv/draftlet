@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { Mail, MessageCircle, Settings } from "lucide-react";
+import { Cable, Mail, MessageCircle, Settings } from "lucide-react";
 
 export type DraftletNavItem = {
   title: string;
@@ -20,6 +20,12 @@ export const draftletNavigation: DraftletNavItem[] = [
     path: "/email",
     icon: Mail,
     description: "Local email drafting companion",
+  },
+  {
+    title: "Connectors",
+    path: "/connectors",
+    icon: Cable,
+    description: "Manage local capture sources",
   },
   {
     title: "Settings",
