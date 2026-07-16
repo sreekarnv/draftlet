@@ -37,6 +37,7 @@ let runtimeEventsReconnect: ReturnType<typeof setTimeout> | null = null;
 const RUN_IN_BACKGROUND_KEY = "run_in_background";
 const RUNTIME_BASE_URL = "http://127.0.0.1:8000";
 const RUNTIME_EVENTS_URL = "http://127.0.0.1:8000/api/v1/events/stream";
+const RUNTIME_AUTH_TOKEN = process.env["DRAFTLET_RUNTIME_TOKEN"];
 const RUN_IN_BACKGROUND_PATH = `/api/v1/settings/${RUN_IN_BACKGROUND_KEY}`;
 const ALLOWED_RUNTIME_PATHS = [
   "/health",
@@ -118,7 +119,10 @@ async function connectRuntimeEvents() {
   runtimeEventsAbort = abort;
   try {
     console.info("Connecting runtime event stream");
-    const response = await net.fetch(RUNTIME_EVENTS_URL, { signal: abort.signal });
+    const response = await net.fetch(RUNTIME_EVENTS_URL, {
+      headers: runtimeAuthHeaders(),
+      signal: abort.signal,
+    });
     if (!response.ok || !response.body) {
       throw new Error(`Runtime event stream failed (${response.status})`);
     }
@@ -150,10 +154,11 @@ function sleep(ms: number) {
 
 async function runtimeRequest(path: string, init?: RuntimeRequestInit, retries = 0) {
   startRuntime();
+  const requestInit = withRuntimeAuth(init);
 
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     try {
-      const response = await net.fetch(`${RUNTIME_BASE_URL}${path}`, init);
+      const response = await net.fetch(`${RUNTIME_BASE_URL}${path}`, requestInit);
       const body = await response.text();
       return { ok: response.ok, status: response.status, body };
     } catch (error) {
@@ -166,6 +171,21 @@ async function runtimeRequest(path: string, init?: RuntimeRequestInit, retries =
   }
 
   throw new Error("Runtime request failed");
+}
+
+function runtimeAuthHeaders() {
+  return RUNTIME_AUTH_TOKEN ? { "X-Draftlet-Runtime-Token": RUNTIME_AUTH_TOKEN } : undefined;
+}
+
+function withRuntimeAuth(init?: RuntimeRequestInit): RuntimeRequestInit | undefined {
+  if (!RUNTIME_AUTH_TOKEN) return init;
+  return {
+    ...init,
+    headers: {
+      ...init?.headers,
+      "X-Draftlet-Runtime-Token": RUNTIME_AUTH_TOKEN,
+    },
+  };
 }
 
 function validateRuntimeRequest(requestPath: string, init?: RuntimeRequestInit) {

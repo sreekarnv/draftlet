@@ -11,6 +11,7 @@ import type {
 } from "@/lib/contracts";
 
 const baseUrl = "http://127.0.0.1:8000/api/v1";
+const runtimeAuthToken = import.meta.env.VITE_DRAFTLET_RUNTIME_TOKEN as string | undefined;
 
 type ApiConversation = Omit<
   Conversation,
@@ -241,6 +242,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const response = await window.draftlet.runtime.request(`/api/v1${path}`, ipcRequestInit);
     if (!response.ok) throw new Error(formatRuntimeError(response.body, response.status));
     return JSON.parse(response.body) as T;
+  }
+
+  if (runtimeAuthToken) {
+    headers.set("X-Draftlet-Runtime-Token", runtimeAuthToken);
   }
   const response = await fetch(`${baseUrl}${path}`, requestInit);
   if (!response.ok)
