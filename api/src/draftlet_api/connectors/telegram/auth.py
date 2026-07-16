@@ -6,6 +6,7 @@ from contextlib import suppress
 from telethon import TelegramClient
 from telethon.errors import SessionPasswordNeededError
 
+from draftlet_api.connectors.telegram.client import disconnect_client
 from draftlet_api.connectors.telegram.config import (
     ensure_private_file,
     ensure_private_parent,
@@ -98,7 +99,7 @@ async def _cancel_qr() -> None:
         with suppress(asyncio.CancelledError):
             await _state.qr_task
     if _state.qr_client and _state.qr_client.is_connected():
-        await _state.qr_client.disconnect()
+        await disconnect_client(_state.qr_client)
     _state.qr_login = None
     _state.qr_client = None
     _state.qr_task = None
@@ -128,7 +129,7 @@ async def send_code(phone: str) -> TelegramAuthStatus:
     except Exception as error:
         _state.state = "error"
         _state.error = str(error)
-        await client.disconnect()
+        await disconnect_client(client)
         raise ConnectorError("telegram_auth_failed", str(error)) from error
 
     delivery, timeout, next_delivery, length = _delivery_label(result)
@@ -150,11 +151,17 @@ async def sign_in(
     client = _state.client or _client()
     if not client.is_connected():
         await client.connect()
+    code_hash = phone_code_hash or _state.phone_code_hash
+    if code_hash is None:
+        raise ConnectorError(
+            "telegram_auth_missing_code_hash",
+            "Request a Telegram login code before signing in.",
+        )
     try:
         await client.sign_in(
             phone=phone,
             code=code,
-            phone_code_hash=phone_code_hash or _state.phone_code_hash,
+            phone_code_hash=code_hash,
         )
     except SessionPasswordNeededError:
         _state.state = "awaiting_password"
@@ -164,7 +171,7 @@ async def sign_in(
     except Exception as error:
         _state.state = "error"
         _state.error = str(error)
-        await client.disconnect()
+        await disconnect_client(client)
         raise ConnectorError("telegram_auth_failed", str(error)) from error
 
     await _mark_connected(client)
@@ -180,7 +187,7 @@ async def sign_in_password(password: str) -> TelegramAuthStatus:
     except Exception as error:
         _state.state = "error"
         _state.error = str(error)
-        await client.disconnect()
+        await disconnect_client(client)
         raise ConnectorError("telegram_auth_failed", str(error)) from error
 
     await _mark_connected(client)
@@ -199,7 +206,7 @@ async def start_qr() -> TelegramQrStart:
     try:
         qr_login = await client.qr_login()
     except Exception as error:
-        await client.disconnect()
+        await disconnect_client(client)
         _state.state = "error"
         _state.error = str(error)
         raise ConnectorError("telegram_qr_failed", str(error)) from error
@@ -229,13 +236,13 @@ async def _wait_for_qr(qr_login, client: TelegramClient) -> None:
     except asyncio.TimeoutError:
         _state.state = "expired"
         _state.error = "QR login expired"
-        await client.disconnect()
+        await disconnect_client(client)
     except asyncio.CancelledError:
         raise
     except Exception as error:
         _state.state = "error"
         _state.error = str(error)
-        await client.disconnect()
+        await disconnect_client(client)
 
 
 def qr_status() -> TelegramQrStatus:
@@ -263,7 +270,7 @@ async def disconnect() -> TelegramAuthStatus:
     if not client.is_connected():
         await client.connect()
     await client.log_out()
-    await client.disconnect()
+    await disconnect_client(client)
     _state.state = "disconnected"
     _state.username = None
     _state.error = None
@@ -280,7 +287,7 @@ async def _mark_connected(client: TelegramClient) -> None:
     _state.phone_code_hash = None
     _state.error = None
     ensure_private_file(telegram_session_path())
-    await client.disconnect()
+    await disconnect_client(client)
     _state.client = None
     _state.qr_client = None
     _state.qr_login = None
@@ -385,4 +392,4 @@ async def current_status() -> TelegramAuthStatus:
             length=_state.length,
         )
     finally:
-        await client.disconnect()
+        await disconnect_client(client)

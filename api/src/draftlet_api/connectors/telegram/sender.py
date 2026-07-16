@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from telethon import TelegramClient
 from telethon.errors import FloodWaitError, RPCError
 
+from draftlet_api.connectors.telegram.client import disconnect_client
 from draftlet_api.connectors.telegram.config import telegram_session_path
 from draftlet_api.connectors.telegram.producer import telegram_producer
 from draftlet_api.core.config import get_settings
@@ -77,7 +78,7 @@ class TelegramSender:
                 "telegram_send_failed", str(error), status=502
             ) from error
         finally:
-            await client.disconnect()
+            await disconnect_client(client)
 
     async def _send_with_client(
         self,
@@ -87,7 +88,10 @@ class TelegramSender:
         reply_to: int | None,
     ) -> TelegramSentMessage:
         try:
-            sent = await client.send_message(chat_id, body, reply_to=reply_to)
+            if reply_to is None:
+                sent = await client.send_message(chat_id, body)
+            else:
+                sent = await client.send_message(chat_id, body, reply_to=reply_to)
             return TelegramSentMessage(id=sent.id, date=sent.date, reply_fallback=False)
         except RPCError:
             if reply_to is None:

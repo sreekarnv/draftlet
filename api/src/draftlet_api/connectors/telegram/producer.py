@@ -7,6 +7,7 @@ from telethon import TelegramClient, events
 from telethon.errors import FloodWaitError, RPCError
 
 from draftlet_api.connectors.base import BaseConnector, ConnectorDaemonStatus
+from draftlet_api.connectors.telegram.client import disconnect_client
 from draftlet_api.connectors.telegram.config import (
     ensure_private_parent,
     telegram_session_path,
@@ -74,7 +75,7 @@ class TelegramProducer(BaseConnector):
                 await task
         if self.client and self.client.is_connected():
             try:
-                await self.client.disconnect()
+                await disconnect_client(self.client)
             except Exception as error:
                 self.error = str(error)
                 logger.warning("Telegram producer disconnect failed: %s", error)
@@ -106,7 +107,7 @@ class TelegramProducer(BaseConnector):
                 if not await self.client.is_user_authorized():
                     self.state = "disabled"
                     self.error = "Telegram session is not authorized"
-                    await self.client.disconnect()
+                    await disconnect_client(self.client)
                     return
 
                 @self.client.on(events.NewMessage(incoming=True))
@@ -132,7 +133,7 @@ class TelegramProducer(BaseConnector):
             finally:
                 if self.client and self.client.is_connected():
                     try:
-                        await self.client.disconnect()
+                        await disconnect_client(self.client)
                     except Exception as error:
                         self.state = "warning"
                         self.error = str(error)
