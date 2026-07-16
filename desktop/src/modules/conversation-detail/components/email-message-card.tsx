@@ -21,7 +21,7 @@ export function EmailMessageCard({ message, replyTarget }: EmailMessageCardProps
   const hasQuote = quotedBody.length > 0;
 
   return (
-    <article className="rounded-xl border bg-card text-card-foreground shadow-sm">
+    <article className="min-w-0 rounded-xl border bg-card text-card-foreground shadow-sm">
       <header className="flex flex-col gap-3 border-b px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -39,7 +39,7 @@ export function EmailMessageCard({ message, replyTarget }: EmailMessageCardProps
           target={replyTarget}
           unresolvedExternalId={!replyTarget ? message.replyToExternalMessageId : undefined}
         />
-        <p className="whitespace-pre-wrap text-sm leading-7 text-foreground/90">
+        <p className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground/90">
           {visibleBody || message.body}
         </p>
         {hasQuote ? (
@@ -54,7 +54,7 @@ export function EmailMessageCard({ message, replyTarget }: EmailMessageCardProps
               {showQuote ? "Hide quoted text" : "Show quoted text"}
             </Button>
             {showQuote ? (
-              <pre className="mt-3 whitespace-pre-wrap rounded-lg bg-muted/60 p-3 text-xs leading-5 text-muted-foreground">
+              <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words rounded-lg bg-muted/60 p-3 text-xs leading-5 text-muted-foreground">
                 {quotedBody}
               </pre>
             ) : null}

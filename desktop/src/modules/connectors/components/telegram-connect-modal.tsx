@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Controller, useForm } from "react-hook-form";
+import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
+import { z } from "zod";
 
 import { QrCode } from "@/components/qr-code";
 import {
@@ -20,19 +23,32 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/shared/components/ui/dialog";
+import { Field, FieldError, FieldLabel } from "@/shared/components/ui/field";
 import { Input } from "@/shared/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs";
 
+const phoneSchema = z.object({
+  phone: z.string().trim().min(4, "Enter your Telegram phone number."),
+});
+
+const codeSchema = z.object({
+  code: z.string().trim().min(2, "Enter the login code."),
+});
+
+const passwordSchema = z.object({
+  password: z.string().min(1, "Enter your 2FA password."),
+});
+
+type PhoneForm = z.infer<typeof phoneSchema>;
+type CodeForm = z.infer<typeof codeSchema>;
+type PasswordForm = z.infer<typeof passwordSchema>;
 
 interface TelegramConnectModalProps {
   open: boolean;
-  onOpenChange(open: boolean): void;
+  onOpenChange: (open: boolean) => void;
 }
 
-export function TelegramConnectModal({
-  open,
-  onOpenChange,
-}: TelegramConnectModalProps) {
+export function TelegramConnectModal({ open, onOpenChange }: TelegramConnectModalProps) {
   const queryClient = useQueryClient();
   const auth = useTelegramAuthStatusQuery();
   const qrStatus = useTelegramQrStatusQuery(open);
@@ -41,9 +57,21 @@ export function TelegramConnectModal({
   const signInPassword = useSignInTelegramPassword();
   const startQr = useStartTelegramQr();
   const cancelQr = useCancelTelegramQr();
-  const [phone, setPhone] = useState("");
-  const [code, setCode] = useState("");
-  const [password, setPassword] = useState("");
+  const phoneForm = useForm<PhoneForm>({
+    resolver: standardSchemaResolver(phoneSchema),
+    mode: "onChange",
+    defaultValues: { phone: "" },
+  });
+  const codeForm = useForm<CodeForm>({
+    resolver: standardSchemaResolver(codeSchema),
+    mode: "onChange",
+    defaultValues: { code: "" },
+  });
+  const passwordForm = useForm<PasswordForm>({
+    resolver: standardSchemaResolver(passwordSchema),
+    mode: "onChange",
+    defaultValues: { password: "" },
+  });
   const [qrUrl, setQrUrl] = useState<string | null>(null);
 
   const pending =
@@ -57,6 +85,7 @@ export function TelegramConnectModal({
   const phoneCodeHash = auth.data?.phone_code_hash;
   const qrState = qrStatus.data?.state ?? (qrUrl ? "awaiting_qr" : "idle");
   const qrExpiresIn = qrStatus.data?.expires_in ?? startQr.data?.expires_in;
+  const phone = phoneForm.watch("phone");
 
   useEffect(() => {
     if (qrStatus.data?.connected) {
@@ -105,25 +134,37 @@ export function TelegramConnectModal({
             </TabsList>
 
             <TabsContent value="phone" className="space-y-4 pt-3">
-              <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-                <label className="flex flex-col gap-1 text-sm">
-                  Phone number
-                  <Input
-                    value={phone}
-                    onChange={(event) => setPhone(event.target.value)}
-                    placeholder="+15551234567"
-                  />
-                </label>
+              <form
+                className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-start"
+                onSubmit={phoneForm.handleSubmit(({ phone }) => startPhone.mutate(phone))}
+              >
+                <Controller
+                  control={phoneForm.control}
+                  name="phone"
+                  render={({ field, fieldState }) => (
+                    <Field>
+                      <FieldLabel htmlFor="telegram-phone">Phone number</FieldLabel>
+                      <Input
+                        id="telegram-phone"
+                        value={field.value}
+                        onChange={field.onChange}
+                        placeholder="+15551234567"
+                        aria-invalid={fieldState.invalid}
+                      />
+                      <FieldError>{fieldState.error?.message}</FieldError>
+                    </Field>
+                  )}
+                />
                 <Button
-                  type="button"
+                  type="submit"
                   size="sm"
                   variant="secondary"
-                  disabled={!phone || pending}
-                  onClick={() => startPhone.mutate(phone)}
+                  className="sm:mt-6"
+                  disabled={!phoneForm.formState.isValid || pending}
                 >
                   Send code
                 </Button>
-              </div>
+              </form>
 
               <AuthHint
                 error={auth.data?.error}
@@ -133,45 +174,77 @@ export function TelegramConnectModal({
                 timeout={auth.data?.timeout}
               />
 
-              <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-                <label className="flex flex-col gap-1 text-sm">
-                  Login code
-                  <Input
-                    value={code}
-                    onChange={(event) => setCode(event.target.value)}
-                    placeholder="12345"
-                  />
-                </label>
+              <form
+                className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-start"
+                onSubmit={codeForm.handleSubmit(({ code }) =>
+                  signIn.mutate({ phone, code, phoneCodeHash }),
+                )}
+              >
+                <Controller
+                  control={codeForm.control}
+                  name="code"
+                  render={({ field, fieldState }) => (
+                    <Field>
+                      <FieldLabel htmlFor="telegram-code">Login code</FieldLabel>
+                      <Input
+                        id="telegram-code"
+                        value={field.value}
+                        onChange={field.onChange}
+                        placeholder="12345"
+                        aria-invalid={fieldState.invalid}
+                      />
+                      <FieldError>{fieldState.error?.message}</FieldError>
+                    </Field>
+                  )}
+                />
                 <Button
-                  type="button"
+                  type="submit"
                   size="sm"
-                  disabled={!phone || !code || pending}
-                  onClick={() => signIn.mutate({ phone, code, phoneCodeHash })}
+                  className="sm:mt-6"
+                  disabled={!phone || !codeForm.formState.isValid || pending}
                 >
                   Sign in
                 </Button>
-              </div>
+              </form>
 
-              <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-                <label className="flex flex-col gap-1 text-sm">
-                  2FA password
-                  <Input
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    placeholder="Only if Telegram asks"
-                    type="password"
-                  />
-                </label>
+              <form
+                className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-start"
+                onSubmit={passwordForm.handleSubmit(({ password }) =>
+                  signInPassword.mutate(password),
+                )}
+              >
+                <Controller
+                  control={passwordForm.control}
+                  name="password"
+                  render={({ field, fieldState }) => (
+                    <Field>
+                      <FieldLabel htmlFor="telegram-password">2FA password</FieldLabel>
+                      <Input
+                        id="telegram-password"
+                        value={field.value}
+                        onChange={field.onChange}
+                        placeholder="Only if Telegram asks"
+                        type="password"
+                        aria-invalid={fieldState.invalid}
+                      />
+                      <FieldError>{fieldState.error?.message}</FieldError>
+                    </Field>
+                  )}
+                />
                 <Button
-                  type="button"
+                  type="submit"
                   size="sm"
                   variant="outline"
-                  disabled={!password || pending || auth.data?.state !== "awaiting_password"}
-                  onClick={() => signInPassword.mutate(password)}
+                  className="sm:mt-6"
+                  disabled={
+                    !passwordForm.formState.isValid ||
+                    pending ||
+                    auth.data?.state !== "awaiting_password"
+                  }
                 >
                   Submit 2FA
                 </Button>
-              </div>
+              </form>
             </TabsContent>
 
             <TabsContent value="qr" className="space-y-4 pt-3">
@@ -243,13 +316,7 @@ export interface AuthHintProps {
   timeout?: number | null;
 }
 
-function AuthHint({
-  error,
-  delivery,
-  nextDelivery,
-  length,
-  timeout,
-}: AuthHintProps) {
+function AuthHint({ error, delivery, nextDelivery, length, timeout }: AuthHintProps) {
   if (error) {
     return (
       <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
