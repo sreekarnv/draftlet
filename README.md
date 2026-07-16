@@ -1,64 +1,74 @@
-# Draftlet
+<p align="center">
+  <img src=".github/assets/logo.webp" alt="Draftlet" width="128" />
+</p>
 
-Local-first writing assistant for Linux desktop. Capture conversations, generate
-drafts through local LLM providers (Ollama first), keep durable local memory,
-and review in a serious writing surface — without sending your data anywhere.
+<h1 align="center">Draftlet</h1>
+
+<p align="center">
+  Local-first writing assistant for Linux desktop.
+</p>
+
+Draftlet captures conversations, generates drafts through local LLM providers
+(Ollama first), keeps durable local memory, and lets you review everything in a
+focused desktop writing surface without sending your data to a cloud service.
 
 ## Status
 
-Pre-alpha. The current code base is the desktop POC (see [`desktop/`](./desktop)).
-A larger rewrite is in planning: shared contracts, a local FastAPI runtime, and
-a Gmail browser extension. See the in-repo planning notes and
-[`desktop/AGENTS.md`](./desktop/AGENTS.md) for the active work.
+Draftlet is in active alpha development as `v1.0.0-alpha1`. It is not published
+as a release yet.
 
-## Surfaces (planned)
+Current working scope:
 
-- **Desktop** (Electron) — main product shell. Library, Drafts, Bookmarks,
-  Connectors, Search, Settings, Diagnostics.
-- **Browser extension** (Chrome / Firefox) — Gmail connector, side panel
-  drafting, popup status.
-- **Runtime** (local FastAPI daemon) — owns persistence, prompt building, and
-  generation. Exposes typed APIs to desktop and extension.
-- **Telegram connector** — MTProto user-client integration. This uses
-  `api_id` / `api_hash` from `my.telegram.org`, not a `@BotFather` bot token.
+- **Telegram** - local MTProto user-client auth, incoming capture, draft
+  generation, and explicit send.
+- **Gmail** - Chrome extension selection capture into the local runtime, rendered
+  in the Email workspace for drafting.
+- **Desktop** - Electron app with Messages, Email, Connectors, Settings, Search,
+  and local runtime status surfaces.
+- **Runtime** - local FastAPI service with SQLite persistence, capture ingest,
+  connector management, search, and local generation through Ollama.
 
-## Layout
+Still in progress:
+
+- Gmail OAuth/API sync.
+- Gmail send and compose insertion.
+- Packaged runtime installation.
+- Production hardening and installer polish.
+- Windows/macOS support.
+
+## Repository Layout
 
 ```text
 draftlet/
-  desktop/         Electron + React 19 + Vite+ (current POC, v1.0.0-alpha1)
-  packages/        shared contracts (planned)
-  apps/            runtime + extension (planned)
-  docs/            architecture, UI principles, phase plan (planned)
+  api/        local FastAPI runtime and connector services
+  desktop/    Electron + React 19 + Vite+ desktop app
+  extension/  WXT + React Chrome extension for Gmail capture
 ```
 
-## Supported scope (target)
+## Development
 
-- Linux desktop (AppImage first).
-- Source connectors: Gmail (via extension), Telegram through MTProto user-client
-  auth.
-- Provider connector: Ollama (local).
+Folder READMEs contain build and run instructions for each surface:
+
+- [`api/`](./api) - local runtime.
+- [`desktop/`](./desktop) - desktop app. Desktop development requires the API
+  runtime to be running separately.
+- [`extension/`](./extension) - Gmail Chrome extension.
+
+## Scope
+
+- Linux desktop first.
+- Local runtime at `127.0.0.1:8000` during development.
+- Source connectors: Telegram and Gmail.
+- Provider connector: Ollama.
 - Local persistence in SQLite.
 
-## Out of scope (for now)
+## Out Of Scope For Now
 
+- Cloud sync, accounts, billing, or team features.
 - Auto-capture across arbitrary apps.
-- macOS / Windows desktop builds.
 - WhatsApp native desktop capture.
-- Cloud sync, accounts, billing, team features.
+- Gmail OAuth/API sync or external email sending.
 
 ## License
 
 AGPLv3. See [`LICENSE`](./LICENSE).
-
-## Development
-
-The active work happens in [`desktop/`](./desktop). From there:
-
-```bash
-vp install
-vp check
-vp dev
-```
-
-`vp` is the Vite+ unified CLI. See `desktop/AGENTS.md` for the full workflow.
