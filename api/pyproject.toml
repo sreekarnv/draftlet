@@ -1,0 +1,31 @@
+[project]
+name = "draftlet-api"
+version = "1.0.0-alpha1"
+requires-python = ">=3.12"
+license = "AGPL-3.0-only"
+dependencies = [
+    "fastapi[all]>=0.139.0",
+    "sqlalchemy>=2.0.51",
+    "aiosqlite>=0.21.0",
+    "httpx>=0.28.0",
+    "greenlet>=3.2.0",
+    "alembic>=1.18.5",
+    "telethon>=1.44.0",
+    "platformdirs>=4.10.0",
+]
+
+[project.scripts]
+dev = "draftlet_api:dev"
+alembic-generate = "draftlet_api.scripts.alembic:generate"
+alembic-upgrade = "draftlet_api.scripts.alembic:upgrade"
+alembic-downgrade = "draftlet_api.scripts.alembic:downgrade"
+ollama-smoke = "draftlet_api.scripts.ollama_smoke:main"
+
+[build-system]
+requires = ["uv_build>=0.11.28,<0.12"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.21",
+]
