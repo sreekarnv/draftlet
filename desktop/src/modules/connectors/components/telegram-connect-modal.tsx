@@ -23,13 +23,16 @@ import {
 import { Input } from "@/shared/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs";
 
+
+interface TelegramConnectModalProps {
+  open: boolean;
+  onOpenChange(open: boolean): void;
+}
+
 export function TelegramConnectModal({
   open,
   onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
+}: TelegramConnectModalProps) {
   const queryClient = useQueryClient();
   const auth = useTelegramAuthStatusQuery();
   const qrStatus = useTelegramQrStatusQuery(open);
@@ -95,7 +98,7 @@ export function TelegramConnectModal({
             </div>
           </div>
         ) : (
-          <Tabs defaultValue="phone" className="min-h-[360px]">
+          <Tabs defaultValue="phone" className="min-h-90">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="phone">Phone</TabsTrigger>
               <TabsTrigger value="qr">QR code</TabsTrigger>
@@ -184,7 +187,7 @@ export function TelegramConnectModal({
                 {qrUrl && qrState !== "expired" ? (
                   <QrCode value={qrUrl} />
                 ) : (
-                  <div className="flex size-[244px] items-center justify-center rounded-lg bg-muted text-sm text-muted-foreground">
+                  <div className="flex size-61 items-center justify-center rounded-lg bg-muted text-sm text-muted-foreground">
                     No active QR
                   </div>
                 )}
@@ -232,19 +235,21 @@ export function TelegramConnectModal({
   );
 }
 
+export interface AuthHintProps {
+  error?: string | null;
+  delivery?: string | null;
+  nextDelivery?: string | null;
+  length?: number | null;
+  timeout?: number | null;
+}
+
 function AuthHint({
   error,
   delivery,
   nextDelivery,
   length,
   timeout,
-}: {
-  error?: string | null;
-  delivery?: string | null;
-  nextDelivery?: string | null;
-  length?: number | null;
-  timeout?: number | null;
-}) {
+}: AuthHintProps) {
   if (error) {
     return (
       <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
