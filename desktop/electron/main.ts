@@ -38,6 +38,20 @@ const RUN_IN_BACKGROUND_KEY = "run_in_background";
 const RUNTIME_BASE_URL = "http://127.0.0.1:8000";
 const RUNTIME_EVENTS_URL = "http://127.0.0.1:8000/api/v1/events/stream";
 const RUN_IN_BACKGROUND_PATH = `/api/v1/settings/${RUN_IN_BACKGROUND_KEY}`;
+const ALLOWED_RUNTIME_PATHS = [
+  "/health",
+  "/api/v1/captures",
+  "/api/v1/connectors",
+  "/api/v1/conversations",
+  "/api/v1/drafts",
+  "/api/v1/events",
+  "/api/v1/generations",
+  "/api/v1/ollama",
+  "/api/v1/search",
+  "/api/v1/settings",
+] as const;
+const ALLOWED_RUNTIME_METHODS = new Set(["GET", "POST", "PATCH", "DELETE"]);
+const ALLOWED_RUNTIME_HEADERS = new Set(["accept", "content-type"]);
 
 type RuntimeRequestInit = {
   method?: string;
@@ -152,6 +166,37 @@ async function runtimeRequest(path: string, init?: RuntimeRequestInit, retries =
   }
 
   throw new Error("Runtime request failed");
+}
+
+function validateRuntimeRequest(requestPath: string, init?: RuntimeRequestInit) {
+  const method = init?.method?.toUpperCase() ?? "GET";
+
+  if (
+    !requestPath.startsWith("/") ||
+    requestPath.startsWith("//") ||
+    requestPath.includes("\\") ||
+    requestPath.includes("..")
+  ) {
+    throw new Error("Invalid runtime request path");
+  }
+
+  if (!ALLOWED_RUNTIME_METHODS.has(method)) {
+    throw new Error("Invalid runtime request method");
+  }
+
+  const url = new URL(requestPath, RUNTIME_BASE_URL);
+  const isAllowedPath = ALLOWED_RUNTIME_PATHS.some(
+    (pathPrefix) => url.pathname === pathPrefix || url.pathname.startsWith(`${pathPrefix}/`),
+  );
+  if (url.origin !== RUNTIME_BASE_URL || !isAllowedPath) {
+    throw new Error("Runtime request path is not allowed");
+  }
+
+  for (const header of Object.keys(init?.headers ?? {})) {
+    if (!ALLOWED_RUNTIME_HEADERS.has(header.toLowerCase())) {
+      throw new Error("Runtime request header is not allowed");
+    }
+  }
 }
 
 async function getRunInBackground() {
@@ -273,6 +318,7 @@ function createTray() {
 }
 
 ipcMain.handle("runtime:request", async (_event, path: string, init?: RuntimeRequestInit) => {
+  validateRuntimeRequest(path, init);
   const response = await runtimeRequest(path, init);
   if (path.startsWith(RUN_IN_BACKGROUND_PATH)) {
     void buildTrayMenu();
