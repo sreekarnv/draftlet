@@ -1,4 +1,5 @@
 export const RUNTIME_CAPTURE_URL = "http://127.0.0.1:8000/api/v1/connectors/gmail/captures";
+const runtimeAuthToken = import.meta.env.VITE_DRAFTLET_RUNTIME_TOKEN as string | undefined;
 
 export type GmailCapturePayload = {
   gmail_message_id: string;
@@ -49,9 +50,14 @@ export type RuntimeResponse<T> =
     };
 
 export async function captureGmail(payload: GmailCapturePayload): Promise<CaptureRead> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (runtimeAuthToken) {
+    headers["X-Draftlet-Runtime-Token"] = runtimeAuthToken;
+  }
+
   const response = await fetch(RUNTIME_CAPTURE_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(payload),
   });
 
