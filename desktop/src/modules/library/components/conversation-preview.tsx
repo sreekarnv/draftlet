@@ -13,7 +13,7 @@ export interface ConversationPreviewProps {
 export function ConversationPreview({ conversation, onGenerate }: ConversationPreviewProps) {
   if (!conversation) {
     return (
-      <aside className="hidden min-h-0 bg-muted/50 lg:flex lg:w-[400px] lg:flex-col">
+      <aside className="hidden min-h-0 bg-muted/50 lg:flex lg:w-100 lg:flex-col">
         <EmptyState
           title="No conversation selected"
           description="Select a captured conversation to preview its connector metadata and latest message."
@@ -23,7 +23,7 @@ export function ConversationPreview({ conversation, onGenerate }: ConversationPr
   }
 
   return (
-    <aside className="hidden min-h-0 bg-muted/50 text-card-foreground lg:flex lg:w-[400px] lg:flex-col">
+    <aside className="hidden min-h-0 bg-muted/50 text-card-foreground lg:flex lg:w-100 lg:flex-col">
       <div className="p-5">
         <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
           Preview

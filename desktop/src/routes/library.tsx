@@ -26,7 +26,7 @@ const FILTERS: LibraryTab[] = [
 
 export function Library() {
   const navigate = useNavigate();
-  const conversations = useConversationsQuery().data ?? [];
+  const conversations = useConversationsQuery();
   const generateDraft = useGenerateDraft();
   const selectedLibraryConversationId = useDraftletStore((s) => s.selectedLibraryConversationId);
   const setSelectedLibraryConversationId = useDraftletStore(
@@ -41,8 +41,9 @@ export function Library() {
 
   const filteredConversations = useMemo(() => {
     const normalizedQuery = state.query.trim().toLowerCase();
+    const conversationsData = conversations.data ?? []
 
-    return conversations.filter((conversation) => {
+    return conversationsData.filter((conversation) => {
       const matchesQuery = normalizedQuery
         ? [
             conversation.title,
@@ -62,7 +63,7 @@ export function Library() {
   }, [state.activeFilter, conversations, state.query]);
 
   const selectedConversation =
-    conversations.find((conversation) => conversation.id === state.selectedId) ??
+    conversations?.data!.find((conversation) => conversation.id === state.selectedId) ??
     filteredConversations[0];
 
   async function handleGenerate(conversationId: string) {
@@ -81,7 +82,7 @@ export function Library() {
               </p>
               <h1 className="mt-1 text-lg font-semibold tracking-tight">Conversation memory</h1>
               <p className="mt-1 text-xs text-muted-foreground">
-                {filteredConversations.length} of {conversations.length} local captures shown
+                {filteredConversations.length} of {conversations?.data!.length} local captures shown
               </p>
             </div>
             <div className="relative w-full xl:max-w-sm">
