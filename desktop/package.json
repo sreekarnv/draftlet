@@ -6,7 +6,8 @@
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
-    "dev": "vp dev",
+    "dev": "pnpm kill:port && vp dev",
+    "kill:port": "fuser -k 8000/tcp || true",
     "build": "tsc && vp build && electron-builder",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vp preview",

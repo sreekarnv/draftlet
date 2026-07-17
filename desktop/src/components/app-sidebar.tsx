@@ -1,6 +1,6 @@
 import type * as React from "react";
 import { Link } from "react-router";
-import { Mail, MessageCircle } from "lucide-react";
+import { ChevronRight, Mail, MessageCircle } from "lucide-react";
 
 import draftletLogo from "../../../.github/assets/logo.webp";
 import { draftletNavigation } from "@/lib/navigation";
@@ -9,6 +9,11 @@ import { useConversationsQuery } from "@/lib/queries/conversations";
 import { useRuntimeStatus } from "@/lib/runtime-status";
 import { StatusDot } from "@/components/status-dot";
 import { cn } from "@/shared/lib/utils";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/shared/components/ui/collapsible";
 import {
   Sidebar,
   SidebarContent,
@@ -93,66 +98,83 @@ function ConversationGroup({ label, conversations, activePath, kind }: Conversat
   const emptyLabel = kind === "email" ? "No Gmail threads yet" : "No Telegram chats yet";
 
   return (
-    <SidebarGroup>
-      <SidebarGroupLabel className="px-2 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-        {label}
-      </SidebarGroupLabel>
-      <SidebarGroupContent>
-        <SidebarMenu className="gap-0.5">
-          {conversations.length > 0 ? (
-            conversations.map((conversation) => {
-              const href =
-                kind === "email" ? `/email/${conversation.id}` : `/messages/${conversation.id}`;
-              const isActive = activePath === href;
-              const title =
-                kind === "email" ? getEmailSender(conversation) : getConversationName(conversation);
-              const subtitle = kind === "email" ? conversation.title : undefined;
-              const preview = conversation.latestMessage;
-              const RowIcon = getConversationIcon(conversation, kind);
+    <Collapsible defaultOpen asChild>
+      <SidebarGroup className="min-h-0 py-1">
+        <SidebarGroupLabel
+          asChild
+          className="group/section-trigger h-7 px-2 text-[10px] uppercase tracking-[0.14em] text-muted-foreground hover:bg-sidebar-accent/45 hover:text-sidebar-foreground"
+        >
+          <CollapsibleTrigger>
+            <ChevronRight className="size-3.5 transition-transform group-data-[state=open]/section-trigger:rotate-90" />
+            <span className="min-w-0 flex-1 truncate">{label}</span>
+            <span className="rounded-full bg-sidebar-accent px-1.5 py-0.5 text-[10px] leading-none text-sidebar-foreground/60">
+              {conversations.length}
+            </span>
+          </CollapsibleTrigger>
+        </SidebarGroupLabel>
+        <CollapsibleContent>
+          <SidebarGroupContent className="max-h-[min(34vh,22rem)] overflow-y-auto overscroll-contain pr-1">
+            <SidebarMenu className="gap-0.5">
+              {conversations.length > 0 ? (
+                conversations.map((conversation) => {
+                  const href =
+                    kind === "email" ? `/email/${conversation.id}` : `/messages/${conversation.id}`;
+                  const isActive = activePath === href;
+                  const title =
+                    kind === "email"
+                      ? getEmailSender(conversation)
+                      : getConversationName(conversation);
+                  const subtitle = kind === "email" ? conversation.title : undefined;
+                  const preview = conversation.latestMessage;
+                  const RowIcon = getConversationIcon(conversation, kind);
 
-              return (
-                <SidebarMenuItem key={conversation.id}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActive}
-                    tooltip={title}
-                    className={cn(
-                      "relative h-auto min-h-10 items-start rounded-md py-2 pl-4 pr-2 text-sidebar-foreground/75 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:px-2",
-                      isActive &&
-                        "bg-sidebar-accent font-medium text-sidebar-accent-foreground before:absolute before:left-2 before:top-1/2 before:h-5 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-primary group-data-[collapsible=icon]:before:left-1",
-                    )}
-                  >
-                    <Link to={href} aria-current={isActive ? "page" : undefined}>
-                      <RowIcon className="mt-0.5 size-4 shrink-0" />
-                      <span className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
-                        <span className="block truncate text-sm leading-4">{title}</span>
-                        {subtitle ? (
-                          <span className="mt-0.5 block truncate text-xs leading-4 text-sidebar-foreground/55">
-                            {subtitle}
+                  return (
+                    <SidebarMenuItem key={conversation.id}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive}
+                        tooltip={title}
+                        className={cn(
+                          "relative h-auto min-h-10 items-start rounded-md py-2 pl-4 pr-2 text-sidebar-foreground/75 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:px-2",
+                          isActive &&
+                            "bg-sidebar-accent font-medium text-sidebar-accent-foreground before:absolute before:left-2 before:top-1/2 before:h-5 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-primary group-data-[collapsible=icon]:before:left-1",
+                        )}
+                      >
+                        <Link to={href} aria-current={isActive ? "page" : undefined}>
+                          <RowIcon className="mt-0.5 size-4 shrink-0" />
+                          <span className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
+                            <span className="block truncate text-sm leading-4">{title}</span>
+                            {subtitle ? (
+                              <span className="mt-0.5 block truncate text-xs leading-4 text-sidebar-foreground/55">
+                                {subtitle}
+                              </span>
+                            ) : null}
+                            {preview ? (
+                              <span className="mt-0.5 block truncate text-xs leading-4 text-sidebar-foreground/55">
+                                {preview}
+                              </span>
+                            ) : null}
                           </span>
-                        ) : null}
-                        {preview ? (
-                          <span className="mt-0.5 block truncate text-xs leading-4 text-sidebar-foreground/55">
-                            {preview}
-                          </span>
-                        ) : null}
-                      </span>
-                    </Link>
-                  </SidebarMenuButton>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })
+              ) : (
+                <SidebarMenuItem>
+                  <div className="flex items-center gap-2 rounded-md px-2 py-2 text-xs text-sidebar-foreground/45 group-data-[collapsible=icon]:justify-center">
+                    <Icon className="size-4 shrink-0" />
+                    <span className="truncate group-data-[collapsible=icon]:hidden">
+                      {emptyLabel}
+                    </span>
+                  </div>
                 </SidebarMenuItem>
-              );
-            })
-          ) : (
-            <SidebarMenuItem>
-              <div className="flex items-center gap-2 rounded-md px-2 py-2 text-xs text-sidebar-foreground/45 group-data-[collapsible=icon]:justify-center">
-                <Icon className="size-4 shrink-0" />
-                <span className="truncate group-data-[collapsible=icon]:hidden">{emptyLabel}</span>
-              </div>
-            </SidebarMenuItem>
-          )}
-        </SidebarMenu>
-      </SidebarGroupContent>
-    </SidebarGroup>
+              )}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </CollapsibleContent>
+      </SidebarGroup>
+    </Collapsible>
   );
 }
 

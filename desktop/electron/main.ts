@@ -138,7 +138,7 @@ async function connectRuntimeEvents() {
     }
   } catch (error) {
     if (!abort.signal.aborted) {
-      console.info("Runtime event stream disconnected", error);
+      console.info("Runtime event stream unavailable; retrying", error);
     }
   } finally {
     if (runtimeEventsAbort === abort) {
@@ -152,7 +152,7 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function runtimeRequest(path: string, init?: RuntimeRequestInit, retries = 0) {
+async function runtimeRequest(path: string, init?: RuntimeRequestInit, retries = 20) {
   startRuntime();
   const requestInit = withRuntimeAuth(init);
 
@@ -290,7 +290,7 @@ function navigateWindow(route: string) {
   );
 }
 
-function enableDevtools(window: BrowserWindow) {
+function enableDevtoolsShortcuts(window: BrowserWindow) {
   if (!VITE_DEV_SERVER_URL) return;
 
   window.webContents.on("before-input-event", (event, input) => {
@@ -303,10 +303,6 @@ function enableDevtools(window: BrowserWindow) {
 
     event.preventDefault();
     window.webContents.toggleDevTools();
-  });
-
-  window.webContents.once("did-finish-load", () => {
-    window.webContents.openDevTools({ mode: "detach" });
   });
 }
 
@@ -383,7 +379,7 @@ function createWindow(initialRoute?: string) {
     },
   });
 
-  enableDevtools(win);
+  enableDevtoolsShortcuts(win);
 
   win.on("close", (event) => {
     if (isQuitting) return;
