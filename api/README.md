@@ -27,6 +27,14 @@ uv run ruff check .
 uv build
 ```
 
+## Package Runtime
+
+```bash
+uv run package-runtime
+```
+
+The packaged runtime is written to `dist-runtime/` for the Electron build.
+
 ## Telegram Environment
 
 Telegram uses MTProto user-client auth. Configure these before connecting

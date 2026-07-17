@@ -1,6 +1,6 @@
-export const RUNTIME_CAPTURE_URL = "http://127.0.0.1:8000/api/v1/connectors/gmail/captures";
-export const RUNTIME_LATEST_GMAIL_DRAFT_URL =
-  "http://127.0.0.1:8000/api/v1/connectors/gmail/drafts/latest";
+const runtimeBaseUrls = ["http://127.0.0.1:8765", "http://127.0.0.1:8000"];
+export const RUNTIME_CAPTURE_URL = `${runtimeBaseUrls[0]}/api/v1/connectors/gmail/captures`;
+export const RUNTIME_LATEST_GMAIL_DRAFT_URL = `${runtimeBaseUrls[0]}/api/v1/connectors/gmail/drafts/latest`;
 const runtimeAuthToken = import.meta.env.VITE_DRAFTLET_RUNTIME_TOKEN as string | undefined;
 
 export type GmailCapturePayload = {
@@ -81,7 +81,7 @@ export async function captureGmail(payload: GmailCapturePayload): Promise<Captur
     headers["X-Draftlet-Runtime-Token"] = runtimeAuthToken;
   }
 
-  const response = await fetch(RUNTIME_CAPTURE_URL, {
+  const response = await runtimeFetch("/api/v1/connectors/gmail/captures", {
     method: "POST",
     headers,
     body: JSON.stringify(payload),
@@ -101,7 +101,7 @@ export async function latestGmailDraft(): Promise<LatestGmailDraft> {
     headers["X-Draftlet-Runtime-Token"] = runtimeAuthToken;
   }
 
-  const response = await fetch(RUNTIME_LATEST_GMAIL_DRAFT_URL, { headers });
+  const response = await runtimeFetch("/api/v1/connectors/gmail/drafts/latest", { headers });
 
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
@@ -109,6 +109,18 @@ export async function latestGmailDraft(): Promise<LatestGmailDraft> {
   }
 
   return response.json() as Promise<LatestGmailDraft>;
+}
+
+async function runtimeFetch(path: string, init?: RequestInit): Promise<Response> {
+  let lastError: unknown;
+  for (const baseUrl of runtimeBaseUrls) {
+    try {
+      return await fetch(`${baseUrl}${path}`, init);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
 }
 
 export function errorMessage(error: unknown): string {

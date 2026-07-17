@@ -171,7 +171,8 @@ export function App() {
         </CardContent>
         <CardFooter>
           <p className="text-[11px] leading-4 text-muted-foreground">
-            Runtime: <span className="text-foreground">127.0.0.1:8000</span>. Reload Gmail after
+            Runtime: <span className="text-foreground">127.0.0.1:8765</span> or{" "}
+            <span className="text-foreground">127.0.0.1:8000</span>. Reload Gmail after
             installing the extension.
           </p>
         </CardFooter>
@@ -209,7 +210,7 @@ function readableRuntimeError(
 ): string {
   if (!error) return fallback;
   if (error.includes("Failed to fetch")) {
-    return "Draftlet runtime is offline. Start the local runtime on 127.0.0.1:8000.";
+    return "Draftlet runtime is offline. Start Draftlet or the local runtime on 127.0.0.1:8000.";
   }
   if (error.includes("gmail_draft_not_found") || error.includes("404")) {
     return fallback;

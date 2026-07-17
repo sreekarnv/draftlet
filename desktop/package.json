@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "pnpm kill:port && vp dev",
     "kill:port": "fuser -k 8000/tcp || true",
-    "build": "tsc && vp build && electron-builder",
+    "build": "uv --project ../api run package-runtime && tsc && vp build && electron-builder",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vp preview",
     "contracts:pull": "curl -fsS http://127.0.0.1:8000/openapi.json -o openapi.json",

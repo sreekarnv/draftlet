@@ -19,7 +19,11 @@ export default defineConfig({
       },
     },
     permissions: ["activeTab", "scripting"],
-    host_permissions: ["http://127.0.0.1:8000/*", "https://mail.google.com/*"],
+    host_permissions: [
+      "http://127.0.0.1:8765/*",
+      "http://127.0.0.1:8000/*",
+      "https://mail.google.com/*",
+    ],
   },
   vite: () => ({
     plugins: [tailwindcss()],

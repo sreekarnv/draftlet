@@ -1,7 +1,7 @@
 import "@/shared/styles/main.css";
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { RouterProvider, createBrowserRouter } from "react-router";
+import { RouterProvider, createHashRouter } from "react-router";
 import { DefaultLayout } from "@/shared/components/layouts/default";
 import { Connectors } from "@/routes/connectors";
 import { ConversationDetail } from "@/routes/conversation-detail";
@@ -16,7 +16,7 @@ import { Search } from "@/routes/search";
 import { Settings } from "@/routes/settings";
 import { QueryProvider } from "@/shared/components/query-provider";
 
-const router = createBrowserRouter([
+const router = createHashRouter([
   {
     path: "/",
     Component: DefaultLayout,

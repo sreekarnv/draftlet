@@ -35,8 +35,9 @@ let runtimeEventsAbort: AbortController | null = null;
 let runtimeEventsReconnect: ReturnType<typeof setTimeout> | null = null;
 
 const RUN_IN_BACKGROUND_KEY = "run_in_background";
-const RUNTIME_BASE_URL = "http://127.0.0.1:8000";
-const RUNTIME_EVENTS_URL = "http://127.0.0.1:8000/api/v1/events/stream";
+const RUNTIME_PORT = VITE_DEV_SERVER_URL ? 8000 : 8765;
+const RUNTIME_BASE_URL = `http://127.0.0.1:${RUNTIME_PORT}`;
+const RUNTIME_EVENTS_URL = `${RUNTIME_BASE_URL}/api/v1/events/stream`;
 const RUNTIME_AUTH_TOKEN = process.env["DRAFTLET_RUNTIME_TOKEN"];
 const RUN_IN_BACKGROUND_PATH = `/api/v1/settings/${RUN_IN_BACKGROUND_KEY}`;
 const ALLOWED_RUNTIME_PATHS = [
@@ -63,12 +64,24 @@ type RuntimeRequestInit = {
 type RuntimeEvent = Record<string, unknown> & { type?: string };
 
 function startRuntime() {
-  if (!VITE_DEV_SERVER_URL || runtime) return;
-  const runtimeRoot = path.resolve(process.env.APP_ROOT, "..", "api");
-  runtime = spawn("sh", ["-c", "uv run alembic-upgrade && uv run dev"], {
-    cwd: runtimeRoot,
-    stdio: "inherit",
-  });
+  if (runtime) return;
+
+  if (VITE_DEV_SERVER_URL) {
+    const runtimeRoot = path.resolve(process.env.APP_ROOT, "..", "api");
+    runtime = spawn("sh", ["-c", "uv run alembic-upgrade && uv run dev"], {
+      cwd: runtimeRoot,
+      stdio: "inherit",
+    });
+  } else {
+    const executable = process.platform === "win32" ? "draftlet-runtime.exe" : "draftlet-runtime";
+    const runtimeRoot = path.join(process.resourcesPath, "runtime");
+    runtime = spawn(path.join(runtimeRoot, executable), [], {
+      cwd: runtimeRoot,
+      env: { ...process.env, PORT: String(RUNTIME_PORT) },
+      stdio: "inherit",
+    });
+  }
+
   runtime.on("exit", () => {
     runtime = null;
   });
@@ -286,7 +299,7 @@ function navigateWindow(route: string) {
   }
 
   void win.webContents.executeJavaScript(
-    `window.history.pushState(null, "", ${JSON.stringify(route)}); window.dispatchEvent(new PopStateEvent("popstate"));`,
+    `window.location.hash = ${JSON.stringify(route)};`,
   );
 }
 
