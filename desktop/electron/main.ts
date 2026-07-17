@@ -255,7 +255,7 @@ function stopRuntime() {
 }
 
 function getTrayIcon() {
-  const iconPath = path.join(process.env.VITE_PUBLIC, "electron-vite.svg");
+  const iconPath = path.join(process.env.VITE_PUBLIC, "logo.png");
   const icon = nativeImage.createFromPath(iconPath);
   return icon.isEmpty() ? nativeImage.createEmpty() : icon;
 }
@@ -373,7 +373,7 @@ function createWindow(initialRoute?: string) {
     x: 0,
     y: 0,
     autoHideMenuBar: true,
-    icon: path.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
+    icon: path.join(process.env.VITE_PUBLIC, "logo.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
     },
