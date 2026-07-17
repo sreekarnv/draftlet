@@ -290,6 +290,26 @@ function navigateWindow(route: string) {
   );
 }
 
+function enableDevtools(window: BrowserWindow) {
+  if (!VITE_DEV_SERVER_URL) return;
+
+  window.webContents.on("before-input-event", (event, input) => {
+    const key = input.key.toLowerCase();
+    const isDevtoolsShortcut =
+      key === "f12" ||
+      (key === "i" && input.control && input.shift) ||
+      (key === "i" && input.meta && input.alt);
+    if (!isDevtoolsShortcut) return;
+
+    event.preventDefault();
+    window.webContents.toggleDevTools();
+  });
+
+  window.webContents.once("did-finish-load", () => {
+    window.webContents.openDevTools({ mode: "detach" });
+  });
+}
+
 async function buildTrayMenu() {
   const runInBackground = await getRunInBackground();
   tray?.setToolTip(
@@ -362,6 +382,8 @@ function createWindow(initialRoute?: string) {
       preload: path.join(__dirname, "preload.mjs"),
     },
   });
+
+  enableDevtools(win);
 
   win.on("close", (event) => {
     if (isQuitting) return;

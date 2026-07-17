@@ -129,9 +129,15 @@ export function InlineDraftEditor({ conversation, latestDraft }: InlineDraftEdit
                     Send Telegram
                   </Button>
                 ) : (
-                  <Button size="sm" disabled title="Email sending is not implemented yet">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={!canActOnDraft}
+                    title="Open Gmail, start a reply, then use the Draftlet extension to insert the latest reply."
+                    onClick={draft.copy}
+                  >
                     <Send className="size-3.5" />
-                    Send disabled
+                    Copy for Gmail
                   </Button>
                 )}
               </div>

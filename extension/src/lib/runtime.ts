@@ -1,4 +1,6 @@
 export const RUNTIME_CAPTURE_URL = "http://127.0.0.1:8000/api/v1/connectors/gmail/captures";
+export const RUNTIME_LATEST_GMAIL_DRAFT_URL =
+  "http://127.0.0.1:8000/api/v1/connectors/gmail/drafts/latest";
 const runtimeAuthToken = import.meta.env.VITE_DRAFTLET_RUNTIME_TOKEN as string | undefined;
 
 export type GmailCapturePayload = {
@@ -28,6 +30,15 @@ export type CaptureRead = {
   captured_at: string;
 };
 
+export type LatestGmailDraft = {
+  draft_id: string;
+  conversation_id: string;
+  subject: string;
+  text: string;
+  gmail_url?: string | null;
+  updated_at: string;
+};
+
 export type ExtractGmailMessage = {
   type: "draftlet.extractGmail";
 };
@@ -37,7 +48,22 @@ export type CaptureGmailMessage = {
   payload: GmailCapturePayload;
 };
 
-export type RuntimeMessage = ExtractGmailMessage | CaptureGmailMessage;
+export type GetLatestGmailDraftMessage = {
+  type: "draftlet.getLatestGmailDraft";
+};
+
+export type InsertGmailDraftMessage = {
+  type: "draftlet.insertGmailDraft";
+  payload: {
+    text: string;
+  };
+};
+
+export type RuntimeMessage =
+  | ExtractGmailMessage
+  | CaptureGmailMessage
+  | GetLatestGmailDraftMessage
+  | InsertGmailDraftMessage;
 
 export type RuntimeResponse<T> =
   | {
@@ -67,6 +93,22 @@ export async function captureGmail(payload: GmailCapturePayload): Promise<Captur
   }
 
   return response.json() as Promise<CaptureRead>;
+}
+
+export async function latestGmailDraft(): Promise<LatestGmailDraft> {
+  const headers: Record<string, string> = {};
+  if (runtimeAuthToken) {
+    headers["X-Draftlet-Runtime-Token"] = runtimeAuthToken;
+  }
+
+  const response = await fetch(RUNTIME_LATEST_GMAIL_DRAFT_URL, { headers });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(detail || `Draftlet runtime returned ${response.status}`);
+  }
+
+  return response.json() as Promise<LatestGmailDraft>;
 }
 
 export function errorMessage(error: unknown): string {

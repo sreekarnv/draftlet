@@ -111,7 +111,7 @@ wheels = [
 
 [[package]]
 name = "draftlet-api"
-version = "1.0.0a1"
+version = "1.0.0a1.post1"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },

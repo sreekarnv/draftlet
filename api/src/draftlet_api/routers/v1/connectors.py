@@ -1,12 +1,17 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Response, status
+from pydantic import BaseModel
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from draftlet_api.connectors.gmail.mapper import GmailCapture, capture_from_gmail
 from draftlet_api.connectors.registry import connector_registry
 from draftlet_api.connectors.telegram import auth as telegram_auth
+from draftlet_api.core.errors import NotFoundError
 from draftlet_api.database.engine import get_db
+from draftlet_api.database.models import Conversation, Draft
 from draftlet_api.dtos.capture import CaptureRead
 from draftlet_api.dtos.connector import (
     ConnectorCreate,
@@ -24,6 +29,15 @@ from draftlet_api.services.capture_service import CaptureService
 from draftlet_api.services.connector_service import ConnectorService
 
 router = APIRouter(prefix="/connectors", tags=["connectors"])
+
+
+class GmailLatestDraftRead(BaseModel):
+    draft_id: UUID
+    conversation_id: UUID
+    subject: str
+    text: str
+    gmail_url: str | None = None
+    updated_at: str
 
 
 async def _activate_telegram(db: AsyncSession, username: str | None) -> None:
@@ -97,6 +111,45 @@ async def ingest_gmail_capture(
     if not created:
         response.status_code = status.HTTP_200_OK
     return capture
+
+
+@router.get("/gmail/drafts/latest", response_model=GmailLatestDraftRead)
+async def latest_gmail_draft(db: AsyncSession = Depends(get_db)) -> GmailLatestDraftRead:
+    draft = (
+        await db.scalars(
+            select(Draft)
+            .join(Conversation)
+            .where(
+                Draft.status == "ready",
+                or_(Conversation.connector == "gmail", Conversation.thread_kind == "email"),
+            )
+            .options(selectinload(Draft.variants), selectinload(Draft.conversation))
+            .order_by(Draft.updated_at.desc())
+        )
+    ).first()
+
+    if not draft:
+        raise NotFoundError("gmail_draft", "latest")
+
+    selected_variant = next(
+        (variant for variant in draft.variants if variant.id == draft.selected_variant_id),
+        None,
+    )
+    text = (selected_variant.body if selected_variant else draft.text).strip()
+    if not text:
+        raise NotFoundError("gmail_draft", "latest")
+
+    conversation = draft.conversation
+    metadata = conversation.meta or {}
+    gmail_url = metadata.get("url")
+    return GmailLatestDraftRead(
+        draft_id=draft.id,
+        conversation_id=conversation.id,
+        subject=conversation.title,
+        text=text,
+        gmail_url=gmail_url if isinstance(gmail_url, str) else None,
+        updated_at=draft.updated_at.isoformat(),
+    )
 
 
 @router.post("/{kind}/pause", response_model=ConnectorDaemonStatusRead)

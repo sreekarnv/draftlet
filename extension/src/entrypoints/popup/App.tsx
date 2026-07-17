@@ -10,7 +10,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import type { CaptureRead, GmailCapturePayload, RuntimeResponse } from "@/lib/runtime";
+import type {
+  CaptureRead,
+  GmailCapturePayload,
+  LatestGmailDraft,
+  RuntimeResponse,
+} from "@/lib/runtime";
 import { cn } from "@/lib/utils";
 
 type StatusTone = "idle" | "working" | "success" | "error";
@@ -25,13 +30,25 @@ type ExtractResponse =
       error: string;
     };
 
+type InsertResponse =
+  | {
+      ok: true;
+      result: true;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+type LoadingAction = "capture" | "insert" | null;
+
 export function App() {
   const [status, setStatus] = useState("Open Gmail, select message text, then capture.");
   const [tone, setTone] = useState<StatusTone>("idle");
-  const [loading, setLoading] = useState(false);
+  const [loadingAction, setLoadingAction] = useState<LoadingAction>(null);
 
   async function captureCurrentSelection() {
-    setLoading(true);
+    setLoadingAction("capture");
     setTone("working");
     setStatus("Reading selected Gmail text...");
 
@@ -62,7 +79,47 @@ export function App() {
       setTone("error");
       setStatus(error instanceof Error ? error.message : String(error));
     } finally {
-      setLoading(false);
+      setLoadingAction(null);
+    }
+  }
+
+  async function insertLatestDraft() {
+    setLoadingAction("insert");
+    setTone("working");
+    setStatus("Fetching latest Gmail draft from Draftlet...");
+
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.id || !tab.url?.startsWith("https://mail.google.com/")) {
+        throw new Error("Open a Gmail reply or compose tab first.");
+      }
+
+      const latest = await chrome.runtime.sendMessage({
+        type: "draftlet.getLatestGmailDraft",
+      } satisfies { type: "draftlet.getLatestGmailDraft" });
+      const latestResult = latest as RuntimeResponse<LatestGmailDraft> | undefined;
+      if (!latestResult?.ok) {
+        throw new Error(
+          readableRuntimeError(
+            latestResult?.error,
+            "No Gmail draft found. Generate one in Draftlet first.",
+          ),
+        );
+      }
+
+      setStatus("Inserting draft into active Gmail compose...");
+      const inserted = await sendInsertToGmailTab(tab.id, latestResult.result.text);
+      if (!inserted.ok) {
+        throw new Error(inserted.error || "Could not insert into Gmail.");
+      }
+
+      setTone("success");
+      setStatus(`Inserted Draftlet reply for ${latestResult.result.subject}. Review before sending.`);
+    } catch (error) {
+      setTone("error");
+      setStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLoadingAction(null);
     }
   }
 
@@ -79,9 +136,22 @@ export function App() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <Button className="w-full" disabled={loading} onClick={() => void captureCurrentSelection()}>
-            {loading ? <RefreshCw className="animate-spin" /> : null}
-            {loading ? "Capturing..." : "Capture selected Gmail text"}
+          <Button
+            className="w-full"
+            disabled={loadingAction !== null}
+            onClick={() => void captureCurrentSelection()}
+          >
+            {loadingAction === "capture" ? <RefreshCw className="animate-spin" /> : null}
+            {loadingAction === "capture" ? "Capturing..." : "Capture selected Gmail text"}
+          </Button>
+          <Button
+            className="w-full"
+            disabled={loadingAction !== null}
+            variant="secondary"
+            onClick={() => void insertLatestDraft()}
+          >
+            {loadingAction === "insert" ? <RefreshCw className="animate-spin" /> : null}
+            {loadingAction === "insert" ? "Inserting..." : "Insert latest Draftlet reply"}
           </Button>
           <div
             className={cn(
@@ -120,10 +190,29 @@ async function sendToGmailTab(tabId: number): Promise<ExtractResponse> {
   }
 }
 
-function readableRuntimeError(error: string | undefined): string {
-  if (!error) return "Draftlet runtime rejected the capture.";
+async function sendInsertToGmailTab(tabId: number, text: string): Promise<InsertResponse> {
+  try {
+    return (await chrome.tabs.sendMessage(tabId, {
+      type: "draftlet.insertGmailDraft",
+      payload: { text },
+    })) as InsertResponse;
+  } catch {
+    throw new Error(
+      "Reload the Gmail tab after installing Draftlet, open a reply box, then try again.",
+    );
+  }
+}
+
+function readableRuntimeError(
+  error: string | undefined,
+  fallback = "Draftlet runtime rejected the request.",
+): string {
+  if (!error) return fallback;
   if (error.includes("Failed to fetch")) {
     return "Draftlet runtime is offline. Start the local runtime on 127.0.0.1:8000.";
+  }
+  if (error.includes("gmail_draft_not_found") || error.includes("404")) {
+    return fallback;
   }
   return error;
 }

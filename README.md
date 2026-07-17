@@ -14,7 +14,7 @@ focused desktop writing surface without sending your data to a cloud service.
 
 ## Status
 
-Draftlet is in active alpha development as `v1.0.0-alpha1`. It is not published
+Draftlet is in active alpha development as `v1.0.0-alpha1.1`. It is not published
 as a release yet.
 
 Current working scope:
