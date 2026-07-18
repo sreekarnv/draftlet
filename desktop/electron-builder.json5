@@ -4,19 +4,29 @@
   appId: "sreekarnv.draftlet.desktop",
   asar: true,
   productName: "Draftlet",
+  executableName: "draftlet",
   directories: {
     output: "release/${version}",
   },
   files: ["dist", "dist-electron"],
   extraResources: [
     {
+      from: "build/icons/512x512.png",
+      to: "app-icon.png",
+    },
+    {
       from: "../api/dist-runtime",
       to: "runtime",
     },
   ],
   linux: {
-    target: ["AppImage"],
+    target: ["AppImage", "deb"],
     category: "Utility",
-    artifactName: "${productName}-Linux-${version}.${ext}",
+    maintainer: "sreekarnv <sreekarnv@users.noreply.github.com>",
+    desktop: {
+      Name: "Draftlet",
+      StartupWMClass: "draftlet",
+    },
+    artifactName: "${productName}-Linux-${version}-${arch}.${ext}",
   },
 }

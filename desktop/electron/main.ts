@@ -1,8 +1,9 @@
 import { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, net } from "electron";
 import { createRequire } from "node:module";
 import { spawn, type ChildProcess } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
+import fs from "node:fs";
 
 const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -28,9 +29,17 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   : RENDERER_DIST;
 
 const APP_NAME = "Draftlet";
+const LINUX_APP_CLASS = "draftlet";
+
+if (process.platform === "linux") {
+  app.commandLine.appendSwitch("class", LINUX_APP_CLASS);
+}
 
 app.setName(APP_NAME);
 app.setAppUserModelId("sreekarnv.draftlet.desktop");
+
+const appWithDesktopName = app as typeof app & { setDesktopName?: (desktopName: string) => void };
+appWithDesktopName.setDesktopName?.(`${LINUX_APP_CLASS}.desktop`);
 
 let win: BrowserWindow | null;
 let runtime: ChildProcess | null = null;
@@ -273,20 +282,24 @@ function stopRuntime() {
 }
 
 function getTrayIcon() {
-  const icon = getAppIcon();
+  const icon = nativeImage.createFromPath(getAppIconPath());
   return icon.isEmpty() ? nativeImage.createEmpty() : icon;
 }
 
-function getAppIcon() {
-  for (const iconPath of [
-    path.join(process.env.APP_ROOT, "build", "icon.png"),
-    path.join(process.env.VITE_PUBLIC, "logo.png"),
-  ]) {
-    const icon = nativeImage.createFromPath(iconPath);
-    if (!icon.isEmpty()) return icon;
+function getAppIconPath() {
+  for (const iconPath of getAppIconPaths()) {
+    if (fs.existsSync(iconPath)) return iconPath;
   }
 
-  return nativeImage.createEmpty();
+  return "";
+}
+
+function getAppIconPaths() {
+  return [
+    path.join(process.resourcesPath, "app-icon.png"),
+    path.join(process.env.APP_ROOT, "build", "icons", "512x512.png"),
+    path.join(process.env.VITE_PUBLIC, "logo.png"),
+  ];
 }
 
 function restoreWindow(route?: string) {
@@ -408,7 +421,7 @@ function createWindow(initialRoute?: string) {
     x: 0,
     y: 0,
     autoHideMenuBar: true,
-    icon: getAppIcon(),
+    icon: getAppIconPath(),
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
     },
@@ -444,8 +457,9 @@ function createWindow(initialRoute?: string) {
   if (VITE_DEV_SERVER_URL) {
     void win.loadURL(`${VITE_DEV_SERVER_URL}${initialRoute ?? ""}`);
   } else {
-    // win.loadFile('dist/index.html')
-    void win.loadFile(path.join(RENDERER_DIST, "index.html")).then(() => {
+    const rendererUrl = new URL(pathToFileURL(path.join(RENDERER_DIST, "index.html")));
+    rendererUrl.hash = initialRoute ?? "/";
+    void win.loadURL(rendererUrl.href).then(() => {
       if (initialRoute) {
         navigateWindow(initialRoute);
       }
@@ -483,7 +497,7 @@ if (!gotLock) {
 
   void app.whenReady().then(() => {
     Menu.setApplicationMenu(null);
-    app.dock?.setIcon(getAppIcon());
+    app.dock?.setIcon(nativeImage.createFromPath(getAppIconPath()));
     startRuntime();
     void connectRuntimeEvents();
     createTray();
