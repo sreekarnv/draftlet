@@ -12,6 +12,7 @@ import { Email } from "@/routes/email";
 import { Home } from "@/routes/home";
 import { Library } from "@/routes/library";
 import { Messages } from "@/routes/messages";
+import { Navigate } from "react-router";
 import { Search } from "@/routes/search";
 import { Settings } from "@/routes/settings";
 import { QueryProvider } from "@/shared/components/query-provider";
@@ -34,8 +35,10 @@ const router = createHashRouter([
       { path: "search", Component: Search },
       { path: "settings", Component: Settings },
       { path: "diagnostics", Component: Diagnostics },
+      { path: "*", element: <Navigate to="/" replace /> },
     ],
   },
+  { path: "*", element: <Navigate to="/" replace /> },
 ]);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

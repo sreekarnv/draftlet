@@ -1,31 +1,11 @@
-import { Link, Navigate } from "react-router";
+import { Link } from "react-router";
 import { Mail, MessageCircle, Settings } from "lucide-react";
 
-import type { Conversation } from "@/lib/contracts";
 import { useConversationsQuery } from "@/lib/queries/conversations";
 import { Button } from "@/shared/components/ui/button";
 
-function isMessageConversation(conversation: Conversation) {
-  return conversation.connector === "telegram" || conversation.threadKind === "chat";
-}
-
-function isEmailConversation(conversation: Conversation) {
-  return conversation.connector === "gmail" || conversation.threadKind === "email";
-}
-
 export function Home() {
   const conversationsQuery = useConversationsQuery();
-  const conversations = conversationsQuery.data ?? [];
-  const firstMessage = conversations.find(isMessageConversation);
-  const firstEmail = conversations.find(isEmailConversation);
-
-  if (firstMessage) {
-    return <Navigate to={`/messages/${firstMessage.id}`} replace />;
-  }
-
-  if (firstEmail) {
-    return <Navigate to={`/email/${firstEmail.id}`} replace />;
-  }
 
   return (
     <section className="flex h-full items-center justify-center bg-background p-6">
