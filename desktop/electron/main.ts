@@ -27,6 +27,11 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   ? path.join(process.env.APP_ROOT, "public")
   : RENDERER_DIST;
 
+const APP_NAME = "Draftlet";
+
+app.setName(APP_NAME);
+app.setAppUserModelId("sreekarnv.draftlet.desktop");
+
 let win: BrowserWindow | null;
 let runtime: ChildProcess | null = null;
 let tray: Tray | null = null;
@@ -268,9 +273,20 @@ function stopRuntime() {
 }
 
 function getTrayIcon() {
-  const iconPath = path.join(process.env.VITE_PUBLIC, "logo.png");
-  const icon = nativeImage.createFromPath(iconPath);
+  const icon = getAppIcon();
   return icon.isEmpty() ? nativeImage.createEmpty() : icon;
+}
+
+function getAppIcon() {
+  for (const iconPath of [
+    path.join(process.env.APP_ROOT, "build", "icon.png"),
+    path.join(process.env.VITE_PUBLIC, "logo.png"),
+  ]) {
+    const icon = nativeImage.createFromPath(iconPath);
+    if (!icon.isEmpty()) return icon;
+  }
+
+  return nativeImage.createEmpty();
 }
 
 function restoreWindow(route?: string) {
@@ -392,7 +408,7 @@ function createWindow(initialRoute?: string) {
     x: 0,
     y: 0,
     autoHideMenuBar: true,
-    icon: path.join(process.env.VITE_PUBLIC, "logo.png"),
+    icon: getAppIcon(),
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
     },
@@ -467,6 +483,7 @@ if (!gotLock) {
 
   void app.whenReady().then(() => {
     Menu.setApplicationMenu(null);
+    app.dock?.setIcon(getAppIcon());
     startRuntime();
     void connectRuntimeEvents();
     createTray();

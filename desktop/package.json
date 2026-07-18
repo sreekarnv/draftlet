@@ -1,5 +1,6 @@
 {
   "name": "@draftlet/desktop",
+  "productName": "Draftlet",
   "version": "1.0.0-alpha1.1",
   "private": true,
   "license": "AGPL-3.0-only",
