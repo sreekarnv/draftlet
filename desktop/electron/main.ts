@@ -319,8 +319,12 @@ function enableDevtoolsShortcuts(window: BrowserWindow) {
   });
 }
 
-async function buildTrayMenu() {
-  const runInBackground = await getRunInBackground();
+function quitDraftlet() {
+  isQuitting = true;
+  app.quit();
+}
+
+function setTrayMenu(runInBackground: boolean) {
   tray?.setToolTip(
     runInBackground ? "Draftlet - background capture on" : "Draftlet - background capture off",
   );
@@ -349,19 +353,21 @@ async function buildTrayMenu() {
       { type: "separator" },
       {
         label: "Quit Draftlet",
-        click: () => {
-          isQuitting = true;
-          app.quit();
-        },
+        click: quitDraftlet,
       },
     ]),
   );
+}
+
+async function buildTrayMenu() {
+  setTrayMenu(await getRunInBackground());
 }
 
 function createTray() {
   if (tray) return;
 
   tray = new Tray(getTrayIcon());
+  setTrayMenu(false);
   tray.on("click", () => restoreWindow());
   void buildTrayMenu();
 }
