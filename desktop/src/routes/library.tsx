@@ -8,8 +8,7 @@ import { ScrollArea } from "@/shared/components/ui/scroll-area";
 import { EmptyState } from "@/components/empty-state";
 import { useConversationsQuery } from "@/lib/queries/conversations";
 import { useGenerateDraft } from "@/lib/queries/drafts";
-import { useDraftletStore } from "@/state/draftlet-store";
-import { LibraryFilter, LibraryTab } from "@/modules/library/types";
+import { LibraryFilter, type LibraryTab } from "@/modules/library/types";
 import { matchesFilter } from "@/modules/library/utils";
 import { ConversationRow } from "@/modules/library/components/conversation-row";
 import { ConversationPreview } from "@/modules/library/components/conversation-preview";
@@ -28,17 +27,13 @@ export function Library() {
   const navigate = useNavigate();
   const conversations = useConversationsQuery();
   const generateDraft = useGenerateDraft();
-  const selectedLibraryConversationId = useDraftletStore((s) => s.selectedLibraryConversationId);
-  const setSelectedLibraryConversationId = useDraftletStore(
-    (s) => s.setSelectedLibraryConversationId,
-  );
   const [state, dispatch] = useReducer(libraryReducer, {
     activeFilter: LibraryFilter.ALL,
     query: "",
-    selectedId: selectedLibraryConversationId,
+    selectedId: "",
   });
   const hasSearch = state.query.trim().length > 0;
-  const conversationsData = conversations.data ?? [];
+  const conversationsData = useMemo(() => conversations.data ?? [], [conversations.data]);
 
   const filteredConversations = useMemo(() => {
     const normalizedQuery = state.query.trim().toLowerCase();
@@ -72,21 +67,21 @@ export function Library() {
   }
 
   return (
-    <section className="flex min-h-full bg-background">
+    <section className="bg-background flex min-h-full">
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="bg-background p-5 text-card-foreground">
+        <div className="bg-background text-card-foreground p-5">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+              <p className="text-muted-foreground text-xs font-medium tracking-[0.14em] uppercase">
                 Conversation Library
               </p>
               <h1 className="mt-1 text-lg font-semibold tracking-tight">Conversation memory</h1>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="text-muted-foreground mt-1 text-xs">
                 {filteredConversations.length} of {conversationsData.length} local captures shown
               </p>
             </div>
             <div className="relative w-full xl:max-w-sm">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
               <Input
                 value={state.query}
                 onChange={(event) => {
@@ -131,7 +126,7 @@ export function Library() {
 
         <ScrollArea className="min-h-0 flex-1">
           {filteredConversations.length > 0 ? (
-            <div className="divide-y divide-border/60">
+            <div className="divide-border/60 divide-y">
               {filteredConversations.map((conversation) => (
                 <ConversationRow
                   key={conversation.id}
@@ -144,7 +139,6 @@ export function Library() {
                         selectedId: conversation.id,
                       },
                     });
-                    setSelectedLibraryConversationId(conversation.id);
                   }}
                 />
               ))}

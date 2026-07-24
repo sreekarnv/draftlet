@@ -20,7 +20,7 @@ export function QrCode({ value }: { value: string }) {
   }, [value]);
 
   if (!svg) {
-    return <div className="size-[220px] animate-pulse rounded-lg bg-muted" />;
+    return <div className="bg-muted size-[220px] animate-pulse rounded-lg" />;
   }
 
   return <div className="rounded-lg bg-white p-3" dangerouslySetInnerHTML={{ __html: svg }} />;

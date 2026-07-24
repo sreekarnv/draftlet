@@ -19,10 +19,7 @@ export interface StatusDotProps {
 
 export function StatusDot({ tone, className }: StatusDotProps) {
   return (
-    <span
-      className={cn("size-2 rounded-full", toneClass[tone], className)}
-      aria-hidden="true"
-    />
+    <span className={cn("size-2 rounded-full", toneClass[tone], className)} aria-hidden="true" />
   );
 }
 
@@ -33,7 +30,7 @@ export interface StatusBadgeProps {
 
 export function StatusBadge({ tone, children }: StatusBadgeProps) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+    <span className="text-muted-foreground inline-flex items-center gap-1.5 text-xs">
       <StatusDot tone={tone} />
       {children}
     </span>

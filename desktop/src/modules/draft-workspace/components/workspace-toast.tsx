@@ -12,7 +12,7 @@ export function WorkspaceToast({ toast }: WorkspaceToastProps) {
   return (
     <div
       key={toast.id}
-      className="pointer-events-none absolute bottom-4 right-4 z-10 rounded-md bg-foreground/90 px-3 py-1.5 text-xs font-medium text-background shadow-md ring-1 ring-foreground/20"
+      className="bg-foreground/90 text-background ring-foreground/20 pointer-events-none absolute right-4 bottom-4 z-10 rounded-md px-3 py-1.5 text-xs font-medium shadow-md ring-1"
     >
       {toast.message}
     </div>

@@ -6,17 +6,13 @@ interface DefaultErrorFallbackProps {
   onReset: () => void;
 }
 
-export function DefaultErrorFallback({
-  error,
-  onReset,
-}: DefaultErrorFallbackProps) {
+export function DefaultErrorFallback({ error, onReset }: DefaultErrorFallbackProps) {
   return (
-    <section className="flex min-h-full items-center justify-center bg-background p-6">
-      <div className="max-w-md rounded-xl border border-dashed bg-card p-6 text-center text-card-foreground shadow-sm">
+    <section className="bg-background flex min-h-full items-center justify-center p-6">
+      <div className="bg-card text-card-foreground max-w-md rounded-xl border border-dashed p-6 text-center shadow-sm">
         <p className="text-sm font-semibold">Something went wrong</p>
-        <p className="mt-2 text-xs leading-5 text-muted-foreground">
-          {error.message ||
-            "An unexpected error occurred while rendering this view."}
+        <p className="text-muted-foreground mt-2 text-xs leading-5">
+          {error.message || "An unexpected error occurred while rendering this view."}
         </p>
         <div className="mt-4 flex justify-center gap-2">
           <Button size="sm" onClick={onReset}>
@@ -48,10 +44,7 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-export class ErrorBoundary extends Component<
-  ErrorBoundaryProps,
-  ErrorBoundaryState
-> {
+export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = { error: null };
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {

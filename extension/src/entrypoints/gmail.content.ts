@@ -1,31 +1,34 @@
 import { extractGmailCapture } from "@/lib/gmail-capture";
-import { errorMessage } from "@/lib/runtime";
+import { insertGmailDraft } from "@/lib/gmail-compose";
+import {
+  extractGmailMessageSchema,
+  insertGmailDraftMessageSchema,
+  toErrorPayload,
+} from "@/lib/protocol";
 
 export default defineContentScript({
   matches: ["https://mail.google.com/*"],
   runAt: "document_idle",
   main() {
     chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
-      if (!isExtractGmailMessage(message)) {
-        return false;
-      }
-
       try {
-        sendResponse({ ok: true, payload: extractGmailCapture() });
+        if (extractGmailMessageSchema.safeParse(message).success) {
+          sendResponse({ ok: true, payload: extractGmailCapture() });
+          return false;
+        }
+
+        const insertMessage = insertGmailDraftMessageSchema.safeParse(message);
+        if (insertMessage.success) {
+          insertGmailDraft(insertMessage.data.payload.text);
+          sendResponse({ ok: true, result: true });
+          return false;
+        }
       } catch (error: unknown) {
-        sendResponse({ ok: false, error: errorMessage(error) });
+        sendResponse({ ok: false, error: toErrorPayload(error) });
+        return false;
       }
 
       return false;
     });
   },
 });
-
-function isExtractGmailMessage(message: unknown): boolean {
-  return Boolean(
-    message &&
-      typeof message === "object" &&
-      "type" in message &&
-      message.type === "draftlet.extractGmail",
-  );
-}

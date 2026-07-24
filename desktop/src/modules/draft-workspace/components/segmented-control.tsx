@@ -16,7 +16,7 @@ export function SegmentedControl<T extends string>({
 }: SegmentedControlProps<T>) {
   return (
     <section className="min-w-0 space-y-2">
-      <p className="truncate text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+      <p className="text-muted-foreground truncate text-xs font-medium tracking-[0.14em] uppercase">
         {label}
       </p>
       <div className="flex flex-wrap gap-1">

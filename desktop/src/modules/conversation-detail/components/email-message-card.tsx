@@ -21,16 +21,16 @@ export function EmailMessageCard({ message, replyTarget }: EmailMessageCardProps
   const hasQuote = quotedBody.length > 0;
 
   return (
-    <article className="min-w-0 rounded-xl border bg-card text-card-foreground shadow-sm">
+    <article className="bg-card text-card-foreground min-w-0 rounded-xl border shadow-sm">
       <header className="flex flex-col gap-3 border-b px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <Mail className="size-4 shrink-0 text-muted-foreground" />
+            <Mail className="text-muted-foreground size-4 shrink-0" />
             <p className="truncate text-sm font-semibold">{message.author}</p>
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">{getMessageLabel(message)}</p>
+          <p className="text-muted-foreground mt-1 text-xs">{getMessageLabel(message)}</p>
         </div>
-        <time className="shrink-0 text-xs text-muted-foreground">
+        <time className="text-muted-foreground shrink-0 text-xs">
           {formatDateTime(message.timestamp)}
         </time>
       </header>
@@ -39,7 +39,7 @@ export function EmailMessageCard({ message, replyTarget }: EmailMessageCardProps
           target={replyTarget}
           unresolvedExternalId={!replyTarget ? message.replyToExternalMessageId : undefined}
         />
-        <p className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground/90">
+        <p className="text-foreground/90 text-sm leading-7 break-words whitespace-pre-wrap">
           {visibleBody || message.body}
         </p>
         {hasQuote ? (
@@ -54,7 +54,7 @@ export function EmailMessageCard({ message, replyTarget }: EmailMessageCardProps
               {showQuote ? "Hide quoted text" : "Show quoted text"}
             </Button>
             {showQuote ? (
-              <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words rounded-lg bg-muted/60 p-3 text-xs leading-5 text-muted-foreground">
+              <pre className="bg-muted/60 text-muted-foreground mt-3 overflow-x-auto rounded-lg p-3 text-xs leading-5 break-words whitespace-pre-wrap">
                 {quotedBody}
               </pre>
             ) : null}

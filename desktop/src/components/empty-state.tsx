@@ -1,6 +1,5 @@
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/shared/components/ui/empty";
 
-
 interface EmptyStateProps {
   title: string;
   description: string;

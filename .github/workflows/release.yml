@@ -1,0 +1,133 @@
+name: Release
+
+on:
+    push:
+        tags:
+            - "v*"
+
+permissions:
+    contents: write
+
+jobs:
+    checks:
+        name: Checks
+        runs-on: ubuntu-24.04
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v7
+
+            - name: Install uv
+              uses: astral-sh/setup-uv@v6
+              with:
+                  enable-cache: true
+
+            - name: Set up Python
+              run: uv python install 3.12
+
+            - name: API dependencies
+              working-directory: api
+              run: uv sync --locked
+
+            - name: API lint
+              working-directory: api
+              run: uv run ruff check .
+
+            - name: Set up pnpm
+              uses: pnpm/action-setup@v6
+              with:
+                  version: 11.10.0
+
+            - name: Set up Node
+              uses: actions/setup-node@v7
+              with:
+                  node-version: 24
+
+            - name: Desktop dependencies
+              working-directory: desktop
+              run: pnpm install --frozen-lockfile
+
+            - name: Desktop typecheck
+              working-directory: desktop
+              run: pnpm typecheck
+
+            - name: Desktop lint
+              working-directory: desktop
+              run: pnpm lint
+
+            - name: Extension dependencies
+              working-directory: extension
+              run: pnpm install --frozen-lockfile
+
+            - name: Extension typecheck
+              working-directory: extension
+              run: pnpm typecheck
+
+            - name: Extension lint
+              working-directory: extension
+              run: pnpm lint
+
+    release:
+        name: Build And Release
+        runs-on: ubuntu-24.04
+        needs: checks
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v7
+
+            - name: Install Linux packaging dependencies
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y libarchive-tools rpm
+
+            - name: Install uv
+              uses: astral-sh/setup-uv@v6
+              with:
+                  enable-cache: true
+
+            - name: Set up Python
+              run: uv python install 3.12
+
+            - name: API dependencies
+              working-directory: api
+              run: uv sync --locked
+
+            - name: Package API runtime
+              working-directory: api
+              run: uv run package-runtime
+
+            - name: Set up pnpm
+              uses: pnpm/action-setup@v6
+              with:
+                  version: 11.10.0
+
+            - name: Set up Node
+              uses: actions/setup-node@v7
+              with:
+                  node-version: 22
+
+            - name: Desktop dependencies
+              working-directory: desktop
+              run: pnpm install --frozen-lockfile
+
+            - name: Build desktop
+              working-directory: desktop
+              run: pnpm build
+
+            - name: Extension dependencies
+              working-directory: extension
+              run: pnpm install --frozen-lockfile
+
+            - name: Build extension
+              working-directory: extension
+              run: pnpm zip
+
+            - name: Create GitHub release
+              uses: softprops/action-gh-release@v2
+              with:
+                  prerelease: true
+                  generate_release_notes: true
+                  files: |
+                      desktop/release/**/*
+                      extension/.output/*.zip

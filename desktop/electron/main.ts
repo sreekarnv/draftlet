@@ -1,8 +1,9 @@
 import { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, net } from "electron";
 import { createRequire } from "node:module";
 import { spawn, type ChildProcess } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
+import fs from "node:fs";
 
 const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -19,13 +20,25 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 process.env.APP_ROOT = path.join(__dirname, "..");
 
 // 🚧 Use ['ENV_NAME'] avoid vite:define plugin - Vite@2.x
-export const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
-export const MAIN_DIST = path.join(process.env.APP_ROOT, "dist-electron");
-export const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
+const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
+const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
 
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   ? path.join(process.env.APP_ROOT, "public")
   : RENDERER_DIST;
+
+const APP_NAME = "Draftlet";
+const LINUX_APP_CLASS = "draftlet";
+
+if (process.platform === "linux") {
+  app.commandLine.appendSwitch("class", LINUX_APP_CLASS);
+}
+
+app.setName(APP_NAME);
+app.setAppUserModelId("sreekarnv.draftlet.desktop");
+
+const appWithDesktopName = app as typeof app & { setDesktopName?: (desktopName: string) => void };
+appWithDesktopName.setDesktopName?.(`${LINUX_APP_CLASS}.desktop`);
 
 let win: BrowserWindow | null;
 let runtime: ChildProcess | null = null;
@@ -35,8 +48,9 @@ let runtimeEventsAbort: AbortController | null = null;
 let runtimeEventsReconnect: ReturnType<typeof setTimeout> | null = null;
 
 const RUN_IN_BACKGROUND_KEY = "run_in_background";
-const RUNTIME_BASE_URL = "http://127.0.0.1:8000";
-const RUNTIME_EVENTS_URL = "http://127.0.0.1:8000/api/v1/events/stream";
+const RUNTIME_PORT = VITE_DEV_SERVER_URL ? 8000 : 8765;
+const RUNTIME_BASE_URL = `http://127.0.0.1:${RUNTIME_PORT}`;
+const RUNTIME_EVENTS_URL = `${RUNTIME_BASE_URL}/api/v1/events/stream`;
 const RUNTIME_AUTH_TOKEN = process.env["DRAFTLET_RUNTIME_TOKEN"];
 const RUN_IN_BACKGROUND_PATH = `/api/v1/settings/${RUN_IN_BACKGROUND_KEY}`;
 const ALLOWED_RUNTIME_PATHS = [
@@ -63,12 +77,24 @@ type RuntimeRequestInit = {
 type RuntimeEvent = Record<string, unknown> & { type?: string };
 
 function startRuntime() {
-  if (!VITE_DEV_SERVER_URL || runtime) return;
-  const runtimeRoot = path.resolve(process.env.APP_ROOT, "..", "api");
-  runtime = spawn("sh", ["-c", "uv run alembic-upgrade && uv run dev"], {
-    cwd: runtimeRoot,
-    stdio: "inherit",
-  });
+  if (runtime) return;
+
+  if (VITE_DEV_SERVER_URL) {
+    const runtimeRoot = path.resolve(process.env.APP_ROOT, "..", "api");
+    runtime = spawn("sh", ["-c", "uv run alembic-upgrade && uv run dev"], {
+      cwd: runtimeRoot,
+      stdio: "inherit",
+    });
+  } else {
+    const executable = process.platform === "win32" ? "draftlet-runtime.exe" : "draftlet-runtime";
+    const runtimeRoot = path.join(process.resourcesPath, "runtime");
+    runtime = spawn(path.join(runtimeRoot, executable), [], {
+      cwd: runtimeRoot,
+      env: { ...process.env, PORT: String(RUNTIME_PORT) },
+      stdio: "inherit",
+    });
+  }
+
   runtime.on("exit", () => {
     runtime = null;
   });
@@ -138,7 +164,7 @@ async function connectRuntimeEvents() {
     }
   } catch (error) {
     if (!abort.signal.aborted) {
-      console.info("Runtime event stream disconnected", error);
+      console.info("Runtime event stream unavailable; retrying", error);
     }
   } finally {
     if (runtimeEventsAbort === abort) {
@@ -152,7 +178,7 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function runtimeRequest(path: string, init?: RuntimeRequestInit, retries = 0) {
+async function runtimeRequest(path: string, init?: RuntimeRequestInit, retries = 20) {
   startRuntime();
   const requestInit = withRuntimeAuth(init);
 
@@ -255,9 +281,24 @@ function stopRuntime() {
 }
 
 function getTrayIcon() {
-  const iconPath = path.join(process.env.VITE_PUBLIC, "electron-vite.svg");
-  const icon = nativeImage.createFromPath(iconPath);
+  const icon = nativeImage.createFromPath(getAppIconPath());
   return icon.isEmpty() ? nativeImage.createEmpty() : icon;
+}
+
+function getAppIconPath() {
+  for (const iconPath of getAppIconPaths()) {
+    if (fs.existsSync(iconPath)) return iconPath;
+  }
+
+  return "";
+}
+
+function getAppIconPaths() {
+  return [
+    path.join(process.resourcesPath, "app-icon.png"),
+    path.join(process.env.APP_ROOT, "build", "icons", "512x512.png"),
+    path.join(process.env.VITE_PUBLIC, "logo.png"),
+  ];
 }
 
 function restoreWindow(route?: string) {
@@ -285,13 +326,31 @@ function navigateWindow(route: string) {
     return;
   }
 
-  void win.webContents.executeJavaScript(
-    `window.history.pushState(null, "", ${JSON.stringify(route)}); window.dispatchEvent(new PopStateEvent("popstate"));`,
-  );
+  void win.webContents.executeJavaScript(`window.location.hash = ${JSON.stringify(route)};`);
 }
 
-async function buildTrayMenu() {
-  const runInBackground = await getRunInBackground();
+function enableDevtoolsShortcuts(window: BrowserWindow) {
+  if (!VITE_DEV_SERVER_URL) return;
+
+  window.webContents.on("before-input-event", (event, input) => {
+    const key = input.key.toLowerCase();
+    const isDevtoolsShortcut =
+      key === "f12" ||
+      (key === "i" && input.control && input.shift) ||
+      (key === "i" && input.meta && input.alt);
+    if (!isDevtoolsShortcut) return;
+
+    event.preventDefault();
+    window.webContents.toggleDevTools();
+  });
+}
+
+function quitDraftlet() {
+  isQuitting = true;
+  app.quit();
+}
+
+function setTrayMenu(runInBackground: boolean) {
   tray?.setToolTip(
     runInBackground ? "Draftlet - background capture on" : "Draftlet - background capture off",
   );
@@ -320,19 +379,21 @@ async function buildTrayMenu() {
       { type: "separator" },
       {
         label: "Quit Draftlet",
-        click: () => {
-          isQuitting = true;
-          app.quit();
-        },
+        click: quitDraftlet,
       },
     ]),
   );
+}
+
+async function buildTrayMenu() {
+  setTrayMenu(await getRunInBackground());
 }
 
 function createTray() {
   if (tray) return;
 
   tray = new Tray(getTrayIcon());
+  setTrayMenu(false);
   tray.on("click", () => restoreWindow());
   void buildTrayMenu();
 }
@@ -357,11 +418,13 @@ function createWindow(initialRoute?: string) {
     x: 0,
     y: 0,
     autoHideMenuBar: true,
-    icon: path.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
+    icon: getAppIconPath(),
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
     },
   });
+
+  enableDevtoolsShortcuts(win);
 
   win.on("close", (event) => {
     if (isQuitting) return;
@@ -383,16 +446,12 @@ function createWindow(initialRoute?: string) {
     win = null;
   });
 
-  // Test active push message to Renderer-process.
-  win.webContents.on("did-finish-load", () => {
-    win?.webContents.send("main-process-message", new Date().toLocaleString());
-  });
-
   if (VITE_DEV_SERVER_URL) {
     void win.loadURL(`${VITE_DEV_SERVER_URL}${initialRoute ?? ""}`);
   } else {
-    // win.loadFile('dist/index.html')
-    void win.loadFile(path.join(RENDERER_DIST, "index.html")).then(() => {
+    const rendererUrl = new URL(pathToFileURL(path.join(RENDERER_DIST, "index.html")));
+    rendererUrl.hash = initialRoute ?? "/";
+    void win.loadURL(rendererUrl.href).then(() => {
       if (initialRoute) {
         navigateWindow(initialRoute);
       }
@@ -430,6 +489,7 @@ if (!gotLock) {
 
   void app.whenReady().then(() => {
     Menu.setApplicationMenu(null);
+    app.dock?.setIcon(nativeImage.createFromPath(getAppIconPath()));
     startRuntime();
     void connectRuntimeEvents();
     createTray();

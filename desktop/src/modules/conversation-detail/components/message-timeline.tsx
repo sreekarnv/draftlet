@@ -36,7 +36,7 @@ export interface MessageTimelineProps {
 export function MessageTimeline({ conversation, messages }: MessageTimelineProps) {
   if (messages.length === 0) {
     return (
-      <div className="rounded-md border border-dashed bg-card p-5 text-sm text-muted-foreground">
+      <div className="bg-card text-muted-foreground rounded-md border border-dashed p-5 text-sm">
         No captured messages yet for this conversation.
       </div>
     );
@@ -59,16 +59,16 @@ export function MessageTimeline({ conversation, messages }: MessageTimelineProps
           <article key={message.id} className={`border-l-2 ${meta.borderClass} pl-5`}>
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
               <p className="text-sm font-medium">{message.author}</p>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-muted-foreground text-xs">
                 {formatDateTime(message.timestamp)}
               </span>
             </div>
-            <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            <p className="text-muted-foreground mt-1 text-[11px] font-medium tracking-[0.14em] uppercase">
               {meta.label}
             </p>
-            <p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground">{message.body}</p>
+            <p className="text-muted-foreground mt-3 max-w-2xl text-sm leading-7">{message.body}</p>
             {message.status ? (
-              <p className="mt-3 text-xs text-muted-foreground">{message.status}</p>
+              <p className="text-muted-foreground mt-3 text-xs">{message.status}</p>
             ) : null}
           </article>
         );

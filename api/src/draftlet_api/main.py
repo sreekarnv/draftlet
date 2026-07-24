@@ -24,7 +24,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings.log_level)
-    app = FastAPI(title="Draftlet Runtime", version="1.0.0-alpha1", lifespan=lifespan)
+    app = FastAPI(title="Draftlet Runtime", version="1.0.0-alpha1.1", lifespan=lifespan)
     app.add_exception_handler(DraftletApiError, problem_details_handler)
     if settings.cors_origins:
         app.add_middleware(

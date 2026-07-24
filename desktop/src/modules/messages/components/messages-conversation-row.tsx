@@ -9,17 +9,31 @@ export interface MessagesConversationRowProps {
   onSelect: () => void;
 }
 
+function normalizeLabel(value?: string | null) {
+  return value?.trim().toLocaleLowerCase() ?? "";
+}
+
+function getSecondaryLabel(conversation: Conversation) {
+  const primary = normalizeLabel(
+    conversation.title || conversation.contact || conversation.participants,
+  );
+  const candidates = [conversation.participants, conversation.contact];
+  return candidates.find((candidate) => candidate && normalizeLabel(candidate) !== primary);
+}
+
 export function MessagesConversationRow({
   conversation,
   selected,
   onSelect,
 }: MessagesConversationRowProps) {
+  const secondaryLabel = getSecondaryLabel(conversation);
+
   return (
     <button
       type="button"
       onClick={onSelect}
       className={cn(
-        "flex w-full gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/70",
+        "hover:bg-muted/70 flex w-full gap-3 px-3 py-3 text-left transition-colors",
         selected && "bg-primary/10 hover:bg-primary/10",
       )}
     >
@@ -29,17 +43,17 @@ export function MessagesConversationRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-3">
           <p className="truncate text-sm font-semibold tracking-tight">{conversation.title}</p>
-          <time className="shrink-0 text-[11px] text-muted-foreground">
+          <time className="text-muted-foreground shrink-0 text-[11px]">
             {formatTime(conversation.timestamp)}
           </time>
         </div>
-        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-          {conversation.participants || conversation.contact}
-        </p>
-        <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+        {secondaryLabel ? (
+          <p className="text-muted-foreground mt-0.5 truncate text-xs">{secondaryLabel}</p>
+        ) : null}
+        <p className="text-muted-foreground mt-1 line-clamp-2 text-xs leading-5">
           {conversation.latestMessage}
         </p>
-        <div className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground">
+        <div className="text-muted-foreground mt-2 flex items-center gap-2 text-[11px]">
           <span>{conversation.messages.length} messages</span>
           {conversation.latestDraftId ? <span>Draft ready</span> : null}
           {conversation.recentlyCaptured ? (

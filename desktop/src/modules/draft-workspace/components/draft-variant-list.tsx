@@ -12,7 +12,7 @@ export interface DraftVariantListProps {
 export function DraftVariantList({ variants, selectedVariant, onSelect }: DraftVariantListProps) {
   if (variants.length === 0) {
     return (
-      <div className="px-3 py-4 text-xs text-muted-foreground">
+      <div className="text-muted-foreground px-3 py-4 text-xs">
         No variants yet. Use “Generate variant” to create one.
       </div>
     );
@@ -29,20 +29,20 @@ export function DraftVariantList({ variants, selectedVariant, onSelect }: DraftV
             type="button"
             onClick={() => onSelect(variant.id)}
             className={cn(
-              "relative w-full rounded-md px-3 py-2.5 text-left hover:bg-card/70",
+              "hover:bg-card/70 relative w-full rounded-md px-3 py-2.5 text-left",
               selected &&
-                "bg-primary/10 ring-1 ring-primary/20 before:absolute before:left-1 before:top-3 before:h-[calc(100%-1.5rem)] before:w-0.5 before:rounded-full before:bg-primary",
+                "bg-primary/10 ring-primary/20 before:bg-primary ring-1 before:absolute before:top-3 before:left-1 before:h-[calc(100%-1.5rem)] before:w-0.5 before:rounded-full",
             )}
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{variant.title}</p>
-                <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                <p className="text-muted-foreground mt-1 line-clamp-2 text-xs leading-5">
                   {variant.detail}
                 </p>
               </div>
               {selected ? (
-                <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                <CheckCircle2 className="text-muted-foreground mt-0.5 size-4 shrink-0" />
               ) : null}
             </div>
           </button>

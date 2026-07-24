@@ -21,9 +21,9 @@ export function AlternativesPanel({
   onGenerateVariant,
 }: AlternativesPanelProps) {
   return (
-    <aside className="flex h-full min-h-0 flex-col bg-secondary/60">
+    <aside className="bg-secondary/60 flex h-full min-h-0 flex-col">
       <div className="px-4 py-4">
-        <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+        <p className="text-muted-foreground text-xs font-medium tracking-[0.14em] uppercase">
           Drafts
         </p>
         <h2 className="mt-1 truncate text-sm font-semibold tracking-tight">Alternatives</h2>

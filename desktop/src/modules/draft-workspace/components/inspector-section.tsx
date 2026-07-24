@@ -8,7 +8,7 @@ export interface InspectorSectionProps {
 export function InspectorSection({ title, children }: InspectorSectionProps) {
   return (
     <section className="space-y-3">
-      <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+      <p className="text-muted-foreground text-xs font-medium tracking-[0.14em] uppercase">
         {title}
       </p>
       {children}

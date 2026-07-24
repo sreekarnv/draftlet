@@ -34,10 +34,10 @@ export function EditorToolbar({
   onMarkSent,
 }: EditorToolbarProps) {
   return (
-    <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border/60 bg-background px-4">
+    <div className="border-border/60 bg-background flex h-12 shrink-0 items-center justify-between gap-2 border-b px-4">
       <div className="min-w-0 flex-1">
         <h1 className="truncate text-sm font-semibold tracking-tight">{title}</h1>
-        <p className="truncate text-xs text-muted-foreground">
+        <p className="text-muted-foreground truncate text-xs">
           {statusLabel} · {statusProvider} · {statusDraft}
         </p>
       </div>
@@ -76,13 +76,7 @@ export function EditorToolbar({
             <span className="hidden lg:inline">Mark as sent</span>
           </Button>
         ) : (
-          <Button
-            size="sm"
-            className="ml-1 px-2.5"
-            onClick={onInsert}
-            disabled={isInserted}
-            title={isInserted ? "This draft has already been inserted into Draftlet" : undefined}
-          >
+          <Button size="sm" className="ml-1 px-2.5" onClick={onInsert}>
             <Send className="size-3.5" />
             <span className="hidden lg:inline">Insert into timeline</span>
           </Button>

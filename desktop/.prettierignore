@@ -1,0 +1,7 @@
+node_modules
+dist
+dist-electron
+release
+pnpm-lock.yaml
+openapi.json
+src/lib/contracts.generated.ts

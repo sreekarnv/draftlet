@@ -24,7 +24,7 @@ export function MessagesConversationHeader({
   onCopyLatest,
 }: MessagesConversationHeaderProps) {
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b bg-background/95 px-3 sm:px-4">
+    <header className="bg-background/95 flex h-16 shrink-0 items-center justify-between gap-3 border-b px-3 sm:px-4">
       <div className="flex min-w-0 items-center gap-3">
         <Button variant="ghost" size="icon-sm" className="lg:hidden" asChild>
           <Link to="/messages" aria-label="Back to messages">
@@ -36,7 +36,7 @@ export function MessagesConversationHeader({
         </Avatar>
         <div className="min-w-0">
           <h2 className="truncate text-sm font-semibold tracking-tight">{conversation.title}</h2>
-          <div className="mt-1 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+          <div className="text-muted-foreground mt-1 flex min-w-0 items-center gap-2 text-xs">
             <ConnectorBadge connector={conversation.connector} status="ready" />
             <span className="truncate">{conversation.messages.length} messages</span>
             {latestDraft ? (

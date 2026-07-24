@@ -23,7 +23,7 @@ async def health(db: AsyncSession = Depends(get_db)) -> HealthRead:
     telegram_ok = telegram_state == "ready"
     return HealthRead(
         status="ok" if database.ok else "degraded",
-        version="1.0.0-alpha1",
+        version="1.0.0-alpha1.1",
         database=database,
         ollama=ComponentHealth(
             ok=ollama_ok,

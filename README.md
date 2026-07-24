@@ -12,9 +12,13 @@ Draftlet captures conversations, generates drafts through local LLM providers
 (Ollama first), keeps durable local memory, and lets you review everything in a
 focused desktop writing surface without sending your data to a cloud service.
 
+<p align="center">
+  <img src=".github/assets/desktop.webp" alt="Draftlet desktop app" width="800" />
+</p>
+
 ## Status
 
-Draftlet is in active alpha development as `v1.0.0-alpha1`. It is not published
+Draftlet is in active alpha development as `v1.0.0-alpha1.1`. It is not published
 as a release yet.
 
 Current working scope:
@@ -27,14 +31,6 @@ Current working scope:
   and local runtime status surfaces.
 - **Runtime** - local FastAPI service with SQLite persistence, capture ingest,
   connector management, search, and local generation through Ollama.
-
-Still in progress:
-
-- Gmail OAuth/API sync.
-- Gmail send and compose insertion.
-- Packaged runtime installation.
-- Production hardening and installer polish.
-- Windows/macOS support.
 
 ## Repository Layout
 
@@ -61,13 +57,6 @@ Folder READMEs contain build and run instructions for each surface:
 - Source connectors: Telegram and Gmail.
 - Provider connector: Ollama.
 - Local persistence in SQLite.
-
-## Out Of Scope For Now
-
-- Cloud sync, accounts, billing, or team features.
-- Auto-capture across arbitrary apps.
-- WhatsApp native desktop capture.
-- Gmail OAuth/API sync or external email sending.
 
 ## License
 

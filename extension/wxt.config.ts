@@ -9,8 +9,21 @@ export default defineConfig({
   manifest: {
     name: "Draftlet Gmail Capture",
     description: "Capture selected Gmail text into the local Draftlet runtime.",
+    action: {
+      default_icon: {
+        16: "/icon-16.png",
+        32: "/icon-32.png",
+        48: "/icon-48.png",
+        96: "/icon-96.png",
+        128: "/icon-128.png",
+      },
+    },
     permissions: ["activeTab", "scripting"],
-    host_permissions: ["http://127.0.0.1:8000/*", "https://mail.google.com/*"],
+    host_permissions: [
+      "http://127.0.0.1:8765/*",
+      "http://127.0.0.1:8000/*",
+      "https://mail.google.com/*",
+    ],
   },
   vite: () => ({
     plugins: [tailwindcss()],

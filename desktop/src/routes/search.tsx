@@ -23,17 +23,17 @@ export function Search() {
   const showNoResults = normalizedQuery.length > 0 && !results.isLoading && items.length === 0;
 
   return (
-    <section className="flex min-h-full flex-col bg-background">
-      <div className="border-b border-border/70 bg-background p-5">
-        <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+    <section className="bg-background flex min-h-full flex-col">
+      <div className="border-border/70 bg-background border-b p-5">
+        <p className="text-muted-foreground text-xs font-medium tracking-[0.14em] uppercase">
           Runtime Search
         </p>
         <h1 className="mt-1 text-lg font-semibold tracking-tight">Find drafts and memory</h1>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="text-muted-foreground mt-1 text-xs">
           Full-text search across local conversations and generated drafts.
         </p>
         <div className="relative mt-4 max-w-2xl">
-          <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <SearchIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -46,7 +46,7 @@ export function Search() {
 
       <ScrollArea className="min-h-0 flex-1">
         {items.length > 0 ? (
-          <div className="divide-y divide-border/60">
+          <div className="divide-border/60 divide-y">
             {items.map((item) => {
               const href = item.itemType === "draft" ? `/drafts/${item.id}` : "/library";
               const Icon = item.itemType === "draft" ? FileText : MessageSquare;
@@ -55,21 +55,23 @@ export function Search() {
                 <Link
                   key={`${item.itemType}-${item.id}`}
                   to={href}
-                  className="block p-4 transition-colors hover:bg-muted/50"
+                  className="hover:bg-muted/50 block p-4 transition-colors"
                 >
                   <div className="flex items-start gap-3">
-                    <div className="mt-0.5 rounded-lg border border-border bg-card p-2 text-muted-foreground">
+                    <div className="border-border bg-card text-muted-foreground mt-0.5 rounded-lg border p-2">
                       <Icon className="size-4" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="truncate text-sm font-medium text-foreground">{item.title}</h2>
-                        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] capitalize text-muted-foreground">
+                        <h2 className="text-foreground truncate text-sm font-medium">
+                          {item.title}
+                        </h2>
+                        <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-[11px] capitalize">
                           {item.itemType}
                         </span>
                       </div>
-                      <p className="mt-1 text-xs text-muted-foreground">{item.subtitle}</p>
-                      <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
+                      <p className="text-muted-foreground mt-1 text-xs">{item.subtitle}</p>
+                      <p className="text-muted-foreground mt-2 line-clamp-2 text-sm">
                         {item.snippet || "Matched this item"}
                       </p>
                     </div>
@@ -79,11 +81,20 @@ export function Search() {
             })}
           </div>
         ) : showEmptySearch ? (
-          <EmptyState title="Search your local runtime" description="Type a phrase, contact, or draft detail to search the SQLite full-text index." />
+          <EmptyState
+            title="Search your local runtime"
+            description="Type a phrase, contact, or draft detail to search the SQLite full-text index."
+          />
         ) : showNoResults ? (
-          <EmptyState title="No search results" description="Try a different contact, phrase, or draft detail." />
+          <EmptyState
+            title="No search results"
+            description="Try a different contact, phrase, or draft detail."
+          />
         ) : (
-          <EmptyState title="Searching" description="Looking through local conversations and drafts..." />
+          <EmptyState
+            title="Searching"
+            description="Looking through local conversations and drafts..."
+          />
         )}
       </ScrollArea>
     </section>

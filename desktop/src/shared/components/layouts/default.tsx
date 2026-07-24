@@ -23,8 +23,7 @@ type Crumb = {
 function getActiveNavItem(pathname: string): DraftletNavItem {
   return (
     draftletNavigation.find(
-      (item) =>
-        item.path !== "/" && (pathname === item.path || pathname.startsWith(`${item.path}/`)),
+      (item) => pathname === item.path || pathname.startsWith(`${item.path}/`),
     ) ??
     draftletNavigation.find((item) => item.path === pathname) ??
     draftletNavigation[0]
@@ -61,7 +60,10 @@ function getBreadcrumbs(pathname: string): Crumb[] {
   }
 
   if (matchedNavItem && matchedNavItem.path !== "/") {
-    crumbs.push({ label: matchedNavItem.title });
+    crumbs.push({
+      label: matchedNavItem.title,
+      ...(navConsumed < segments.length ? { href: matchedNavItem.path } : {}),
+    });
   }
 
   const remainingSegments = segments.slice(navConsumed);
@@ -96,8 +98,8 @@ export const DefaultLayout = () => {
     <TooltipProvider>
       <SidebarProvider className="h-svh min-h-0 overflow-hidden">
         <AppSidebar activePath={location.pathname} />
-        <SidebarInset className="h-full min-h-0 min-w-0 overflow-hidden bg-background shadow-none md:m-0 md:rounded-none">
-          <header className="flex h-14 shrink-0 items-center gap-3 border-b border-sidebar-border/55 bg-background/95 px-4">
+        <SidebarInset className="bg-background h-full min-h-0 min-w-0 overflow-hidden shadow-none md:m-0 md:rounded-none">
+          <header className="border-sidebar-border/55 bg-background/95 flex h-14 shrink-0 items-center gap-3 border-b px-4">
             <SidebarTrigger className="md:hidden" />
             <Breadcrumb className="min-w-0 flex-1">
               <BreadcrumbList className="min-w-0 truncate">
@@ -123,15 +125,15 @@ export const DefaultLayout = () => {
             </Breadcrumb>
 
             <div className="hidden min-w-0 items-center gap-3 xl:flex">
-              <span aria-hidden className="h-4 w-px shrink-0 bg-sidebar-border/55" />
-              <span className="truncate text-sm text-muted-foreground">
+              <span aria-hidden className="bg-sidebar-border/55 h-4 w-px shrink-0" />
+              <span className="text-muted-foreground truncate text-sm">
                 {activeItem.description}
               </span>
             </div>
 
             <h1 className="sr-only">{crumbs[crumbs.length - 1]?.label ?? activeItem.title}</h1>
           </header>
-          <main className="h-full min-h-0 flex-1 overflow-hidden bg-background">
+          <main className="bg-background h-full min-h-0 flex-1 overflow-hidden">
             <ErrorBoundary>
               <Outlet />
             </ErrorBoundary>
