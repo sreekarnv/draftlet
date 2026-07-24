@@ -327,9 +327,7 @@ function navigateWindow(route: string) {
     return;
   }
 
-  void win.webContents.executeJavaScript(
-    `window.location.hash = ${JSON.stringify(route)};`,
-  );
+  void win.webContents.executeJavaScript(`window.location.hash = ${JSON.stringify(route)};`);
 }
 
 function enableDevtoolsShortcuts(window: BrowserWindow) {

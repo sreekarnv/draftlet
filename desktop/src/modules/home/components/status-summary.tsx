@@ -1,5 +1,5 @@
-import { StatusDot, StatusTone } from "@/components/status-dot";
-import { StatusItem } from "@/modules/home/types";
+import { StatusDot, type StatusTone } from "@/components/status-dot";
+import { type StatusItem } from "@/modules/home/types";
 
 export interface StatusSummaryProps {
   items: StatusItem[];
@@ -14,9 +14,9 @@ export function StatusSummary({ items }: StatusSummaryProps) {
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-3">
               <p className="truncate text-sm font-medium">{item.label}</p>
-              <span className="text-[11px] text-muted-foreground">{item.state}</span>
+              <span className="text-muted-foreground text-[11px]">{item.state}</span>
             </div>
-            <p className="mt-1 truncate text-xs text-muted-foreground">{item.value}</p>
+            <p className="text-muted-foreground mt-1 truncate text-xs">{item.value}</p>
           </div>
         </div>
       ))}

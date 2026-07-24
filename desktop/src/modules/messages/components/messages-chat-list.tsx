@@ -27,22 +27,22 @@ export function MessagesChatList({
   return (
     <aside
       className={cn(
-        "min-h-0 flex-col border-r bg-muted/30 lg:flex",
+        "bg-muted/30 min-h-0 flex-col border-r lg:flex",
         hiddenOnMobile ? "hidden" : "flex",
       )}
     >
-      <div className="shrink-0 border-b bg-background/80 p-4">
+      <div className="bg-background/80 shrink-0 border-b p-4">
         <div className="flex items-center gap-2">
-          <div className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <div className="bg-primary/10 text-primary flex size-9 items-center justify-center rounded-full">
             <MessageCircle className="size-4" />
           </div>
           <div>
             <h1 className="text-base font-semibold tracking-tight">Messages</h1>
-            <p className="text-xs text-muted-foreground">Local texting companion</p>
+            <p className="text-muted-foreground text-xs">Local texting companion</p>
           </div>
         </div>
         <div className="relative mt-4">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
           <Input
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
@@ -53,7 +53,7 @@ export function MessagesChatList({
       </div>
       <ScrollArea className="min-h-0 flex-1">
         {conversations.length > 0 ? (
-          <div className="divide-y divide-border/60">
+          <div className="divide-border/60 divide-y">
             {conversations.map((conversation) => (
               <MessagesConversationRow
                 key={conversation.id}

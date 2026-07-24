@@ -102,7 +102,7 @@ export function ManualCaptureForm() {
   return (
     <div id="manual-capture" className="scroll-mt-6">
       <h3 className="text-sm font-semibold">Manual capture</h3>
-      <p className="mt-1 text-xs text-muted-foreground">
+      <p className="text-muted-foreground mt-1 text-xs">
         Create a conversation from a captured Gmail or Telegram message while background producers
         are still evolving.
       </p>
@@ -119,7 +119,7 @@ export function ManualCaptureForm() {
                   value={field.value}
                   onChange={field.onChange}
                   aria-invalid={fieldState.invalid}
-                  className="h-9 rounded-md border border-input bg-background px-3 text-sm aria-invalid:border-destructive"
+                  className="border-input bg-background aria-invalid:border-destructive h-9 rounded-md border px-3 text-sm"
                 >
                   <option value="gmail">Gmail</option>
                   <option value="telegram">Telegram</option>
@@ -200,10 +200,10 @@ export function ManualCaptureForm() {
             {pending ? "Capturing..." : "Capture message"}
           </Button>
           {capture.isSuccess || gmailCapture.isSuccess ? (
-            <span className="text-xs text-muted-foreground">Captured</span>
+            <span className="text-muted-foreground text-xs">Captured</span>
           ) : null}
           {capture.isError || gmailCapture.isError ? (
-            <span className="text-xs text-destructive">Capture failed</span>
+            <span className="text-destructive text-xs">Capture failed</span>
           ) : null}
         </div>
       </form>

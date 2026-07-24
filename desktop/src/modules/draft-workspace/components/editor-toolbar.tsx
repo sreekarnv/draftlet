@@ -34,10 +34,10 @@ export function EditorToolbar({
   onMarkSent,
 }: EditorToolbarProps) {
   return (
-    <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border/60 bg-background px-4">
+    <div className="border-border/60 bg-background flex h-12 shrink-0 items-center justify-between gap-2 border-b px-4">
       <div className="min-w-0 flex-1">
         <h1 className="truncate text-sm font-semibold tracking-tight">{title}</h1>
-        <p className="truncate text-xs text-muted-foreground">
+        <p className="text-muted-foreground truncate text-xs">
           {statusLabel} · {statusProvider} · {statusDraft}
         </p>
       </div>

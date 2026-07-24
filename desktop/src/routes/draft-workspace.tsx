@@ -51,7 +51,7 @@ export function DraftWorkspace() {
   }
 
   return (
-    <section className="relative h-full min-h-0 overflow-hidden bg-background">
+    <section className="bg-background relative h-full min-h-0 overflow-hidden">
       <ResizablePanelGroup id="drafts" orientation="horizontal" className="h-full">
         <ResizablePanel defaultSize="22" minSize="18" maxSize="32">
           <AlternativesPanel
@@ -112,7 +112,7 @@ export function DraftWorkspace() {
               from inserting the draft into the local timeline.
             </DialogDescription>
           </DialogHeader>
-          <div className="max-h-56 overflow-auto rounded-lg border bg-muted/30 p-3 text-sm whitespace-pre-wrap">
+          <div className="bg-muted/30 max-h-56 overflow-auto rounded-lg border p-3 text-sm whitespace-pre-wrap">
             {workspace.draftText || "No draft text"}
           </div>
           <DialogFooter>

@@ -66,14 +66,14 @@ export function Settings() {
   const telegramState = telegramAuth.data?.state ?? "disconnected";
 
   return (
-    <section className="h-full min-h-0 overflow-auto bg-background">
+    <section className="bg-background h-full min-h-0 overflow-auto">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-6 py-6">
         <header>
-          <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+          <p className="text-muted-foreground text-xs font-medium tracking-[0.14em] uppercase">
             Local-first preferences
           </p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight">Settings</h1>
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+          <p className="text-muted-foreground mt-2 max-w-2xl text-sm">
             Manage accounts, local model behavior, background capture, privacy, storage, and runtime
             diagnostics from one place.
           </p>
@@ -85,13 +85,13 @@ export function Settings() {
         >
           <div className="space-y-5">
             <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
-              <div className="rounded-lg border bg-card/50 px-3 py-2 text-sm">
+              <div className="bg-card/50 rounded-lg border px-3 py-2 text-sm">
                 <p className="font-medium">
                   {telegramAuth.data?.connected
                     ? `Telegram connected${telegramAuth.data.username ? ` as ${telegramAuth.data.username}` : ""}`
                     : `Telegram status: ${telegramState}`}
                 </p>
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="text-muted-foreground mt-1 text-xs">
                   {telegramAuth.data?.connected
                     ? "Incoming Telegram messages can be captured by the local runtime."
                     : "Connect with phone verification or QR code. Draftlet uses your local Telegram user session, not a bot token."}
@@ -118,7 +118,7 @@ export function Settings() {
             </div>
 
             {connectors.data?.length ? (
-              <div className="divide-y divide-border rounded-lg border">
+              <div className="divide-border divide-y rounded-lg border">
                 {connectors.data.map((connector) => (
                   <div
                     key={connector.id}
@@ -126,7 +126,7 @@ export function Settings() {
                   >
                     <div>
                       <p className="font-medium">{connector.name}</p>
-                      <p className="text-xs text-muted-foreground">{connector.kind}</p>
+                      <p className="text-muted-foreground text-xs">{connector.kind}</p>
                     </div>
                     <Button
                       type="button"
@@ -145,7 +145,7 @@ export function Settings() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-muted-foreground text-sm">
                 No connector rows yet. Telegram can still be connected, and manual captures can
                 still be ingested.
               </p>
@@ -180,7 +180,7 @@ export function Settings() {
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-muted-foreground text-xs">
                 {models.isError
                   ? "Ollama models are unavailable."
                   : "Installed models will appear here when Ollama is reachable."}
@@ -196,7 +196,7 @@ export function Settings() {
                 {updateSetting.isPending ? "Saving..." : "Save model"}
               </Button>
               {updateSetting.isSuccess ? (
-                <span className="text-xs text-muted-foreground">Saved</span>
+                <span className="text-muted-foreground text-xs">Saved</span>
               ) : null}
             </div>
           </div>
@@ -207,21 +207,21 @@ export function Settings() {
           description="Control whether Draftlet should keep local capture jobs available after the window closes."
         >
           <div className="space-y-5">
-            <label className="flex max-w-3xl items-start gap-3 rounded-lg border bg-background p-3 text-sm">
+            <label className="bg-background flex max-w-3xl items-start gap-3 rounded-lg border p-3 text-sm">
               <input
                 type="checkbox"
                 checked={runInBackground}
                 onChange={(event) => void saveRunInBackground(event.target.checked)}
-                className="mt-1 size-4 rounded border-input"
+                className="border-input mt-1 size-4 rounded"
               />
               <span>
                 <span className="block font-medium">Run in background</span>
-                <span className="mt-1 block text-muted-foreground">
+                <span className="text-muted-foreground mt-1 block">
                   Keep Draftlet running in the background after closing the window so connectors can
                   keep capturing.
                 </span>
                 {updateSetting.isPending ? (
-                  <span className="mt-1 block text-xs text-muted-foreground">Saving...</span>
+                  <span className="text-muted-foreground mt-1 block text-xs">Saving...</span>
                 ) : null}
               </span>
             </label>
@@ -293,14 +293,14 @@ export function Settings() {
                   ))}
                 </div>
               ) : (
-                <p className="mt-2 text-sm text-muted-foreground">No models available.</p>
+                <p className="text-muted-foreground mt-2 text-sm">No models available.</p>
               )}
             </div>
 
             <div>
               <h3 className="text-sm font-semibold">Recent captures</h3>
               {captures.data?.length ? (
-                <div className="mt-2 divide-y divide-border rounded-lg border">
+                <div className="divide-border mt-2 divide-y rounded-lg border">
                   {captures.data.map((item) => (
                     <div
                       key={item.id}
@@ -310,16 +310,16 @@ export function Settings() {
                         <p className="font-medium">
                           {item.connector_kind}:{item.source_message_id}
                         </p>
-                        <p className="text-xs text-muted-foreground">status: {item.status}</p>
+                        <p className="text-muted-foreground text-xs">status: {item.status}</p>
                       </div>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-muted-foreground text-xs">
                         {new Date(item.captured_at).toLocaleString()}
                       </p>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="mt-2 text-sm text-muted-foreground">No captures yet.</p>
+                <p className="text-muted-foreground mt-2 text-sm">No captures yet.</p>
               )}
             </div>
           </div>
@@ -331,21 +331,21 @@ export function Settings() {
 
 function StatusTile({ label, ok, detail }: { label: string; ok: boolean; detail?: string | null }) {
   return (
-    <div className="rounded-lg border bg-background p-3">
+    <div className="bg-background rounded-lg border p-3">
       <p className="text-sm font-medium">{label}</p>
-      <p className={ok ? "mt-1 text-sm text-emerald-500" : "mt-1 text-sm text-destructive"}>
+      <p className={ok ? "mt-1 text-sm text-emerald-500" : "text-destructive mt-1 text-sm"}>
         {ok ? "Ready" : "Offline"}
       </p>
-      {detail ? <p className="mt-2 text-xs text-muted-foreground">{detail}</p> : null}
+      {detail ? <p className="text-muted-foreground mt-2 text-xs">{detail}</p> : null}
     </div>
   );
 }
 
 function InfoTile({ title, detail }: { title: string; detail: string }) {
   return (
-    <div className="rounded-lg border bg-background p-3">
+    <div className="bg-background rounded-lg border p-3">
       <p className="text-sm font-medium">{title}</p>
-      <p className="mt-1 text-xs leading-5 text-muted-foreground">{detail}</p>
+      <p className="text-muted-foreground mt-1 text-xs leading-5">{detail}</p>
     </div>
   );
 }

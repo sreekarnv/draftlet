@@ -21,14 +21,14 @@ export function Connectors() {
   const telegramConnected = Boolean(telegramAuth.data?.connected);
 
   return (
-    <section className="h-full min-h-0 overflow-auto bg-background">
+    <section className="bg-background h-full min-h-0 overflow-auto">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-6 py-6">
         <header>
-          <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+          <p className="text-muted-foreground text-xs font-medium tracking-[0.14em] uppercase">
             Local sources
           </p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight">Connectors</h1>
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+          <p className="text-muted-foreground mt-2 max-w-2xl text-sm">
             Manage capture sources for local drafting. Gmail is currently extension-first and
             Telegram uses a local user session.
           </p>
@@ -46,7 +46,7 @@ export function Connectors() {
             description="Local user-session capture and supported message sending."
           >
             <div className="space-y-4">
-              <div className="rounded-lg border bg-background p-3">
+              <div className="bg-background rounded-lg border p-3">
                 <StatusBadge tone={telegramConnected ? "ready" : "warning"}>
                   {telegramConnected
                     ? "Connected"
@@ -57,7 +57,7 @@ export function Connectors() {
                     ? `Telegram${telegramAuth.data?.username ? ` as ${telegramAuth.data.username}` : ""}`
                     : "Connect Telegram"}
                 </p>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                <p className="text-muted-foreground mt-1 text-xs leading-5">
                   Telegram can capture incoming messages and send accepted drafts through the
                   runtime.
                 </p>
@@ -86,7 +86,7 @@ export function Connectors() {
           description="Runtime connector records and enabled state."
         >
           {connectors.data?.length ? (
-            <div className="divide-y divide-border rounded-lg border">
+            <div className="divide-border divide-y rounded-lg border">
               {connectors.data.map((connector) => (
                 <div
                   key={connector.id}
@@ -94,18 +94,18 @@ export function Connectors() {
                 >
                   <div>
                     <p className="font-medium">{connector.name}</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-muted-foreground text-xs">
                       {connector.kind} · {connector.enabled ? "enabled" : "disabled"}
                     </p>
                   </div>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-muted-foreground text-xs">
                     Updated {new Date(connector.updated_at).toLocaleString()}
                   </span>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-muted-foreground text-sm">
               No connector rows yet. Gmail manual captures and Telegram auth can still work without
               a stored connector row.
             </p>

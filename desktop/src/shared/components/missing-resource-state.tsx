@@ -5,10 +5,10 @@ export interface MissingResourceStateProps {
 
 export function MissingResourceState({ title, description }: MissingResourceStateProps) {
   return (
-    <section className="flex min-h-full items-center justify-center bg-background p-6">
-      <div className="max-w-sm rounded-xl border border-dashed bg-card p-5 text-center text-card-foreground">
+    <section className="bg-background flex min-h-full items-center justify-center p-6">
+      <div className="bg-card text-card-foreground max-w-sm rounded-xl border border-dashed p-5 text-center">
         <p className="text-sm font-medium">{title}</p>
-        <p className="mt-2 text-xs leading-5 text-muted-foreground">{description}</p>
+        <p className="text-muted-foreground mt-2 text-xs leading-5">{description}</p>
       </div>
     </section>
   );

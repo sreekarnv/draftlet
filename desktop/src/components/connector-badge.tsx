@@ -27,11 +27,7 @@ interface ConnectorBadgeProps {
   label?: string;
 }
 
-export function ConnectorBadge({
-  connector,
-  status = "offline",
-  label,
-}: ConnectorBadgeProps) {
+export function ConnectorBadge({ connector, status = "offline", label }: ConnectorBadgeProps) {
   const Icon = iconFor(connector);
   const resolvedLabel = label ?? (connector === "gmail" ? "Gmail" : "Telegram");
   return (

@@ -44,11 +44,11 @@ export function GmailStatusCard({
       description="Extension-first local capture for email review and drafting. OAuth, Gmail API sync, and sending are deferred."
     >
       <div className="space-y-5">
-        <div className="flex flex-col gap-3 rounded-lg border bg-background p-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="bg-background flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <StatusBadge tone={tone}>{statusLabel}</StatusBadge>
             <p className="mt-3 text-sm font-medium">Selection-based Gmail capture</p>
-            <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">
+            <p className="text-muted-foreground mt-1 max-w-2xl text-xs leading-5">
               Load the Chrome extension from the repository, select the exact text in a Gmail
               thread, and capture it into Draftlet. Captures appear in the Email workspace for local
               drafting; external email sending is not implemented yet.
@@ -70,9 +70,9 @@ export function GmailStatusCard({
           <Metric label="External sending" value="Disabled" />
         </div>
 
-        <div className="rounded-lg border border-dashed bg-background/60 p-3">
+        <div className="bg-background/60 rounded-lg border border-dashed p-3">
           <p className="text-sm font-medium">Chrome extension MVP</p>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+          <p className="text-muted-foreground mt-1 text-xs leading-5">
             Load `extension/` unpacked in Chrome, reload Gmail, select message text, then click the
             Draftlet extension. OAuth, Gmail API sync, and sending are intentionally deferred.
           </p>
@@ -87,8 +87,8 @@ export function GmailStatusCard({
 
 function Metric({ label, value }: { label: string; value: number | string }) {
   return (
-    <div className="rounded-lg border bg-background p-3">
-      <p className="text-xs text-muted-foreground">{label}</p>
+    <div className="bg-background rounded-lg border p-3">
+      <p className="text-muted-foreground text-xs">{label}</p>
       <p className="mt-1 text-lg font-semibold tracking-tight">{value}</p>
     </div>
   );

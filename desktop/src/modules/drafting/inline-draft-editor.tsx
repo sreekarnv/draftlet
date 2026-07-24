@@ -37,19 +37,19 @@ export function InlineDraftEditor({ conversation, latestDraft }: InlineDraftEdit
   }
 
   return (
-    <div className="relative border-t bg-background/95 p-3">
-      <section className="rounded-xl border bg-card text-card-foreground shadow-sm">
+    <div className="bg-background/95 relative border-t p-3">
+      <section className="bg-card text-card-foreground rounded-xl border shadow-sm">
         <div className="flex flex-col gap-3 border-b px-3 py-3 md:flex-row md:items-start md:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <Bot className="size-4 text-primary" />
+              <Bot className="text-primary size-4" />
               <h2 className="text-sm font-semibold tracking-tight">Inline draft</h2>
               <StatusBadge tone={draft.isInserted ? "generating" : "ready"}>
                 {draft.statusLabel}
               </StatusBadge>
               {draft.userIsEditing ? <StatusBadge tone="warning">Unsaved edits</StatusBadge> : null}
             </div>
-            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+            <p className="text-muted-foreground mt-1 line-clamp-2 text-xs">
               {replyTarget
                 ? `Reply target: ${replyTarget.author} · ${replyTarget.body}`
                 : `Draft locally for ${conversation.title || conversation.contact}.`}
@@ -85,8 +85,8 @@ export function InlineDraftEditor({ conversation, latestDraft }: InlineDraftEdit
 
         <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_300px]">
           <div className="min-w-0 p-3">
-            <div className="rounded-lg border bg-background shadow-inner">
-              <div className="flex items-center justify-between gap-3 border-b px-3 py-2 text-xs text-muted-foreground">
+            <div className="bg-background rounded-lg border shadow-inner">
+              <div className="text-muted-foreground flex items-center justify-between gap-3 border-b px-3 py-2 text-xs">
                 <span>
                   {draft.draft
                     ? `${draft.activeVariantTitle} · ${draft.draft.provider}`
@@ -100,11 +100,11 @@ export function InlineDraftEditor({ conversation, latestDraft }: InlineDraftEdit
                 readOnly={draft.isInserted}
                 aria-readonly={draft.isInserted}
                 placeholder="Generate a draft or write one manually here."
-                className="block max-h-80 min-h-40 w-full resize-y border-0 bg-transparent px-3 py-3 font-mono text-[13px] leading-6 text-foreground outline-none readOnly:cursor-not-allowed readOnly:opacity-70"
+                className="text-foreground readOnly:cursor-not-allowed readOnly:opacity-70 block max-h-80 min-h-40 w-full resize-y border-0 bg-transparent px-3 py-3 font-mono text-[13px] leading-6 outline-none"
               />
             </div>
 
-            <div className="mt-3 flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-muted-foreground mt-3 flex flex-col gap-2 text-xs sm:flex-row sm:items-center sm:justify-between">
               <p className="flex items-center gap-1.5">
                 <ShieldCheck className="size-3.5" />
                 Insert locally adds this to Draftlet only. It does not send externally.
@@ -144,7 +144,7 @@ export function InlineDraftEditor({ conversation, latestDraft }: InlineDraftEdit
             </div>
           </div>
 
-          <aside className="border-t bg-muted/30 p-3 lg:border-l lg:border-t-0">
+          <aside className="bg-muted/30 border-t p-3 lg:border-t-0 lg:border-l">
             <div className="space-y-3">
               <SegmentedControl
                 label="Tone"
@@ -166,10 +166,10 @@ export function InlineDraftEditor({ conversation, latestDraft }: InlineDraftEdit
               />
             </div>
             <div className="mt-4">
-              <p className="px-1 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+              <p className="text-muted-foreground px-1 text-xs font-medium tracking-[0.14em] uppercase">
                 Variants
               </p>
-              <div className="mt-2 max-h-44 overflow-auto rounded-lg border bg-background/70">
+              <div className="bg-background/70 mt-2 max-h-44 overflow-auto rounded-lg border">
                 <DraftVariantList
                   variants={draft.draft?.variants ?? []}
                   selectedVariant={draft.selectedVariant}
@@ -184,7 +184,7 @@ export function InlineDraftEditor({ conversation, latestDraft }: InlineDraftEdit
       {draft.toast ? (
         <div
           key={draft.toast.id}
-          className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-full border bg-popover px-3 py-1.5 text-xs text-popover-foreground shadow-lg"
+          className="bg-popover text-popover-foreground absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-full border px-3 py-1.5 text-xs shadow-lg"
         >
           {draft.toast.message}
         </div>
@@ -200,7 +200,7 @@ export function InlineDraftEditor({ conversation, latestDraft }: InlineDraftEdit
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+            <div className="bg-muted/30 text-muted-foreground rounded-lg border p-3 text-xs">
               <p>
                 Destination:{" "}
                 <span className="text-foreground">
@@ -216,7 +216,7 @@ export function InlineDraftEditor({ conversation, latestDraft }: InlineDraftEdit
                 </span>
               </p>
             </div>
-            <div className="max-h-56 overflow-auto rounded-lg border bg-background p-3 text-sm whitespace-pre-wrap">
+            <div className="bg-background max-h-56 overflow-auto rounded-lg border p-3 text-sm whitespace-pre-wrap">
               {draft.draftText || "No draft text"}
             </div>
           </div>

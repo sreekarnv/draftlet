@@ -78,7 +78,7 @@ function StatusRow({ label, value, tone }: StatusRowProps) {
     <div className="flex items-center gap-2 px-0.5 py-1.5 text-xs">
       <StatusDot tone={tone} />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sidebar-foreground/55">
+        <div className="text-sidebar-foreground/55 truncate">
           <span className="text-sidebar-foreground/80">{label}</span>: {value}
         </div>
       </div>
@@ -102,12 +102,12 @@ function ConversationGroup({ label, conversations, activePath, kind }: Conversat
       <SidebarGroup className="min-h-0 py-1">
         <SidebarGroupLabel
           asChild
-          className="group/section-trigger h-7 px-2 text-[10px] uppercase tracking-[0.14em] text-muted-foreground hover:bg-sidebar-accent/45 hover:text-sidebar-foreground"
+          className="group/section-trigger text-muted-foreground hover:bg-sidebar-accent/45 hover:text-sidebar-foreground h-7 px-2 text-[10px] tracking-[0.14em] uppercase"
         >
           <CollapsibleTrigger>
             <ChevronRight className="size-3.5 transition-transform group-data-[state=open]/section-trigger:rotate-90" />
             <span className="min-w-0 flex-1 truncate">{label}</span>
-            <span className="rounded-full bg-sidebar-accent px-1.5 py-0.5 text-[10px] leading-none text-sidebar-foreground/60">
+            <span className="bg-sidebar-accent text-sidebar-foreground/60 rounded-full px-1.5 py-0.5 text-[10px] leading-none">
               {conversations.length}
             </span>
           </CollapsibleTrigger>
@@ -135,9 +135,9 @@ function ConversationGroup({ label, conversations, activePath, kind }: Conversat
                         isActive={isActive}
                         tooltip={title}
                         className={cn(
-                          "relative h-auto min-h-10 items-start rounded-md py-2 pl-4 pr-2 text-sidebar-foreground/75 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:px-2",
+                          "text-sidebar-foreground/75 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground relative h-auto min-h-10 items-start rounded-md py-2 pr-2 pl-4 group-data-[collapsible=icon]:px-2",
                           isActive &&
-                            "bg-sidebar-accent font-medium text-sidebar-accent-foreground before:absolute before:left-2 before:top-1/2 before:h-5 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-primary group-data-[collapsible=icon]:before:left-1",
+                            "bg-sidebar-accent text-sidebar-accent-foreground before:bg-primary font-medium before:absolute before:top-1/2 before:left-2 before:h-5 before:w-0.5 before:-translate-y-1/2 before:rounded-full group-data-[collapsible=icon]:before:left-1",
                         )}
                       >
                         <Link to={href} aria-current={isActive ? "page" : undefined}>
@@ -145,12 +145,12 @@ function ConversationGroup({ label, conversations, activePath, kind }: Conversat
                           <span className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
                             <span className="block truncate text-sm leading-4">{title}</span>
                             {subtitle ? (
-                              <span className="mt-0.5 block truncate text-xs leading-4 text-sidebar-foreground/55">
+                              <span className="text-sidebar-foreground/55 mt-0.5 block truncate text-xs leading-4">
                                 {subtitle}
                               </span>
                             ) : null}
                             {preview ? (
-                              <span className="mt-0.5 block truncate text-xs leading-4 text-sidebar-foreground/55">
+                              <span className="text-sidebar-foreground/55 mt-0.5 block truncate text-xs leading-4">
                                 {preview}
                               </span>
                             ) : null}
@@ -162,7 +162,7 @@ function ConversationGroup({ label, conversations, activePath, kind }: Conversat
                 })
               ) : (
                 <SidebarMenuItem>
-                  <div className="flex items-center gap-2 rounded-md px-2 py-2 text-xs text-sidebar-foreground/45 group-data-[collapsible=icon]:justify-center">
+                  <div className="text-sidebar-foreground/45 flex items-center gap-2 rounded-md px-2 py-2 text-xs group-data-[collapsible=icon]:justify-center">
                     <Icon className="size-4 shrink-0" />
                     <span className="truncate group-data-[collapsible=icon]:hidden">
                       {emptyLabel}
@@ -187,7 +187,7 @@ function SystemGroup({ activePath }: SystemGroupProps) {
 
   return (
     <SidebarGroup>
-      <SidebarGroupLabel className="px-2 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+      <SidebarGroupLabel className="text-muted-foreground px-2 text-[10px] tracking-[0.14em] uppercase">
         System
       </SidebarGroupLabel>
       <SidebarGroupContent>
@@ -203,9 +203,9 @@ function SystemGroup({ activePath }: SystemGroupProps) {
                   isActive={isActive}
                   tooltip={item.title}
                   className={cn(
-                    "relative h-8 rounded-md text-sidebar-foreground/70 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
+                    "text-sidebar-foreground/70 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground relative h-8 rounded-md",
                     isActive &&
-                      "bg-sidebar-accent font-medium text-sidebar-accent-foreground before:absolute before:left-1 before:top-1/2 before:h-4 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-primary",
+                      "bg-sidebar-accent text-sidebar-accent-foreground before:bg-primary font-medium before:absolute before:top-1/2 before:left-1 before:h-4 before:w-0.5 before:-translate-y-1/2 before:rounded-full",
                   )}
                 >
                   <Link to={item.path} aria-current={isActive ? "page" : undefined}>
@@ -233,18 +233,18 @@ export function AppSidebar({ activePath, ...props }: AppSidebarProps) {
   const emailConversations = conversations.filter(isEmailConversation);
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar" {...props}>
+    <Sidebar collapsible="icon" className="border-sidebar-border bg-sidebar border-r" {...props}>
       <SidebarHeader className="h-14 justify-center px-2 py-2">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild tooltip="Draftlet">
               <Link to="/">
-                <div className="flex aspect-square size-7 items-center justify-center overflow-hidden rounded-md bg-sidebar-primary/10 ring-1 ring-sidebar-border">
+                <div className="bg-sidebar-primary/10 ring-sidebar-border flex aspect-square size-7 items-center justify-center overflow-hidden rounded-md ring-1">
                   <img src={draftletLogo} alt="" className="size-full object-cover" />
                 </div>
                 <div className="grid flex-1 text-left leading-tight">
                   <span className="truncate text-sm font-semibold tracking-tight">Draftlet</span>
-                  <span className="truncate text-xs text-sidebar-foreground/55">
+                  <span className="text-sidebar-foreground/55 truncate text-xs">
                     Local drafting companion
                   </span>
                 </div>
@@ -273,7 +273,7 @@ export function AppSidebar({ activePath, ...props }: AppSidebarProps) {
       </SidebarContent>
 
       <SidebarFooter className="gap-2 px-3 py-3 group-data-[collapsible=icon]:hidden">
-        <div className="px-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-sidebar-foreground/45">
+        <div className="text-sidebar-foreground/45 px-0.5 text-[10px] font-medium tracking-[0.14em] uppercase">
           Local status
         </div>
         <div className="space-y-1">

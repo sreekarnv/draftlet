@@ -20,20 +20,20 @@ export function MessagesDraftDock({
   const replyTarget = getDraftReplyTarget(latestDraft, conversation);
 
   return (
-    <footer className="shrink-0 border-t bg-background/95 p-3">
-      <div className="rounded-xl border bg-card px-3 py-3 shadow-sm">
+    <footer className="bg-background/95 shrink-0 border-t p-3">
+      <div className="bg-card rounded-xl border px-3 py-3 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-sm font-semibold">
-              <Bot className="size-4 text-primary" />
+              <Bot className="text-primary size-4" />
               {getDraftStateLabel(latestDraft)}
             </div>
-            <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
+            <p className="text-muted-foreground mt-1 line-clamp-1 text-xs">
               {replyTarget
                 ? `Replying to ${replyTarget.author}: ${replyTarget.body}`
                 : "Generate a local draft from this thread."}
             </p>
-            <p className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <p className="text-muted-foreground mt-1 flex items-center gap-1.5 text-[11px]">
               <ShieldCheck className="size-3.5" />
               Draft inline here. Insert locally does not send externally.
             </p>

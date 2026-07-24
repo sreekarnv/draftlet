@@ -21,12 +21,12 @@ export function ConversationDetail() {
 
   if (conversationQuery.isLoading || draftsQuery.isLoading) {
     return (
-      <main className="h-full min-h-0 overflow-auto bg-background px-6 py-8">
+      <main className="bg-background h-full min-h-0 overflow-auto px-6 py-8">
         <div className="mx-auto w-full max-w-5xl space-y-4">
-          <div className="h-28 rounded-2xl bg-muted/60" />
+          <div className="bg-muted/60 h-28 rounded-2xl" />
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
-            <div className="h-96 rounded-2xl bg-muted/40" />
-            <div className="h-80 rounded-2xl bg-muted/40" />
+            <div className="bg-muted/40 h-96 rounded-2xl" />
+            <div className="bg-muted/40 h-80 rounded-2xl" />
           </div>
         </div>
       </main>
@@ -56,7 +56,7 @@ export function ConversationDetail() {
   }
 
   return (
-    <main className="h-full min-h-0 overflow-auto bg-background">
+    <main className="bg-background h-full min-h-0 overflow-auto">
       <ConversationHeader
         conversation={selectedConversation}
         latestDraft={latestDraft}

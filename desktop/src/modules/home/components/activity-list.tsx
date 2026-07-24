@@ -1,5 +1,5 @@
 import { StatusBadge } from "@/components/status-dot";
-import { ActivityItem } from "../types";
+import { type ActivityItem } from "../types";
 
 export interface ActivityListProps {
   items: ActivityItem[];
@@ -12,7 +12,7 @@ export function ActivityList({ items, emptyTitle, emptyDescription }: ActivityLi
     return (
       <div>
         <p className="text-sm font-medium">{emptyTitle}</p>
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">{emptyDescription}</p>
+        <p className="text-muted-foreground mt-1 text-xs leading-5">{emptyDescription}</p>
       </div>
     );
   }
@@ -23,14 +23,14 @@ export function ActivityList({ items, emptyTitle, emptyDescription }: ActivityLi
         <div key={item.title} className="group flex items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="truncate text-sm font-medium">{item.title}</p>
-            <p className="mt-1 truncate text-xs text-muted-foreground">{item.detail}</p>
+            <p className="text-muted-foreground mt-1 truncate text-xs">{item.detail}</p>
           </div>
           {item.status && item.status !== "ready" && item.status !== "generating" ? (
             <StatusBadge tone={item.status === "sent" ? "ready" : "generating"}>
               {item.status === "accepted" ? "Inserted" : "Sent"}
             </StatusBadge>
           ) : item.connector ? (
-            <span className="shrink-0 text-[11px] text-muted-foreground">{item.connector}</span>
+            <span className="text-muted-foreground shrink-0 text-[11px]">{item.connector}</span>
           ) : null}
         </div>
       ))}

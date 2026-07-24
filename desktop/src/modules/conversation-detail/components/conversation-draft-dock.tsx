@@ -20,19 +20,19 @@ export function ConversationDraftDock({
   const replyTarget = getDraftReplyTarget(latestDraft, conversation);
 
   return (
-    <div className="rounded-2xl border bg-card p-4 shadow-sm">
+    <div className="bg-card rounded-2xl border p-4 shadow-sm">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-sm font-semibold">
-            <Bot className="size-4 text-primary" />
+            <Bot className="text-primary size-4" />
             {getDraftStateLabel(latestDraft)}
           </div>
-          <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+          <p className="text-muted-foreground mt-1 line-clamp-2 text-sm">
             {replyTarget
               ? `Replying to ${replyTarget.author}: ${replyTarget.body}`
               : "Generate a local draft from this thread and edit it inline."}
           </p>
-          <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <p className="text-muted-foreground mt-2 flex items-center gap-1.5 text-xs">
             <ShieldCheck className="size-3.5" />
             Insert locally does not send externally. Supported external sends require confirmation.
           </p>

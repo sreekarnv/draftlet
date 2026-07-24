@@ -16,7 +16,7 @@ export function ContinueWorkCard({ primaryDraft }: ContinueWorkCardProps) {
       description="The most relevant draft and context waiting for review."
     >
       <div className="space-y-6">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
           <StatusBadge tone="offline">Runtime offline</StatusBadge>
           <span>Ollama model selected</span>
           <span>Telegram needs review</span>
@@ -24,7 +24,7 @@ export function ContinueWorkCard({ primaryDraft }: ContinueWorkCardProps) {
         <h2 className="max-w-2xl text-2xl font-semibold tracking-[-0.03em]">
           {primaryDraft?.title ?? "No draft selected"}
         </h2>
-        <p className="max-w-2xl text-sm leading-7 text-muted-foreground">
+        <p className="text-muted-foreground max-w-2xl text-sm leading-7">
           {primaryDraft?.instruction ??
             "Captured conversations and generated drafts will appear here when there is work to continue."}
         </p>
