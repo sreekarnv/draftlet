@@ -1,9 +1,10 @@
 {
-  "extends": "./.wxt/tsconfig.json",
-  "compilerOptions": {
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["src/*"]
-    }
-  }
+	"extends": "./.wxt/tsconfig.json",
+	"compilerOptions": {
+		"jsx": "react-jsx",
+		"types": ["chrome"],
+		"paths": {
+			"@/*": ["./src/*"]
+		}
+	}
 }

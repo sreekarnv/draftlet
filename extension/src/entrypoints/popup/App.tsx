@@ -22,23 +22,23 @@ type StatusTone = "idle" | "working" | "success" | "error";
 
 type ExtractResponse =
   | {
-      ok: true;
-      payload: GmailCapturePayload;
-    }
+    ok: true;
+    payload: GmailCapturePayload;
+  }
   | {
-      ok: false;
-      error: string;
-    };
+    ok: false;
+    error: string;
+  };
 
 type InsertResponse =
   | {
-      ok: true;
-      result: true;
-    }
+    ok: true;
+    result: true;
+  }
   | {
-      ok: false;
-      error: string;
-    };
+    ok: false;
+    error: string;
+  };
 
 type LoadingAction = "capture" | "insert" | null;
 
@@ -124,7 +124,7 @@ export function App() {
   }
 
   return (
-    <main className="w-[340px] bg-background p-3 text-foreground">
+    <main className="w-85 bg-background p-3 text-foreground">
       <Card className="overflow-hidden border-border/70 bg-card/95">
         <CardHeader>
           <div className="mb-2 flex size-9 items-center justify-center rounded-xl bg-primary/15 text-primary">
