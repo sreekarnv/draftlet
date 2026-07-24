@@ -129,5 +129,6 @@ jobs:
                   prerelease: true
                   generate_release_notes: true
                   files: |
-                      desktop/release/**/*
-                      extension/.output/*.zip
+                      desktop/release/**/Draftlet-Linux-*.AppImage
+                      desktop/release/**/Draftlet-Linux-*.deb
+                      extension/.output/draftletextension-*-chrome.zip
