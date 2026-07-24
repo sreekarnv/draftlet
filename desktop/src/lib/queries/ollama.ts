@@ -6,7 +6,7 @@ import { runtimeClient } from "@/lib/runtime-client";
 export function useOllamaModelsQuery() {
   return useQuery({
     queryKey: queryKeys.ollamaModels,
-    queryFn: runtimeClient.listOllamaModels,
+    queryFn: () => runtimeClient.listOllamaModels(),
     refetchInterval: 60_000,
   });
 }

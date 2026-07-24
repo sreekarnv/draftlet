@@ -33,14 +33,6 @@ const systemNavigation = draftletNavigation.filter((item) =>
   ["/connectors", "/settings"].includes(item.path),
 );
 
-function TelegramIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className={className} fill="currentColor">
-      <path d="M21.93 4.14c.28-1.05-.75-1.9-1.72-1.42L2.92 11.18c-1.05.51-.94 2.05.16 2.41l4.36 1.42 1.68 5.31c.33 1.05 1.67 1.33 2.38.5l2.45-2.86 4.42 3.23c.9.66 2.17.16 2.45-.92l3.11-16.13ZM8.21 13.63l8.51-5.28c.4-.25.81.29.47.62l-6.99 6.7-.27 2.83-1.05-3.32-.67-1.55Zm2.57 3.46 1.94-1.86 1.64 1.2-2.94 3.44-.64-2.78Z" />
-    </svg>
-  );
-}
-
 function isMessageConversation(conversation: Conversation) {
   return conversation.connector === "telegram" || conversation.threadKind === "chat";
 }
@@ -61,10 +53,19 @@ function getEmailSender(conversation: Conversation) {
   );
 }
 
-function getConversationIcon(conversation: Conversation, kind: ConversationGroupProps["kind"]) {
-  if (conversation.connector === "telegram") return TelegramIcon;
-  if (conversation.connector === "gmail" || kind === "email") return Mail;
-  return MessageCircle;
+function connectorForGroup(kind: ConversationGroupProps["kind"]): Conversation["connector"] {
+  return kind === "email" ? "gmail" : "telegram";
+}
+
+function connectorForConversation(
+  conversation: Conversation,
+  kind: ConversationGroupProps["kind"],
+): Conversation["connector"] {
+  if (conversation.connector === "gmail" || conversation.connector === "telegram") {
+    return conversation.connector;
+  }
+
+  return connectorForGroup(kind);
 }
 
 interface StatusRowProps {
@@ -94,7 +95,7 @@ interface ConversationGroupProps {
 }
 
 function ConversationGroup({ label, conversations, activePath, kind }: ConversationGroupProps) {
-  const Icon = kind === "email" ? Mail : MessageCircle;
+  const emptyConnector = connectorForGroup(kind);
   const emptyLabel = kind === "email" ? "No Gmail threads yet" : "No Telegram chats yet";
 
   return (
@@ -126,7 +127,7 @@ function ConversationGroup({ label, conversations, activePath, kind }: Conversat
                       : getConversationName(conversation);
                   const subtitle = kind === "email" ? conversation.title : undefined;
                   const preview = conversation.latestMessage;
-                  const RowIcon = getConversationIcon(conversation, kind);
+                  const rowConnector = connectorForConversation(conversation, kind);
 
                   return (
                     <SidebarMenuItem key={conversation.id}>
@@ -141,7 +142,11 @@ function ConversationGroup({ label, conversations, activePath, kind }: Conversat
                         )}
                       >
                         <Link to={href} aria-current={isActive ? "page" : undefined}>
-                          <RowIcon className="mt-0.5 size-4 shrink-0" />
+                          {rowConnector === "gmail" ? (
+                            <Mail className="mt-0.5 size-4 shrink-0" />
+                          ) : (
+                            <MessageCircle className="mt-0.5 size-4 shrink-0" />
+                          )}
                           <span className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
                             <span className="block truncate text-sm leading-4">{title}</span>
                             {subtitle ? (
@@ -163,7 +168,11 @@ function ConversationGroup({ label, conversations, activePath, kind }: Conversat
               ) : (
                 <SidebarMenuItem>
                   <div className="text-sidebar-foreground/45 flex items-center gap-2 rounded-md px-2 py-2 text-xs group-data-[collapsible=icon]:justify-center">
-                    <Icon className="size-4 shrink-0" />
+                    {emptyConnector === "gmail" ? (
+                      <Mail className="size-4 shrink-0" />
+                    ) : (
+                      <MessageCircle className="size-4 shrink-0" />
+                    )}
                     <span className="truncate group-data-[collapsible=icon]:hidden">
                       {emptyLabel}
                     </span>

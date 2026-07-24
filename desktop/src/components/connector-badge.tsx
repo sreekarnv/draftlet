@@ -5,10 +5,6 @@ import type { Connector, OllamaProviderStatus, RuntimeStatus } from "@/lib/contr
 
 type BadgeStatus = RuntimeStatus | OllamaProviderStatus | "connected";
 
-function iconFor(connector: Connector) {
-  return connector === "gmail" ? Mail : MessageCircle;
-}
-
 function toneFor(status: BadgeStatus): StatusTone {
   if (status === "ready" || status === "connected") {
     return "ready";
@@ -28,11 +24,14 @@ interface ConnectorBadgeProps {
 }
 
 export function ConnectorBadge({ connector, status = "offline", label }: ConnectorBadgeProps) {
-  const Icon = iconFor(connector);
   const resolvedLabel = label ?? (connector === "gmail" ? "Gmail" : "Telegram");
   return (
     <StatusBadge tone={toneFor(status)}>
-      <Icon className="size-3" aria-hidden="true" />
+      {connector === "gmail" ? (
+        <Mail className="size-3" aria-hidden="true" />
+      ) : (
+        <MessageCircle className="size-3" aria-hidden="true" />
+      )}
       <span>{resolvedLabel}</span>
     </StatusBadge>
   );

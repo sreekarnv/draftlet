@@ -61,7 +61,10 @@ function getBreadcrumbs(pathname: string): Crumb[] {
   }
 
   if (matchedNavItem && matchedNavItem.path !== "/") {
-    crumbs.push({ label: matchedNavItem.title });
+    crumbs.push({
+      label: matchedNavItem.title,
+      ...(navConsumed < segments.length ? { href: matchedNavItem.path } : {}),
+    });
   }
 
   const remainingSegments = segments.slice(navConsumed);

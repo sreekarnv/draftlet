@@ -8,7 +8,6 @@ import { ScrollArea } from "@/shared/components/ui/scroll-area";
 import { EmptyState } from "@/components/empty-state";
 import { useConversationsQuery } from "@/lib/queries/conversations";
 import { useGenerateDraft } from "@/lib/queries/drafts";
-import { useDraftletStore } from "@/state/draftlet-store";
 import { LibraryFilter, type LibraryTab } from "@/modules/library/types";
 import { matchesFilter } from "@/modules/library/utils";
 import { ConversationRow } from "@/modules/library/components/conversation-row";
@@ -28,17 +27,13 @@ export function Library() {
   const navigate = useNavigate();
   const conversations = useConversationsQuery();
   const generateDraft = useGenerateDraft();
-  const selectedLibraryConversationId = useDraftletStore((s) => s.selectedLibraryConversationId);
-  const setSelectedLibraryConversationId = useDraftletStore(
-    (s) => s.setSelectedLibraryConversationId,
-  );
   const [state, dispatch] = useReducer(libraryReducer, {
     activeFilter: LibraryFilter.ALL,
     query: "",
-    selectedId: selectedLibraryConversationId,
+    selectedId: "",
   });
   const hasSearch = state.query.trim().length > 0;
-  const conversationsData = conversations.data ?? [];
+  const conversationsData = useMemo(() => conversations.data ?? [], [conversations.data]);
 
   const filteredConversations = useMemo(() => {
     const normalizedQuery = state.query.trim().toLowerCase();
@@ -144,7 +139,6 @@ export function Library() {
                         selectedId: conversation.id,
                       },
                     });
-                    setSelectedLibraryConversationId(conversation.id);
                   }}
                 />
               ))}
