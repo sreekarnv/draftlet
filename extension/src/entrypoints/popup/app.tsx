@@ -10,7 +10,14 @@ import {
 } from "@/lib/protocol";
 import { RUNTIME_DISPLAY_HOSTS } from "@/lib/runtime-client";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from "@/components/ui/card";
 import { MailCheck, RefreshCw } from "lucide-react";
 
 type LoadingAction = "capture" | "insert" | null;
@@ -77,7 +84,10 @@ export function App() {
       updateStatus("Inserting draft into active Gmail compose...");
       await sendInsertGmailDraft(tab.id, latest.text);
 
-      updateStatus(`Inserted Draftlet reply for ${latest.subject}. Review before sending.`, "success");
+      updateStatus(
+        `Inserted Draftlet reply for ${latest.subject}. Review before sending.`,
+        "success",
+      );
     });
   }
 
@@ -100,10 +110,10 @@ export function App() {
 
   return (
     <>
-      <main className="w-85 bg-background p-3 text-foreground">
-        <Card className="overflow-hidden border-border/70 bg-card/95">
+      <main className="bg-background text-foreground w-85 p-3">
+        <Card className="border-border/70 bg-card/95 overflow-hidden">
           <CardHeader>
-            <div className="mb-2 flex size-9 items-center justify-center rounded-xl bg-primary/15 text-primary">
+            <div className="bg-primary/15 text-primary mb-2 flex size-9 items-center justify-center rounded-xl">
               <MailCheck className="size-5" />
             </div>
             <CardTitle>Draftlet Gmail Capture</CardTitle>
@@ -112,7 +122,11 @@ export function App() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Button className="w-full" disabled={loadingAction !== null} onClick={captureCurrentSelection}>
+            <Button
+              className="w-full"
+              disabled={loadingAction !== null}
+              onClick={captureCurrentSelection}
+            >
               {loadingAction === "capture" ? <RefreshCw className="animate-spin" /> : null}
               {loadingAction === "capture" ? "Capturing..." : "Capture selected Gmail text"}
             </Button>
@@ -128,10 +142,10 @@ export function App() {
             <StatusMessage status={status} />
           </CardContent>
           <CardFooter>
-            <p className="text-[11px] leading-4 text-muted-foreground">
+            <p className="text-muted-foreground text-[11px] leading-4">
               Runtime: <span className="text-foreground">{RUNTIME_DISPLAY_HOSTS[0]}</span> or{" "}
-              <span className="text-foreground">{RUNTIME_DISPLAY_HOSTS[1]}</span>. Keep Gmail open while
-              capturing or inserting drafts.
+              <span className="text-foreground">{RUNTIME_DISPLAY_HOSTS[1]}</span>. Keep Gmail open
+              while capturing or inserting drafts.
             </p>
           </CardFooter>
         </Card>

@@ -31,7 +31,10 @@ export async function latestGmailDraft(): Promise<LatestGmailDraft> {
   });
 
   if (!response.ok) {
-    throw await errorFromResponse(response, "No Gmail draft found. Generate one in Draftlet first.");
+    throw await errorFromResponse(
+      response,
+      "No Gmail draft found. Generate one in Draftlet first.",
+    );
   }
 
   return latestGmailDraftSchema.parse(await response.json());
@@ -55,7 +58,11 @@ async function runtimeFetch(path: string, init?: RequestInit): Promise<Response>
       });
 
       if (response.status >= 500 && baseUrl !== RUNTIME_BASE_URLS.at(-1)) {
-        lastError = new RuntimeError("RUNTIME_HTTP", `Draftlet runtime returned ${response.status}.`, response.status);
+        lastError = new RuntimeError(
+          "RUNTIME_HTTP",
+          `Draftlet runtime returned ${response.status}.`,
+          response.status,
+        );
         continue;
       }
 
