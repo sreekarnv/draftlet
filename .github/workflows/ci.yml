@@ -1,0 +1,100 @@
+name: CI
+
+on:
+    pull_request:
+    push:
+        branches:
+            - main
+
+jobs:
+    api:
+        name: API
+        runs-on: ubuntu-24.04
+
+        defaults:
+            run:
+                working-directory: api
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v7
+
+            - name: Install uv
+              uses: astral-sh/setup-uv@v7
+              with:
+                  enable-cache: true
+
+            - name: Set up Python
+              run: uv python install 3.12
+
+            - name: Install dependencies
+              run: uv sync --locked
+
+            - name: Lint
+              run: uv run ruff check .
+
+    desktop:
+        name: Desktop
+        runs-on: ubuntu-24.04
+
+        defaults:
+            run:
+                working-directory: desktop
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v7
+
+            - name: Set up pnpm
+              uses: pnpm/action-setup@v6
+              with:
+                  version: 11.10.0
+
+            - name: Set up Node
+              uses: actions/setup-node@v7
+              with:
+                  node-version: 24
+                  cache: pnpm
+                  cache-dependency-path: desktop/pnpm-lock.yaml
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+
+            - name: Typecheck
+              run: pnpm typecheck
+
+            - name: Lint
+              run: pnpm lint
+
+    extension:
+        name: Extension
+        runs-on: ubuntu-24.04
+
+        defaults:
+            run:
+                working-directory: extension
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v7
+
+            - name: Set up pnpm
+              uses: pnpm/action-setup@v6
+              with:
+                  version: 11.10.0
+
+            - name: Set up Node
+              uses: actions/setup-node@v7
+              with:
+                  node-version: 24
+                  cache: pnpm
+                  cache-dependency-path: extension/pnpm-lock.yaml
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+
+            - name: Typecheck
+              run: pnpm typecheck
+
+            - name: Lint
+              run: pnpm lint
