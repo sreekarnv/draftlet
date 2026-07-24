@@ -13,14 +13,14 @@ export function ReplyQuote({ target, unresolvedExternalId, compact = false }: Re
   return (
     <div
       className={cn(
-        "mb-2 rounded-md border-l-2 border-primary/50 bg-background/60 px-3 py-2",
+        "border-primary/50 bg-background/60 mb-2 rounded-md border-l-2 px-3 py-2",
         compact && "px-2.5 py-1.5",
       )}
     >
-      <p className="text-[11px] font-medium text-muted-foreground">
+      <p className="text-muted-foreground text-[11px] font-medium">
         Replying to {target?.author ?? "external message"}
       </p>
-      <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+      <p className="text-muted-foreground mt-1 line-clamp-2 text-xs leading-5">
         {target?.body ?? unresolvedExternalId}
       </p>
     </div>

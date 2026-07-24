@@ -115,9 +115,9 @@ export function TelegramConnectModal({ open, onOpenChange }: TelegramConnectModa
         </DialogHeader>
 
         {connected ? (
-          <div className="rounded-lg border bg-card/50 p-4">
+          <div className="bg-card/50 rounded-lg border p-4">
             <p className="text-sm font-medium">Connected{username ? ` as ${username}` : ""}</p>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="text-muted-foreground mt-1 text-xs">
               Draftlet can now ingest new incoming Telegram messages into the local runtime.
             </p>
             <div className="mt-4 flex justify-end">
@@ -248,9 +248,9 @@ export function TelegramConnectModal({ open, onOpenChange }: TelegramConnectModa
             </TabsContent>
 
             <TabsContent value="qr" className="space-y-4 pt-3">
-              <div className="rounded-lg border bg-card/50 p-4 text-sm">
+              <div className="bg-card/50 rounded-lg border p-4 text-sm">
                 <p className="font-medium">Scan from Telegram</p>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                <p className="text-muted-foreground mt-1 text-xs leading-5">
                   Open Telegram on your phone, go to Settings {"->"} Devices {"->"} Link Desktop
                   Device, then scan this code.
                 </p>
@@ -260,11 +260,11 @@ export function TelegramConnectModal({ open, onOpenChange }: TelegramConnectModa
                 {qrUrl && qrState !== "expired" ? (
                   <QrCode value={qrUrl} />
                 ) : (
-                  <div className="flex size-61 items-center justify-center rounded-lg bg-muted text-sm text-muted-foreground">
+                  <div className="bg-muted text-muted-foreground flex size-61 items-center justify-center rounded-lg text-sm">
                     No active QR
                   </div>
                 )}
-                <p className="text-center text-xs text-muted-foreground">
+                <p className="text-muted-foreground text-center text-xs">
                   {qrState === "expired"
                     ? "This QR code expired. Generate a new one."
                     : qrUrl
@@ -272,7 +272,7 @@ export function TelegramConnectModal({ open, onOpenChange }: TelegramConnectModa
                       : "Generate a QR code to start."}
                 </p>
                 {qrStatus.data?.error ? (
-                  <p className="text-xs text-destructive">{qrStatus.data.error}</p>
+                  <p className="text-destructive text-xs">{qrStatus.data.error}</p>
                 ) : null}
               </div>
 
@@ -319,20 +319,20 @@ export interface AuthHintProps {
 function AuthHint({ error, delivery, nextDelivery, length, timeout }: AuthHintProps) {
   if (error) {
     return (
-      <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+      <p className="border-destructive/30 bg-destructive/10 text-destructive rounded-lg border px-3 py-2 text-xs">
         {error}
       </p>
     );
   }
   if (!delivery) {
     return (
-      <p className="text-xs text-muted-foreground">
+      <p className="text-muted-foreground text-xs">
         Send a code first. Telegram usually delivers it to the official Telegram chat in your app.
       </p>
     );
   }
   return (
-    <p className="rounded-lg border bg-card/50 px-3 py-2 text-xs leading-5 text-muted-foreground">
+    <p className="bg-card/50 text-muted-foreground rounded-lg border px-3 py-2 text-xs leading-5">
       Telegram chose {delivery}. Check the official Telegram chat in your app.
       {nextDelivery ? ` Alternate delivery: ${nextDelivery}.` : ""}
       {length ? ` Code length: ${length} digits.` : ""}

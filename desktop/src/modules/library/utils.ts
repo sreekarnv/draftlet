@@ -1,4 +1,4 @@
-import { Conversation } from "@/lib/contracts";
+import { type Conversation } from "@/lib/contracts";
 import { LibraryFilter } from "./types";
 
 export function matchesFilter(conversation: Conversation, filter: LibraryFilter) {

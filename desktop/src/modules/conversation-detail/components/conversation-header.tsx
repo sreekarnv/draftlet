@@ -23,6 +23,18 @@ export interface ConversationHeaderProps {
   className?: string;
 }
 
+function normalizeLabel(value?: string | null) {
+  return value?.trim().toLocaleLowerCase() ?? "";
+}
+
+function getSecondaryLabel(conversation: Conversation) {
+  const primary = normalizeLabel(
+    conversation.title || conversation.contact || conversation.participants,
+  );
+  const candidates = [conversation.participants, conversation.contact];
+  return candidates.find((candidate) => candidate && normalizeLabel(candidate) !== primary);
+}
+
 export function ConversationHeader({
   conversation,
   latestDraft,
@@ -38,6 +50,7 @@ export function ConversationHeader({
   const threadKind = getThreadViewKind(conversation);
   const threadLabel =
     threadKind === "chat" ? "Chat thread" : threadKind === "email" ? "Email thread" : "Timeline";
+  const secondaryLabel = getSecondaryLabel(conversation);
 
   const isRail = variant === "rail";
   const isCompact = variant === "compact";
@@ -45,9 +58,9 @@ export function ConversationHeader({
   return (
     <div
       className={cn(
-        variant === "page" && "border-b bg-background/95 px-6 py-6",
-        isCompact && "shrink-0 border-b bg-background/95 px-4 py-3 sm:px-6",
-        isRail && "rounded-2xl border bg-card p-4 text-card-foreground shadow-sm",
+        variant === "page" && "bg-background/95 border-b px-6 py-6",
+        isCompact && "bg-background/95 shrink-0 border-b px-4 py-3 sm:px-6",
+        isRail && "bg-card text-card-foreground rounded-2xl border p-4 shadow-sm",
         className,
       )}
     >
@@ -73,12 +86,12 @@ export function ConversationHeader({
           </h1>
           <p
             className={cn(
-              "mt-2 flex flex-wrap items-center gap-x-1.5 text-muted-foreground",
+              "text-muted-foreground mt-2 flex flex-wrap items-center gap-x-1.5",
               isRail || isCompact ? "text-xs" : "text-sm",
             )}
           >
-            <span>{conversation.participants || conversation.contact}</span>
-            <span aria-hidden>·</span>
+            {secondaryLabel ? <span>{secondaryLabel}</span> : null}
+            {secondaryLabel ? <span aria-hidden>·</span> : null}
             <span>{conversation.messages.length} messages</span>
             <span aria-hidden>·</span>
             <span>Captured {formatDateTime(conversation.capturedAt)}</span>
@@ -89,13 +102,13 @@ export function ConversationHeader({
           </p>
           <p
             className={cn(
-              "mt-2 text-muted-foreground",
+              "text-muted-foreground mt-2",
               isRail ? "line-clamp-3 text-xs leading-5" : "max-w-2xl truncate text-sm",
             )}
           >
             Latest: {conversation.latestMessage}
           </p>
-          <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <div className="text-muted-foreground mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
             <StatusBadge tone="ready">Local capture</StatusBadge>
             {hasDraft ? (
               <StatusBadge tone="generating">{getDraftStateLabel(latestDraft)}</StatusBadge>

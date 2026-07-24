@@ -4,7 +4,10 @@ import { queryKeys } from "@/lib/queries/keys";
 import { runtimeClient } from "@/lib/runtime-client";
 
 export function useConversationsQuery() {
-  return useQuery({ queryKey: queryKeys.conversations, queryFn: runtimeClient.listConversations });
+  return useQuery({
+    queryKey: queryKeys.conversations,
+    queryFn: () => runtimeClient.listConversations(),
+  });
 }
 
 export function useConversationQuery(id: string | undefined) {
@@ -14,8 +17,9 @@ export function useConversationQuery(id: string | undefined) {
 
 export function useMarkConversationCaptured() {
   const queryClient = useQueryClient();
+
   return useMutation({
-    mutationFn: runtimeClient.markConversationCaptured,
+    mutationFn: (conversationId: string) => runtimeClient.markConversationCaptured(conversationId),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.conversations }),
   });
 }

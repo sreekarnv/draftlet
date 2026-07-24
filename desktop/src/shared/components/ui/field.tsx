@@ -11,13 +11,13 @@ function FieldLabel({ className, ...props }: React.ComponentProps<"label">) {
 }
 
 function FieldDescription({ className, ...props }: React.ComponentProps<"p">) {
-  return <p className={cn("text-xs leading-5 text-muted-foreground", className)} {...props} />;
+  return <p className={cn("text-muted-foreground text-xs leading-5", className)} {...props} />;
 }
 
 function FieldError({ className, children, ...props }: React.ComponentProps<"p">) {
   if (!children) return null;
   return (
-    <p className={cn("text-xs font-medium text-destructive", className)} {...props}>
+    <p className={cn("text-destructive text-xs font-medium", className)} {...props}>
       {children}
     </p>
   );

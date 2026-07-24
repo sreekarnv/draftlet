@@ -5,7 +5,6 @@ import { RouterProvider, createHashRouter } from "react-router";
 import { DefaultLayout } from "@/shared/components/layouts/default";
 import { Connectors } from "@/routes/connectors";
 import { ConversationDetail } from "@/routes/conversation-detail";
-import { Diagnostics } from "@/routes/diagnostics";
 import { DraftsIndex } from "@/routes/drafts-index";
 import { DraftWorkspace } from "@/routes/draft-workspace";
 import { Email } from "@/routes/email";
@@ -34,11 +33,9 @@ const router = createHashRouter([
       { path: "connectors", Component: Connectors },
       { path: "search", Component: Search },
       { path: "settings", Component: Settings },
-      { path: "diagnostics", Component: Diagnostics },
       { path: "*", element: <Navigate to="/" replace /> },
     ],
   },
-  { path: "*", element: <Navigate to="/" replace /> },
 ]);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

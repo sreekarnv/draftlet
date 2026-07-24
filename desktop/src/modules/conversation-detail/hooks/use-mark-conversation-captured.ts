@@ -19,12 +19,9 @@ export function useMarkConversationCaptured(
       return;
     }
 
-    if (markedConversationIdsRef.current.has(conversationId)) {
-      return;
-    }
+    if (markedConversationIdsRef.current.has(conversationId)) return;
 
     markedConversationIdsRef.current.add(conversationId);
-
     mutate(conversationId);
   }, [conversationId, mutate, recentlyCaptured]);
 }

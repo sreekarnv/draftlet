@@ -3,7 +3,7 @@ import { Link } from "react-router";
 
 import { StatusBadge } from "@/components/status-dot";
 import { useCapturesQuery } from "@/lib/queries/captures";
-import { useConnectorsQuery, useTelegramAuthStatusQuery } from "@/lib/queries/connectors";
+import { useDisconnectTelegram, useTelegramAuthStatusQuery } from "@/lib/queries/connectors";
 import { useConversationsQuery } from "@/lib/queries/conversations";
 import { GmailStatusCard } from "@/modules/connectors/components/gmail-status-card";
 import { TelegramConnectModal } from "@/modules/connectors/components/telegram-connect-modal";
@@ -13,24 +13,26 @@ import { SectionCard } from "@/shared/components/ui/section-card";
 export function Connectors() {
   const conversations = useConversationsQuery();
   const captures = useCapturesQuery();
-  const connectors = useConnectorsQuery();
   const telegramAuth = useTelegramAuthStatusQuery();
+  const disconnectTelegram = useDisconnectTelegram();
   const [telegramModalOpen, setTelegramModalOpen] = useState(false);
 
   const runtimeUnavailable = conversations.isError || captures.isError;
   const telegramConnected = Boolean(telegramAuth.data?.connected);
+  const recentCaptures = [...(captures.data ?? [])]
+    .sort((first, second) => Date.parse(second.captured_at) - Date.parse(first.captured_at))
+    .slice(0, 5);
 
   return (
-    <section className="h-full min-h-0 overflow-auto bg-background">
+    <section className="bg-background h-full min-h-0 overflow-auto">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-6 py-6">
         <header>
-          <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+          <p className="text-muted-foreground text-xs font-medium tracking-[0.14em] uppercase">
             Local sources
           </p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight">Connectors</h1>
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            Manage capture sources for local drafting. Gmail is currently extension-first and
-            Telegram uses a local user session.
+          <p className="text-muted-foreground mt-2 max-w-2xl text-sm">
+            Connect the sources that bring messages into Draftlet.
           </p>
         </header>
 
@@ -43,10 +45,10 @@ export function Connectors() {
 
           <SectionCard
             title="Telegram"
-            description="Local user-session capture and supported message sending."
+            description="Capture Telegram messages and send accepted drafts."
           >
             <div className="space-y-4">
-              <div className="rounded-lg border bg-background p-3">
+              <div className="bg-background rounded-lg border p-3">
                 <StatusBadge tone={telegramConnected ? "ready" : "warning"}>
                   {telegramConnected
                     ? "Connected"
@@ -57,16 +59,23 @@ export function Connectors() {
                     ? `Telegram${telegramAuth.data?.username ? ` as ${telegramAuth.data.username}` : ""}`
                     : "Connect Telegram"}
                 </p>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  Telegram can capture incoming messages and send accepted drafts through the
-                  runtime.
+                <p className="text-muted-foreground mt-1 text-xs leading-5">
+                  {telegramConnected
+                    ? "Telegram is ready for message capture and supported sends."
+                    : "Connect Telegram with QR code or phone verification."}
                 </p>
               </div>
 
               <div className="flex flex-wrap gap-2">
                 {telegramConnected ? (
-                  <Button asChild size="sm" variant="secondary">
-                    <Link to="/settings">Manage in Settings</Link>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    disabled={disconnectTelegram.isPending}
+                    onClick={() => disconnectTelegram.mutate()}
+                  >
+                    {disconnectTelegram.isPending ? "Disconnecting..." : "Disconnect Telegram"}
                   </Button>
                 ) : (
                   <Button type="button" size="sm" onClick={() => setTelegramModalOpen(true)}>
@@ -81,34 +90,28 @@ export function Connectors() {
           </SectionCard>
         </div>
 
-        <SectionCard
-          title="Connector rows"
-          description="Runtime connector records and enabled state."
-        >
-          {connectors.data?.length ? (
-            <div className="divide-y divide-border rounded-lg border">
-              {connectors.data.map((connector) => (
+        <SectionCard title="Recent activity" description="Latest captures from connected sources.">
+          {recentCaptures.length ? (
+            <div className="divide-border divide-y rounded-lg border">
+              {recentCaptures.map((capture) => (
                 <div
-                  key={connector.id}
+                  key={capture.id}
                   className="grid gap-2 px-3 py-2 text-sm sm:grid-cols-[1fr_auto] sm:items-center"
                 >
                   <div>
-                    <p className="font-medium">{connector.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {connector.kind} · {connector.enabled ? "enabled" : "disabled"}
+                    <p className="font-medium">{formatConnectorName(capture.connector_kind)}</p>
+                    <p className="text-muted-foreground text-xs">
+                      {capture.status} · {capture.source_message_id}
                     </p>
                   </div>
-                  <span className="text-xs text-muted-foreground">
-                    Updated {new Date(connector.updated_at).toLocaleString()}
+                  <span className="text-muted-foreground text-xs">
+                    {new Date(capture.captured_at).toLocaleString()}
                   </span>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              No connector rows yet. Gmail manual captures and Telegram auth can still work without
-              a stored connector row.
-            </p>
+            <p className="text-muted-foreground text-sm">New captures will appear here.</p>
           )}
         </SectionCard>
 
@@ -116,4 +119,10 @@ export function Connectors() {
       </div>
     </section>
   );
+}
+
+function formatConnectorName(kind: string) {
+  if (kind === "gmail") return "Gmail";
+  if (kind === "telegram") return "Telegram";
+  return kind;
 }

@@ -8,21 +8,21 @@ export function Home() {
   const conversationsQuery = useConversationsQuery();
 
   return (
-    <section className="flex h-full items-center justify-center bg-background p-6">
-      <div className="w-full max-w-xl rounded-2xl border bg-card p-6 text-card-foreground shadow-sm">
-        <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+    <section className="bg-background flex h-full items-center justify-center p-6">
+      <div className="bg-card text-card-foreground w-full max-w-xl rounded-2xl border p-6 shadow-sm">
+        <p className="text-muted-foreground text-xs font-medium tracking-[0.14em] uppercase">
           Draftlet
         </p>
         <h1 className="mt-2 text-2xl font-semibold tracking-[-0.03em]">
           Local-first drafting for messages and email.
         </h1>
-        <p className="mt-3 text-sm leading-6 text-muted-foreground">
+        <p className="text-muted-foreground mt-3 text-sm leading-6">
           Captured Telegram chats and Gmail threads stay local, then open directly into focused
           drafting context when they are available.
         </p>
 
         {conversationsQuery.isLoading ? (
-          <div className="mt-6 h-9 w-40 rounded-md bg-muted" />
+          <div className="bg-muted mt-6 h-9 w-40 rounded-md" />
         ) : (
           <div className="mt-6 flex flex-wrap gap-2">
             <Button asChild>

@@ -25,21 +25,12 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarRail,
   SidebarSeparator,
 } from "@/shared/components/ui/sidebar";
 
 const systemNavigation = draftletNavigation.filter((item) =>
   ["/connectors", "/settings"].includes(item.path),
 );
-
-function TelegramIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className={className} fill="currentColor">
-      <path d="M21.93 4.14c.28-1.05-.75-1.9-1.72-1.42L2.92 11.18c-1.05.51-.94 2.05.16 2.41l4.36 1.42 1.68 5.31c.33 1.05 1.67 1.33 2.38.5l2.45-2.86 4.42 3.23c.9.66 2.17.16 2.45-.92l3.11-16.13ZM8.21 13.63l8.51-5.28c.4-.25.81.29.47.62l-6.99 6.7-.27 2.83-1.05-3.32-.67-1.55Zm2.57 3.46 1.94-1.86 1.64 1.2-2.94 3.44-.64-2.78Z" />
-    </svg>
-  );
-}
 
 function isMessageConversation(conversation: Conversation) {
   return conversation.connector === "telegram" || conversation.threadKind === "chat";
@@ -61,10 +52,19 @@ function getEmailSender(conversation: Conversation) {
   );
 }
 
-function getConversationIcon(conversation: Conversation, kind: ConversationGroupProps["kind"]) {
-  if (conversation.connector === "telegram") return TelegramIcon;
-  if (conversation.connector === "gmail" || kind === "email") return Mail;
-  return MessageCircle;
+function connectorForGroup(kind: ConversationGroupProps["kind"]): Conversation["connector"] {
+  return kind === "email" ? "gmail" : "telegram";
+}
+
+function connectorForConversation(
+  conversation: Conversation,
+  kind: ConversationGroupProps["kind"],
+): Conversation["connector"] {
+  if (conversation.connector === "gmail" || conversation.connector === "telegram") {
+    return conversation.connector;
+  }
+
+  return connectorForGroup(kind);
 }
 
 interface StatusRowProps {
@@ -78,7 +78,7 @@ function StatusRow({ label, value, tone }: StatusRowProps) {
     <div className="flex items-center gap-2 px-0.5 py-1.5 text-xs">
       <StatusDot tone={tone} />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sidebar-foreground/55">
+        <div className="text-sidebar-foreground/55 truncate">
           <span className="text-sidebar-foreground/80">{label}</span>: {value}
         </div>
       </div>
@@ -94,7 +94,7 @@ interface ConversationGroupProps {
 }
 
 function ConversationGroup({ label, conversations, activePath, kind }: ConversationGroupProps) {
-  const Icon = kind === "email" ? Mail : MessageCircle;
+  const emptyConnector = connectorForGroup(kind);
   const emptyLabel = kind === "email" ? "No Gmail threads yet" : "No Telegram chats yet";
 
   return (
@@ -102,12 +102,12 @@ function ConversationGroup({ label, conversations, activePath, kind }: Conversat
       <SidebarGroup className="min-h-0 py-1">
         <SidebarGroupLabel
           asChild
-          className="group/section-trigger h-7 px-2 text-[10px] uppercase tracking-[0.14em] text-muted-foreground hover:bg-sidebar-accent/45 hover:text-sidebar-foreground"
+          className="group/section-trigger text-muted-foreground hover:bg-sidebar-accent/45 hover:text-sidebar-foreground h-7 px-2 text-[10px] tracking-[0.14em] uppercase"
         >
           <CollapsibleTrigger>
             <ChevronRight className="size-3.5 transition-transform group-data-[state=open]/section-trigger:rotate-90" />
             <span className="min-w-0 flex-1 truncate">{label}</span>
-            <span className="rounded-full bg-sidebar-accent px-1.5 py-0.5 text-[10px] leading-none text-sidebar-foreground/60">
+            <span className="bg-sidebar-accent text-sidebar-foreground/60 rounded-full px-1.5 py-0.5 text-[10px] leading-none">
               {conversations.length}
             </span>
           </CollapsibleTrigger>
@@ -126,7 +126,7 @@ function ConversationGroup({ label, conversations, activePath, kind }: Conversat
                       : getConversationName(conversation);
                   const subtitle = kind === "email" ? conversation.title : undefined;
                   const preview = conversation.latestMessage;
-                  const RowIcon = getConversationIcon(conversation, kind);
+                  const rowConnector = connectorForConversation(conversation, kind);
 
                   return (
                     <SidebarMenuItem key={conversation.id}>
@@ -135,22 +135,26 @@ function ConversationGroup({ label, conversations, activePath, kind }: Conversat
                         isActive={isActive}
                         tooltip={title}
                         className={cn(
-                          "relative h-auto min-h-10 items-start rounded-md py-2 pl-4 pr-2 text-sidebar-foreground/75 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:px-2",
+                          "text-sidebar-foreground/75 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground relative h-auto min-h-10 items-start rounded-md py-2 pr-2 pl-4 group-data-[collapsible=icon]:px-2",
                           isActive &&
-                            "bg-sidebar-accent font-medium text-sidebar-accent-foreground before:absolute before:left-2 before:top-1/2 before:h-5 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-primary group-data-[collapsible=icon]:before:left-1",
+                            "bg-sidebar-accent text-sidebar-accent-foreground before:bg-primary font-medium before:absolute before:top-1/2 before:left-2 before:h-5 before:w-0.5 before:-translate-y-1/2 before:rounded-full group-data-[collapsible=icon]:before:left-1",
                         )}
                       >
                         <Link to={href} aria-current={isActive ? "page" : undefined}>
-                          <RowIcon className="mt-0.5 size-4 shrink-0" />
+                          {rowConnector === "gmail" ? (
+                            <Mail className="mt-0.5 size-4 shrink-0" />
+                          ) : (
+                            <MessageCircle className="mt-0.5 size-4 shrink-0" />
+                          )}
                           <span className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
                             <span className="block truncate text-sm leading-4">{title}</span>
                             {subtitle ? (
-                              <span className="mt-0.5 block truncate text-xs leading-4 text-sidebar-foreground/55">
+                              <span className="text-sidebar-foreground/55 mt-0.5 block truncate text-xs leading-4">
                                 {subtitle}
                               </span>
                             ) : null}
                             {preview ? (
-                              <span className="mt-0.5 block truncate text-xs leading-4 text-sidebar-foreground/55">
+                              <span className="text-sidebar-foreground/55 mt-0.5 block truncate text-xs leading-4">
                                 {preview}
                               </span>
                             ) : null}
@@ -162,8 +166,12 @@ function ConversationGroup({ label, conversations, activePath, kind }: Conversat
                 })
               ) : (
                 <SidebarMenuItem>
-                  <div className="flex items-center gap-2 rounded-md px-2 py-2 text-xs text-sidebar-foreground/45 group-data-[collapsible=icon]:justify-center">
-                    <Icon className="size-4 shrink-0" />
+                  <div className="text-sidebar-foreground/45 flex items-center gap-2 rounded-md px-2 py-2 text-xs group-data-[collapsible=icon]:justify-center">
+                    {emptyConnector === "gmail" ? (
+                      <Mail className="size-4 shrink-0" />
+                    ) : (
+                      <MessageCircle className="size-4 shrink-0" />
+                    )}
                     <span className="truncate group-data-[collapsible=icon]:hidden">
                       {emptyLabel}
                     </span>
@@ -187,7 +195,7 @@ function SystemGroup({ activePath }: SystemGroupProps) {
 
   return (
     <SidebarGroup>
-      <SidebarGroupLabel className="px-2 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+      <SidebarGroupLabel className="text-muted-foreground px-2 text-[10px] tracking-[0.14em] uppercase">
         System
       </SidebarGroupLabel>
       <SidebarGroupContent>
@@ -203,9 +211,9 @@ function SystemGroup({ activePath }: SystemGroupProps) {
                   isActive={isActive}
                   tooltip={item.title}
                   className={cn(
-                    "relative h-8 rounded-md text-sidebar-foreground/70 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
+                    "text-sidebar-foreground/70 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground relative h-8 rounded-md",
                     isActive &&
-                      "bg-sidebar-accent font-medium text-sidebar-accent-foreground before:absolute before:left-1 before:top-1/2 before:h-4 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-primary",
+                      "bg-sidebar-accent text-sidebar-accent-foreground before:bg-primary font-medium before:absolute before:top-1/2 before:left-1 before:h-4 before:w-0.5 before:-translate-y-1/2 before:rounded-full",
                   )}
                 >
                   <Link to={item.path} aria-current={isActive ? "page" : undefined}>
@@ -233,18 +241,18 @@ export function AppSidebar({ activePath, ...props }: AppSidebarProps) {
   const emailConversations = conversations.filter(isEmailConversation);
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar" {...props}>
+    <Sidebar collapsible="none" className="border-sidebar-border bg-sidebar border-r" {...props}>
       <SidebarHeader className="h-14 justify-center px-2 py-2">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild tooltip="Draftlet">
               <Link to="/">
-                <div className="flex aspect-square size-7 items-center justify-center overflow-hidden rounded-md bg-sidebar-primary/10 ring-1 ring-sidebar-border">
+                <div className="bg-sidebar-primary/10 ring-sidebar-border flex aspect-square size-7 items-center justify-center overflow-hidden rounded-md ring-1">
                   <img src={draftletLogo} alt="" className="size-full object-cover" />
                 </div>
                 <div className="grid flex-1 text-left leading-tight">
                   <span className="truncate text-sm font-semibold tracking-tight">Draftlet</span>
-                  <span className="truncate text-xs text-sidebar-foreground/55">
+                  <span className="text-sidebar-foreground/55 truncate text-xs">
                     Local drafting companion
                   </span>
                 </div>
@@ -273,7 +281,7 @@ export function AppSidebar({ activePath, ...props }: AppSidebarProps) {
       </SidebarContent>
 
       <SidebarFooter className="gap-2 px-3 py-3 group-data-[collapsible=icon]:hidden">
-        <div className="px-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-sidebar-foreground/45">
+        <div className="text-sidebar-foreground/45 px-0.5 text-[10px] font-medium tracking-[0.14em] uppercase">
           Local status
         </div>
         <div className="space-y-1">
@@ -289,7 +297,6 @@ export function AppSidebar({ activePath, ...props }: AppSidebarProps) {
           />
         </div>
       </SidebarFooter>
-      <SidebarRail />
     </Sidebar>
   );
 }

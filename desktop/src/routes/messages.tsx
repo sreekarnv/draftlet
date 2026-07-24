@@ -52,26 +52,26 @@ export function Messages() {
 
   if (conversationsQuery.isLoading || draftsQuery.isLoading) {
     return (
-      <section className="grid h-full min-h-0 overflow-hidden bg-background lg:grid-cols-[340px_minmax(0,1fr)]">
-        <div className="hidden border-r bg-muted/30 p-4 lg:block">
-          <div className="h-10 rounded-lg bg-muted" />
+      <section className="bg-background grid h-full min-h-0 overflow-hidden lg:grid-cols-[340px_minmax(0,1fr)]">
+        <div className="bg-muted/30 hidden border-r p-4 lg:block">
+          <div className="bg-muted h-10 rounded-lg" />
           <div className="mt-4 space-y-3">
-            <div className="h-20 rounded-xl bg-muted" />
-            <div className="h-20 rounded-xl bg-muted" />
-            <div className="h-20 rounded-xl bg-muted" />
+            <div className="bg-muted h-20 rounded-xl" />
+            <div className="bg-muted h-20 rounded-xl" />
+            <div className="bg-muted h-20 rounded-xl" />
           </div>
         </div>
         <div className="flex min-h-0 flex-col overflow-hidden p-4">
-          <div className="h-16 shrink-0 rounded-xl bg-muted/70" />
-          <div className="mt-4 min-h-0 flex-1 rounded-xl bg-muted/40" />
-          <div className="mt-4 h-20 shrink-0 rounded-xl bg-muted/70" />
+          <div className="bg-muted/70 h-16 shrink-0 rounded-xl" />
+          <div className="bg-muted/40 mt-4 min-h-0 flex-1 rounded-xl" />
+          <div className="bg-muted/70 mt-4 h-20 shrink-0 rounded-xl" />
         </div>
       </section>
     );
   }
 
   return (
-    <section className="grid h-full min-h-0 overflow-hidden bg-background lg:grid-cols-[340px_minmax(0,1fr)]">
+    <section className="bg-background grid h-full min-h-0 overflow-hidden lg:grid-cols-[340px_minmax(0,1fr)]">
       <MessagesChatList
         conversations={chatConversations}
         selectedConversationId={selectedConversation?.id}
