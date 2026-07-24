@@ -76,13 +76,7 @@ export function EditorToolbar({
             <span className="hidden lg:inline">Mark as sent</span>
           </Button>
         ) : (
-          <Button
-            size="sm"
-            className="ml-1 px-2.5"
-            onClick={onInsert}
-            disabled={isInserted}
-            title={isInserted ? "This draft has already been inserted into Draftlet" : undefined}
-          >
+          <Button size="sm" className="ml-1 px-2.5" onClick={onInsert}>
             <Send className="size-3.5" />
             <span className="hidden lg:inline">Insert into timeline</span>
           </Button>

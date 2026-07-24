@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { Coverage, Draft, DraftVariant, Length, Tone } from "@/lib/contracts";
+import type { Coverage, Draft, Length, Tone } from "@/lib/contracts";
 import { queryKeys } from "@/lib/queries/keys";
 import { runtimeClient } from "@/lib/runtime-client";
 
@@ -35,15 +35,6 @@ export function useUpdateDraft() {
   return useMutation({
     mutationFn: ({ id, patch }: { id: string; patch: Partial<Draft> }) =>
       runtimeClient.updateDraft(id, patch),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.drafts }),
-  });
-}
-
-export function useAddDraftVariant() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, variant }: { id: string; variant: DraftVariant }) =>
-      runtimeClient.addVariant(id, variant),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.drafts }),
   });
 }

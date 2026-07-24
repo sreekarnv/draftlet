@@ -1,6 +1,5 @@
 import { type AnyAction } from "@/shared/types/any-action";
 import { type LibraryFilter } from "@/modules/library/types";
-import { type Conversation } from "@/lib/contracts";
 
 export type SetActiveFilterAction = AnyAction<"set_active_filter", { filter: LibraryFilter }>;
 export type SetQueryAction = AnyAction<"set_query", { query: string }>;
@@ -12,7 +11,6 @@ export type LibraryState = {
   activeFilter: LibraryFilter;
   query: string;
   selectedId: string;
-  selectedConversation?: Conversation;
 };
 
 export const libraryReducer = (

@@ -377,12 +377,6 @@ export const runtimeClient = {
       await request<ApiDraft>(`/drafts/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
     );
   },
-  async addVariant(id: string, variant: DraftVariant) {
-    return request<DraftVariant>(`/drafts/${id}/variants`, {
-      method: "POST",
-      body: JSON.stringify(variant),
-    });
-  },
   async generateVariant(
     id: string,
     options: { tone?: Tone; length?: Length; coverage?: Coverage } = {},

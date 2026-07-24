@@ -23,8 +23,7 @@ type Crumb = {
 function getActiveNavItem(pathname: string): DraftletNavItem {
   return (
     draftletNavigation.find(
-      (item) =>
-        item.path !== "/" && (pathname === item.path || pathname.startsWith(`${item.path}/`)),
+      (item) => pathname === item.path || pathname.startsWith(`${item.path}/`),
     ) ??
     draftletNavigation.find((item) => item.path === pathname) ??
     draftletNavigation[0]

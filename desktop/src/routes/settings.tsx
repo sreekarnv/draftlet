@@ -231,30 +231,6 @@ export function Settings() {
         </SectionCard>
 
         <SectionCard
-          title="Privacy / Storage"
-          description="Local-first data boundaries and stored runtime state."
-        >
-          <div className="grid gap-3 md:grid-cols-2">
-            <InfoTile
-              title="Local storage"
-              detail="Messages, drafts, connector rows, and settings are stored in the local Draftlet runtime database."
-            />
-            <InfoTile
-              title="External sends"
-              detail="Drafts are local until you explicitly insert them into Draftlet or confirm a supported external send."
-            />
-            <InfoTile
-              title="Telegram session"
-              detail="Telegram uses a local user session for capture and send support. Disconnect from Accounts / Connectors to stop using it."
-            />
-            <InfoTile
-              title="Email"
-              detail="Gmail threads can be captured locally. Email sending is not implemented yet."
-            />
-          </div>
-        </SectionCard>
-
-        <SectionCard
           title="Diagnostics / Advanced"
           description="Live local runtime status and recent capture records."
         >
@@ -337,15 +313,6 @@ function StatusTile({ label, ok, detail }: { label: string; ok: boolean; detail?
         {ok ? "Ready" : "Offline"}
       </p>
       {detail ? <p className="text-muted-foreground mt-2 text-xs">{detail}</p> : null}
-    </div>
-  );
-}
-
-function InfoTile({ title, detail }: { title: string; detail: string }) {
-  return (
-    <div className="bg-background rounded-lg border p-3">
-      <p className="text-sm font-medium">{title}</p>
-      <p className="text-muted-foreground mt-1 text-xs leading-5">{detail}</p>
     </div>
   );
 }
