@@ -11,10 +11,6 @@ if TYPE_CHECKING:
     from draftlet_api.database.models.draft import Draft
     from draftlet_api.database.models.message import Message
 
-if TYPE_CHECKING:
-    from draftlet_api.database.models.draft import Draft
-
-
 def utcnow() -> datetime:
     return datetime.now(UTC)
 
