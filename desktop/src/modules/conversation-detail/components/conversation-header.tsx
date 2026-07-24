@@ -23,6 +23,18 @@ export interface ConversationHeaderProps {
   className?: string;
 }
 
+function normalizeLabel(value?: string | null) {
+  return value?.trim().toLocaleLowerCase() ?? "";
+}
+
+function getSecondaryLabel(conversation: Conversation) {
+  const primary = normalizeLabel(
+    conversation.title || conversation.contact || conversation.participants,
+  );
+  const candidates = [conversation.participants, conversation.contact];
+  return candidates.find((candidate) => candidate && normalizeLabel(candidate) !== primary);
+}
+
 export function ConversationHeader({
   conversation,
   latestDraft,
@@ -38,6 +50,7 @@ export function ConversationHeader({
   const threadKind = getThreadViewKind(conversation);
   const threadLabel =
     threadKind === "chat" ? "Chat thread" : threadKind === "email" ? "Email thread" : "Timeline";
+  const secondaryLabel = getSecondaryLabel(conversation);
 
   const isRail = variant === "rail";
   const isCompact = variant === "compact";
@@ -77,8 +90,8 @@ export function ConversationHeader({
               isRail || isCompact ? "text-xs" : "text-sm",
             )}
           >
-            <span>{conversation.participants || conversation.contact}</span>
-            <span aria-hidden>·</span>
+            {secondaryLabel ? <span>{secondaryLabel}</span> : null}
+            {secondaryLabel ? <span aria-hidden>·</span> : null}
             <span>{conversation.messages.length} messages</span>
             <span aria-hidden>·</span>
             <span>Captured {formatDateTime(conversation.capturedAt)}</span>

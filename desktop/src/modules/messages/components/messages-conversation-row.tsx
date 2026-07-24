@@ -9,11 +9,25 @@ export interface MessagesConversationRowProps {
   onSelect: () => void;
 }
 
+function normalizeLabel(value?: string | null) {
+  return value?.trim().toLocaleLowerCase() ?? "";
+}
+
+function getSecondaryLabel(conversation: Conversation) {
+  const primary = normalizeLabel(
+    conversation.title || conversation.contact || conversation.participants,
+  );
+  const candidates = [conversation.participants, conversation.contact];
+  return candidates.find((candidate) => candidate && normalizeLabel(candidate) !== primary);
+}
+
 export function MessagesConversationRow({
   conversation,
   selected,
   onSelect,
 }: MessagesConversationRowProps) {
+  const secondaryLabel = getSecondaryLabel(conversation);
+
   return (
     <button
       type="button"
@@ -33,9 +47,9 @@ export function MessagesConversationRow({
             {formatTime(conversation.timestamp)}
           </time>
         </div>
-        <p className="text-muted-foreground mt-0.5 truncate text-xs">
-          {conversation.participants || conversation.contact}
-        </p>
+        {secondaryLabel ? (
+          <p className="text-muted-foreground mt-0.5 truncate text-xs">{secondaryLabel}</p>
+        ) : null}
         <p className="text-muted-foreground mt-1 line-clamp-2 text-xs leading-5">
           {conversation.latestMessage}
         </p>
