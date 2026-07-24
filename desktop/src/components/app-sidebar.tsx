@@ -25,7 +25,6 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarRail,
   SidebarSeparator,
 } from "@/shared/components/ui/sidebar";
 
@@ -242,7 +241,7 @@ export function AppSidebar({ activePath, ...props }: AppSidebarProps) {
   const emailConversations = conversations.filter(isEmailConversation);
 
   return (
-    <Sidebar collapsible="icon" className="border-sidebar-border bg-sidebar border-r" {...props}>
+    <Sidebar collapsible="none" className="border-sidebar-border bg-sidebar border-r" {...props}>
       <SidebarHeader className="h-14 justify-center px-2 py-2">
         <SidebarMenu>
           <SidebarMenuItem>
@@ -298,7 +297,6 @@ export function AppSidebar({ activePath, ...props }: AppSidebarProps) {
           />
         </div>
       </SidebarFooter>
-      <SidebarRail />
     </Sidebar>
   );
 }

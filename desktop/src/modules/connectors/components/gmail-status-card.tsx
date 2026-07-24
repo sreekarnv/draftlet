@@ -41,44 +41,27 @@ export function GmailStatusCard({
   return (
     <SectionCard
       title="Gmail"
-      description="Extension-first local capture for email review and drafting. OAuth, Gmail API sync, and sending are deferred."
+      description="Capture selected Gmail message text with the browser extension."
     >
-      <div className="space-y-5">
+      <div className="space-y-4">
         <div className="bg-background flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <StatusBadge tone={tone}>{statusLabel}</StatusBadge>
-            <p className="mt-3 text-sm font-medium">Selection-based Gmail capture</p>
+            <p className="mt-3 text-sm font-medium">Gmail capture</p>
             <p className="text-muted-foreground mt-1 max-w-2xl text-xs leading-5">
-              Load the Chrome extension from the repository, select the exact text in a Gmail
-              thread, and capture it into Draftlet. Captures appear in the Email workspace for local
-              drafting; external email sending is not implemented yet.
+              Captured Gmail threads appear in the Email workspace for review and draft generation.
             </p>
           </div>
           <div className="flex flex-wrap gap-2 sm:justify-end">
             <Button asChild size="sm">
               <Link to="/email">View Gmail threads</Link>
             </Button>
-            <Button asChild size="sm" variant="secondary">
-              <Link to="/settings#manual-capture">Manual capture</Link>
-            </Button>
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           <Metric label="Email threads" value={gmailConversations.length} />
           <Metric label="Recent Gmail captures" value={gmailCaptures.length} />
-          <Metric label="External sending" value="Disabled" />
-        </div>
-
-        <div className="bg-background/60 rounded-lg border border-dashed p-3">
-          <p className="text-sm font-medium">Chrome extension MVP</p>
-          <p className="text-muted-foreground mt-1 text-xs leading-5">
-            Load `extension/` unpacked in Chrome, reload Gmail, select message text, then click the
-            Draftlet extension. OAuth, Gmail API sync, and sending are intentionally deferred.
-          </p>
-          <Button className="mt-3" type="button" size="sm" variant="secondary" disabled>
-            OAuth deferred
-          </Button>
         </div>
       </div>
     </SectionCard>

@@ -50,20 +50,11 @@ export function Email() {
         <div className="flex max-w-md flex-col items-center gap-4 text-center">
           <EmptyState
             title="No Gmail threads captured yet"
-            description="Gmail conversations captured by the extension or manual debug form will appear here for review and local draft generation."
+            description="Gmail conversations captured by the browser extension will appear here for review and local draft generation."
           />
-          <div className="flex flex-wrap justify-center gap-2">
-            <Button asChild size="sm">
-              <Link to="/connectors">Open Gmail setup</Link>
-            </Button>
-            <Button asChild size="sm" variant="secondary">
-              <Link to="/settings#manual-capture">Manual capture</Link>
-            </Button>
-          </div>
-          <p className="text-muted-foreground text-xs leading-5">
-            Email sending and Gmail OAuth are not enabled yet. This workspace is ready for captured
-            local Gmail threads.
-          </p>
+          <Button asChild size="sm">
+            <Link to="/connectors">Open Connectors</Link>
+          </Button>
         </div>
       </section>
     );
